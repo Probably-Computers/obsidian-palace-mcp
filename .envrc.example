@@ -1,9 +1,9 @@
 # Obsidian Palace MCP - Development Environment
-# This file is used by direnv to set environment variables for development
+# Copy this file to .envrc and customize for your environment
 # See: https://direnv.net/
 
 # Path to the Obsidian vault used for development and testing
-export PALACE_VAULT_PATH="/Users/adamc/Documents/Claude Palace"
+export PALACE_VAULT_PATH="/path/to/your/obsidian/vault"
 
 # Log level (debug, info, warn, error)
 export PALACE_LOG_LEVEL="debug"
