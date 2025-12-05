@@ -56,8 +56,37 @@ export interface WikiLink {
 // Graph link with direction
 export interface GraphLink {
   source: string; // Source note path
-  target: string; // Target note path
+  target: string; // Target note path (or title if unresolved)
   resolved: boolean; // Does target note exist?
+}
+
+// Graph node with link counts
+export interface GraphNode {
+  path: string;
+  title: string;
+  incomingCount: number;
+  outgoingCount: number;
+}
+
+// Traversal result for multi-hop queries
+export interface TraversalResult {
+  depth: number;
+  path: string[]; // Path from origin to this node
+  note: NoteMetadata;
+}
+
+// Orphan types
+export type OrphanType = 'no_incoming' | 'no_outgoing' | 'isolated';
+
+// Relatedness methods
+export type RelatednessMethod = 'links' | 'tags' | 'both';
+
+// Related note result
+export interface RelatedNote {
+  note: NoteMetadata;
+  score: number;
+  sharedLinks?: string[];
+  sharedTags?: string[];
 }
 
 // Search result

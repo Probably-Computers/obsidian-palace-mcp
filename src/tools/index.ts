@@ -13,6 +13,9 @@ import { listTool, listHandler } from './list.js';
 import { structureTool, structureHandler } from './structure.js';
 import { updateTool, updateHandler } from './update.js';
 import { queryTool, queryHandler } from './query.js';
+import { linksTool, linksHandler } from './links.js';
+import { orphansTool, orphansHandler } from './orphans.js';
+import { relatedTool, relatedHandler } from './related.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -45,10 +48,17 @@ export function registerTools(): void {
   tools.set('palace_query', queryTool);
   handlers.set('palace_query', queryHandler);
 
+  // Phase 004 tools - Graph Intelligence
+  tools.set('palace_links', linksTool);
+  handlers.set('palace_links', linksHandler);
+
+  tools.set('palace_orphans', orphansTool);
+  handlers.set('palace_orphans', orphansHandler);
+
+  tools.set('palace_related', relatedTool);
+  handlers.set('palace_related', relatedHandler);
+
   // TODO: Add more tools as implemented
-  // - palace_links (Phase 004)
-  // - palace_orphans (Phase 004)
-  // - palace_related (Phase 004)
   // - palace_autolink (Phase 005)
   // - palace_dataview (Phase 006)
   // - palace_session_start (Phase 007)

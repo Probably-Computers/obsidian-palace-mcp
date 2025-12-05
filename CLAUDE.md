@@ -152,9 +152,9 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_structure | ✅ | Get vault directory structure |
 | palace_update | ✅ | Update existing notes (replace/append/frontmatter) |
 | palace_query | ✅ | Query by properties (type, tags, confidence, dates) |
-| palace_links | 🔜 | Backlink/outlink traversal (Phase 004) |
-| palace_orphans | 🔜 | Find disconnected notes (Phase 004) |
-| palace_related | 🔜 | Discover related content (Phase 004) |
+| palace_links | ✅ | Backlink/outlink traversal with multi-hop support |
+| palace_orphans | ✅ | Find disconnected notes (no incoming/outgoing links) |
+| palace_related | ✅ | Discover related content by shared links/tags |
 | palace_autolink | 🔜 | Automatic wiki-link insertion (Phase 005) |
 | palace_dataview | 🔜 | DQL query execution (Phase 006) |
 
@@ -217,6 +217,43 @@ Query notes by properties without full-text search:
   limit?: number;          // Default: 20
   offset?: number;         // For pagination
 }
+```
+
+### palace_links
+
+Get incoming links (backlinks) and outgoing links for a note with multi-hop traversal:
+
+```typescript
+{
+  path: string;                              // Note to analyze (required)
+  direction?: 'incoming' | 'outgoing' | 'both';  // Link direction (default: both)
+  depth?: number;                            // Traversal depth 1-5 (default: 1)
+}
+```
+
+### palace_orphans
+
+Find orphan notes - notes with missing link connections:
+
+```typescript
+{
+  type?: 'no_incoming' | 'no_outgoing' | 'isolated';  // Orphan type (default: isolated)
+  path?: string;                             // Limit to directory
+  limit?: number;                            // Max results (default: 50)
+}
+```
+
+### palace_related
+
+Find notes related to a given note by shared links or tags:
+
+```typescript
+{
+  path: string;                              // Source note (required)
+  method?: 'links' | 'tags' | 'both';        // Relatedness method (default: both)
+  limit?: number;                            // Max results (default: 10)
+}
+```
 
 ## Testing
 

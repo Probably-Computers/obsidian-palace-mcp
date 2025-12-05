@@ -1,10 +1,10 @@
 # Phase 004: Graph Intelligence
 
-**Status**: Planning
-**Start Date**: TBD
-**Target Completion**: TBD
-**Actual Completion**: -
-**Owner**: TBD
+**Status**: Completed
+**Start Date**: 2025-12-05
+**Target Completion**: 2025-12-05
+**Actual Completion**: 2025-12-05
+**Owner**: Claude
 
 ## Objectives
 
@@ -18,9 +18,9 @@
 
 - [x] Phase 001 completed
 - [x] Phase 002 completed
-- [ ] Phase 003 completed (SQLite index with links table)
-- [ ] Wiki-link extraction working in index
-- [ ] Test vault configured via PALACE_VAULT_PATH
+- [x] Phase 003 completed (SQLite index with links table)
+- [x] Wiki-link extraction working in index
+- [x] Test vault configured via PALACE_VAULT_PATH
 
 ## Scope
 
@@ -46,50 +46,50 @@
 
 ### Setup
 
-- [ ] Create services/graph/ directory structure
-- [ ] Define graph data structures
+- [x] Create services/graph/ directory structure
+- [x] Define graph data structures
 
 ### Development
 
-- [ ] Implement services/graph/links.ts
-  - [ ] Extract outgoing links from note content
-  - [ ] Resolve link targets to note paths
-  - [ ] Handle broken/unresolved links
-  - [ ] Cache link relationships
-- [ ] Implement services/graph/relationships.ts
-  - [ ] Get backlinks (notes linking to target)
-  - [ ] Get outlinks (notes target links to)
-  - [ ] Multi-hop traversal (depth parameter)
-  - [ ] Find common links between notes
-- [ ] Implement services/graph/index.ts barrel export
-- [ ] Implement tools/links.ts (palace_links)
-  - [ ] Direction parameter (incoming, outgoing, both)
-  - [ ] Depth parameter for multi-hop
-  - [ ] Include resolved/unresolved status
-- [ ] Implement tools/orphans.ts (palace_orphans)
-  - [ ] Find notes with no incoming links
-  - [ ] Find notes with no outgoing links
-  - [ ] Find completely isolated notes
-  - [ ] Filter by path/type
-- [ ] Implement tools/related.ts (palace_related)
-  - [ ] Find related by shared links
-  - [ ] Find related by shared tags
-  - [ ] Configurable relatedness method
-  - [ ] Limit results
+- [x] Implement services/graph/links.ts
+  - [x] Extract outgoing links from note content
+  - [x] Resolve link targets to note paths
+  - [x] Handle broken/unresolved links
+  - [x] Cache link relationships (via SQLite index)
+- [x] Implement services/graph/relationships.ts
+  - [x] Get backlinks (notes linking to target)
+  - [x] Get outlinks (notes target links to)
+  - [x] Multi-hop traversal (depth parameter)
+  - [x] Find common links between notes
+- [x] Implement services/graph/index.ts barrel export
+- [x] Implement tools/links.ts (palace_links)
+  - [x] Direction parameter (incoming, outgoing, both)
+  - [x] Depth parameter for multi-hop
+  - [x] Include resolved/unresolved status
+- [x] Implement tools/orphans.ts (palace_orphans)
+  - [x] Find notes with no incoming links
+  - [x] Find notes with no outgoing links
+  - [x] Find completely isolated notes
+  - [x] Filter by path/type
+- [x] Implement tools/related.ts (palace_related)
+  - [x] Find related by shared links
+  - [x] Find related by shared tags
+  - [x] Configurable relatedness method
+  - [x] Limit results
 
 ### Testing & Validation
 
-- [ ] Unit tests for link extraction
-- [ ] Unit tests for graph traversal
-- [ ] Integration tests with linked notes
-- [ ] Test orphan detection accuracy
-- [ ] Test multi-hop traversal
+- [x] Unit tests for link extraction
+- [x] Unit tests for graph traversal
+- [x] Integration tests with linked notes
+- [x] Test orphan detection accuracy
+- [x] Test multi-hop traversal
 
 ### Documentation
 
-- [ ] Update CLAUDE.md with new tools
-- [ ] Document graph query patterns
-- [ ] Add examples for common use cases
+- [x] Update CLAUDE.md with new tools
+- [x] Document graph query patterns
+- [x] Add examples for common use cases
 
 ## Standards & References
 
@@ -180,21 +180,21 @@ Create test notes with known link structures for validation.
 
 ### Quality Checks
 
-- [ ] Code review completed
-- [ ] All tests passing
-- [ ] Linting passes
-- [ ] Documentation updated
-- [ ] No regressions in existing tools
+- [x] Code review completed
+- [x] All tests passing (39 tests)
+- [x] Linting passes
+- [x] Documentation updated
+- [x] No regressions in existing tools
 
 ## Acceptance Criteria
 
-- [ ] palace_links returns accurate backlinks and outlinks
-- [ ] Multi-hop traversal works correctly
-- [ ] palace_orphans identifies all orphan types
-- [ ] palace_related finds meaningfully related notes
-- [ ] Broken links are identified but don't cause errors
-- [ ] Performance acceptable for large graphs
-- [ ] Graph data stays in sync with index
+- [x] palace_links returns accurate backlinks and outlinks
+- [x] Multi-hop traversal works correctly
+- [x] palace_orphans identifies all orphan types
+- [x] palace_related finds meaningfully related notes
+- [x] Broken links are identified but don't cause errors
+- [x] Performance acceptable for large graphs
+- [x] Graph data stays in sync with index
 
 ## Risks & Mitigation
 
@@ -207,7 +207,7 @@ Create test notes with known link structures for validation.
 
 ## Notes & Decisions
 
-### TBD - Link Resolution Strategy
+### Link Resolution Strategy
 
 - Context: How to match [[link]] to actual notes
 - Options:
@@ -215,13 +215,13 @@ Create test notes with known link structures for validation.
   2. Case-insensitive match
   3. Alias support
   4. Fuzzy matching
-- Decision: Pending (likely case-insensitive + aliases)
+- Decision: Implemented case-insensitive matching on title, path, and filename. Alias support can be added in future.
 
-### TBD - Relatedness Scoring
+### Relatedness Scoring
 
 - Context: How to rank related notes
 - Options:
   1. Shared link count
   2. Jaccard similarity of links
   3. Combined link + tag score
-- Decision: Pending
+- Decision: Implemented Jaccard-like similarity for both links and tags. Combined scoring with configurable method (links, tags, or both).
