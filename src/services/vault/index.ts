@@ -18,3 +18,10 @@ export {
   updateFrontmatter,
   deleteNote,
 } from './writer.js';
+
+export {
+  startWatcher,
+  stopWatcher,
+  isWatcherRunning,
+  performInitialScan,
+} from './watcher.js';

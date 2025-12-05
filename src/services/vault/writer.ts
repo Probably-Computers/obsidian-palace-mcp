@@ -6,7 +6,6 @@ import { writeFile, mkdir, unlink } from 'fs/promises';
 import { join, dirname } from 'path';
 import { getConfig } from '../../config/index.js';
 import {
-  parseFrontmatter,
   stringifyFrontmatter,
   createDefaultFrontmatter,
   mergeFrontmatter,

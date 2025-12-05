@@ -32,7 +32,6 @@ describe('wikilinks', () => {
     expect(links).toHaveLength(2);
     expect(links[0]).toEqual({
       target: 'Note One',
-      display: undefined,
       raw: '[[Note One]]',
     });
     expect(links[1]).toEqual({

@@ -40,7 +40,8 @@ src/
 │   │   └── index.ts           # Service exports
 │   ├── index/                 # SQLite index
 │   │   ├── sqlite.ts          # Database setup and migrations
-│   │   ├── query.ts           # Query builder
+│   │   ├── query.ts           # FTS5 query builder
+│   │   ├── sync.ts            # Index synchronization
 │   │   └── index.ts
 │   ├── graph/                 # Knowledge graph
 │   │   ├── links.ts           # Wiki-link parser
@@ -97,8 +98,19 @@ npm run inspect  # Test with MCP Inspector
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | PALACE_VAULT_PATH | Yes | - | Path to Obsidian vault |
+| PALACE_INDEX_PATH | No | {vault}/.palace/index.sqlite | SQLite database location |
 | PALACE_LOG_LEVEL | No | info | debug, info, warn, error |
 | PALACE_WATCH_ENABLED | No | true | Watch for external file changes |
+
+### Development Setup with direnv
+
+Create `.envrc` in project root (git-ignored):
+```bash
+export PALACE_VAULT_PATH="/path/to/your/obsidian/vault"
+export PALACE_LOG_LEVEL="debug"
+```
+
+Run `direnv allow` to activate.
 
 ## Note Format
 
@@ -128,6 +140,83 @@ All tool inputs are validated with Zod. Each tool file exports:
 - `schema` - Zod schema for input validation
 - `handler` - Async function that implements the tool
 - Tool is registered in `tools/index.ts`
+
+### Implemented Tools
+
+| Tool | Status | Description |
+|------|--------|-------------|
+| palace_remember | ✅ | Create new notes with frontmatter |
+| palace_read | ✅ | Read note content by path |
+| palace_recall | ✅ | Full-text search with FTS5 ranking |
+| palace_list | ✅ | List notes in directory |
+| palace_structure | ✅ | Get vault directory structure |
+| palace_update | ✅ | Update existing notes (replace/append/frontmatter) |
+| palace_query | ✅ | Query by properties (type, tags, confidence, dates) |
+| palace_links | 🔜 | Backlink/outlink traversal (Phase 004) |
+| palace_orphans | 🔜 | Find disconnected notes (Phase 004) |
+| palace_related | 🔜 | Discover related content (Phase 004) |
+| palace_autolink | 🔜 | Automatic wiki-link insertion (Phase 005) |
+| palace_dataview | 🔜 | DQL query execution (Phase 006) |
+
+### palace_recall
+
+Search notes using FTS5 full-text search with BM25 ranking.
+
+```typescript
+{
+  query: string;           // Search query (required)
+  type?: KnowledgeType | 'all';  // Filter by type
+  tags?: string[];         // Filter by tags (AND logic)
+  path?: string;           // Filter by path prefix
+  min_confidence?: number; // Minimum confidence (0-1)
+  limit?: number;          // Max results (default: 10)
+  include_content?: boolean; // Include content (default: true)
+}
+```
+
+### palace_update
+
+Update existing notes with three modes:
+
+```typescript
+{
+  path: string;            // Note path (required)
+  mode?: 'replace' | 'append' | 'frontmatter';  // Update mode
+  content?: string;        // New content (for replace/append)
+  frontmatter?: {          // Frontmatter updates (merged)
+    type?: KnowledgeType;
+    source?: string;
+    confidence?: number;
+    verified?: boolean;
+    tags?: string[];
+    related?: string[];
+    aliases?: string[];
+  };
+}
+```
+
+### palace_query
+
+Query notes by properties without full-text search:
+
+```typescript
+{
+  type?: KnowledgeType | 'all';
+  tags?: string[];         // Must have ALL tags
+  path?: string;           // Path prefix filter
+  source?: string;         // Source filter
+  min_confidence?: number;
+  max_confidence?: number;
+  verified?: boolean;
+  created_after?: string;  // ISO date
+  created_before?: string;
+  modified_after?: string;
+  modified_before?: string;
+  sort_by?: 'created' | 'modified' | 'title' | 'confidence';
+  sort_order?: 'asc' | 'desc';
+  limit?: number;          // Default: 20
+  offset?: number;         // For pagination
+}
 
 ## Testing
 

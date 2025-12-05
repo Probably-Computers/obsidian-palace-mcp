@@ -11,6 +11,8 @@ import { readTool, readHandler } from './read.js';
 import { recallTool, recallHandler } from './recall.js';
 import { listTool, listHandler } from './list.js';
 import { structureTool, structureHandler } from './structure.js';
+import { updateTool, updateHandler } from './update.js';
+import { queryTool, queryHandler } from './query.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -36,16 +38,21 @@ export function registerTools(): void {
   tools.set('palace_structure', structureTool);
   handlers.set('palace_structure', structureHandler);
 
+  // Phase 003 tools
+  tools.set('palace_update', updateTool);
+  handlers.set('palace_update', updateHandler);
+
+  tools.set('palace_query', queryTool);
+  handlers.set('palace_query', queryHandler);
+
   // TODO: Add more tools as implemented
-  // - palace_update
-  // - palace_links
-  // - palace_orphans
-  // - palace_related
-  // - palace_autolink
-  // - palace_dataview
-  // - palace_query
-  // - palace_session_start
-  // - palace_session_log
+  // - palace_links (Phase 004)
+  // - palace_orphans (Phase 004)
+  // - palace_related (Phase 004)
+  // - palace_autolink (Phase 005)
+  // - palace_dataview (Phase 006)
+  // - palace_session_start (Phase 007)
+  // - palace_session_log (Phase 007)
 }
 
 /**

@@ -16,7 +16,9 @@ import {
 
 import { getConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
-import { registerTools, handleToolCall, getToolDefinitions } from './tools/index.js';
+import { handleToolCall, getToolDefinitions } from './tools/index.js';
+import { getDatabase, closeDatabase } from './services/index/index.js';
+import { startWatcher, stopWatcher, performInitialScan } from './services/vault/index.js';
 
 async function main(): Promise<void> {
   // Load and validate configuration
@@ -26,7 +28,22 @@ async function main(): Promise<void> {
   logger.info('Starting Obsidian Palace MCP Server', {
     vaultPath: config.vaultPath,
     logLevel: config.logLevel,
+    indexPath: config.indexPath,
+    watchEnabled: config.watchEnabled,
   });
+
+  // Initialize SQLite database and index
+  await getDatabase();
+  logger.info('Database initialized');
+
+  // Perform initial vault scan to populate index
+  const indexedCount = await performInitialScan();
+  logger.info(`Indexed ${indexedCount} notes`);
+
+  // Start file watcher for external changes
+  if (config.watchEnabled) {
+    startWatcher();
+  }
 
   // Create MCP server
   const server = new Server(
@@ -87,6 +104,19 @@ async function main(): Promise<void> {
 
   logger.info('Server connected and ready');
 }
+
+// Graceful shutdown handler
+async function shutdown(): Promise<void> {
+  logger.info('Shutting down...');
+  await stopWatcher();
+  closeDatabase();
+  logger.info('Shutdown complete');
+  process.exit(0);
+}
+
+// Register shutdown handlers
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // Run the server
 main().catch((error) => {

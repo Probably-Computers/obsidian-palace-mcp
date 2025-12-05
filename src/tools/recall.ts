@@ -1,12 +1,13 @@
 /**
- * palace_recall - Search the palace for knowledge
+ * palace_recall - Search the palace for knowledge using FTS5
  */
 
 import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolResult, NoteMetadata, SearchResult } from '../types/index.js';
-import { listNotes, readNote } from '../services/vault/index.js';
-import { stripMarkdown } from '../utils/markdown.js';
+import type { ToolResult, SearchResult } from '../types/index.js';
+import { readNote, listNotes } from '../services/vault/index.js';
+import { searchNotes, getDatabaseSync } from '../services/index/index.js';
+import { logger } from '../utils/logger.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -35,13 +36,13 @@ const inputSchema = z.object({
 export const recallTool: Tool = {
   name: 'palace_recall',
   description:
-    'Search the Obsidian palace for knowledge. Searches titles, content, and tags.',
+    'Search the Obsidian palace for knowledge. Uses FTS5 full-text search for fast, ranked results.',
   inputSchema: {
     type: 'object',
     properties: {
       query: {
         type: 'string',
-        description: 'Search query (searches titles and content)',
+        description: 'Search query (searches titles and content using full-text search)',
       },
       type: {
         type: 'string',
@@ -84,7 +85,7 @@ export const recallTool: Tool = {
 };
 
 /**
- * Simple text search scoring
+ * Simple text search scoring (fallback when index unavailable)
  */
 function scoreMatch(text: string, query: string): number {
   const lowerText = text.toLowerCase();
@@ -112,6 +113,73 @@ function scoreMatch(text: string, query: string): number {
   return score;
 }
 
+/**
+ * Fallback search without index
+ */
+async function fallbackSearch(
+  query: string,
+  type: string,
+  tags: string[] | undefined,
+  path: string | undefined,
+  minConfidence: number | undefined,
+  limit: number,
+  includeContent: boolean
+): Promise<SearchResult[]> {
+  logger.debug('Using fallback search (index not available)');
+
+  const basePath = type !== 'all' ? type : '';
+  const allNotes = await listNotes(basePath || path || '', true);
+  const results: SearchResult[] = [];
+
+  for (const meta of allNotes) {
+    if (path && !meta.path.startsWith(path)) continue;
+    if (type !== 'all' && meta.frontmatter.type !== type) continue;
+
+    if (tags && tags.length > 0) {
+      const noteTags = meta.frontmatter.tags ?? [];
+      const hasAllTags = tags.every((tag) =>
+        noteTags.some((t) => t.toLowerCase() === tag.toLowerCase())
+      );
+      if (!hasAllTags) continue;
+    }
+
+    if (minConfidence !== undefined && (meta.frontmatter.confidence ?? 0) < minConfidence) {
+      continue;
+    }
+
+    let score = scoreMatch(meta.title, query);
+
+    if (includeContent || score === 0) {
+      const fullNote = await readNote(meta.path);
+      if (fullNote) {
+        score += scoreMatch(fullNote.content, query) * 0.5;
+      }
+    }
+
+    const tagText = (meta.frontmatter.tags ?? []).join(' ');
+    score += scoreMatch(tagText, query) * 2;
+
+    if (score > 0) {
+      results.push({ note: meta, score });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  return results.slice(0, limit);
+}
+
+/**
+ * Check if index is available
+ */
+function isIndexAvailable(): boolean {
+  try {
+    getDatabaseSync();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Tool handler
 export async function recallHandler(
   args: Record<string, unknown>
@@ -131,68 +199,36 @@ export async function recallHandler(
   const input = parseResult.data;
 
   try {
-    // Get all notes (TODO: use SQLite index for performance)
-    const basePath = input.type !== 'all' ? input.type : '';
-    const allNotes = await listNotes(basePath || input.path || '', true);
+    let results: SearchResult[];
 
-    // Filter and score
-    const results: SearchResult[] = [];
+    // Try FTS5 search first, fallback to simple search
+    if (isIndexAvailable()) {
+      logger.debug('Using FTS5 search');
+      const searchOptions: Parameters<typeof searchNotes>[0] = {
+        query: input.query,
+        limit: input.limit,
+      };
+      if (input.type !== 'all') searchOptions.type = input.type;
+      if (input.tags) searchOptions.tags = input.tags;
+      if (input.path) searchOptions.path = input.path;
+      if (input.min_confidence !== undefined) searchOptions.minConfidence = input.min_confidence;
 
-    for (const meta of allNotes) {
-      // Apply filters
-      if (input.path && !meta.path.startsWith(input.path)) {
-        continue;
-      }
-
-      if (input.type !== 'all' && meta.frontmatter.type !== input.type) {
-        continue;
-      }
-
-      if (input.tags && input.tags.length > 0) {
-        const noteTags = meta.frontmatter.tags ?? [];
-        const hasAllTags = input.tags.every((tag) =>
-          noteTags.some((t) => t.toLowerCase() === tag.toLowerCase())
-        );
-        if (!hasAllTags) continue;
-      }
-
-      if (
-        input.min_confidence !== undefined &&
-        (meta.frontmatter.confidence ?? 0) < input.min_confidence
-      ) {
-        continue;
-      }
-
-      // Score the match
-      let score = scoreMatch(meta.title, input.query);
-
-      // If we need content for scoring or results, read the full note
-      if (input.include_content || score === 0) {
-        const fullNote = await readNote(meta.path);
-        if (fullNote) {
-          score += scoreMatch(fullNote.content, input.query) * 0.5;
-        }
-      }
-
-      // Also score tag matches
-      const tagText = (meta.frontmatter.tags ?? []).join(' ');
-      score += scoreMatch(tagText, input.query) * 2;
-
-      if (score > 0) {
-        results.push({
-          note: meta,
-          score,
-        });
-      }
+      results = searchNotes(searchOptions);
+    } else {
+      results = await fallbackSearch(
+        input.query,
+        input.type,
+        input.tags,
+        input.path,
+        input.min_confidence,
+        input.limit,
+        input.include_content
+      );
     }
-
-    // Sort by score and limit
-    results.sort((a, b) => b.score - a.score);
-    const limited = results.slice(0, input.limit);
 
     // Optionally include content
     const finalResults = await Promise.all(
-      limited.map(async (result) => {
+      results.map(async (result) => {
         if (input.include_content) {
           const fullNote = await readNote(result.note.path);
           return {
@@ -209,7 +245,7 @@ export async function recallHandler(
       data: {
         query: input.query,
         count: finalResults.length,
-        total: results.length,
+        indexed: isIndexAvailable(),
         results: finalResults,
       },
     };

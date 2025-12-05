@@ -15,11 +15,18 @@ export function extractWikiLinks(content: string): WikiLink[] {
   let match;
 
   while ((match = WIKILINK_REGEX.exec(content)) !== null) {
-    links.push({
+    const link: WikiLink = {
       target: match[1]!.trim(),
-      display: match[2]?.trim(),
       raw: match[0],
-    });
+    };
+
+    // Only set display if it exists
+    const display = match[2]?.trim();
+    if (display) {
+      link.display = display;
+    }
+
+    links.push(link);
   }
 
   return links;

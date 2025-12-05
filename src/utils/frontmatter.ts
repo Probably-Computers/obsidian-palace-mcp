@@ -71,15 +71,22 @@ export function mergeFrontmatter(
     ...new Set([...(existing.aliases ?? []), ...(updates.aliases ?? [])]),
   ];
 
-  return {
+  const result: NoteFrontmatter = {
     type: updates.type ?? existing.type ?? 'research',
     created: existing.created ?? now,
     modified: now,
-    source: updates.source ?? existing.source,
-    confidence: updates.confidence ?? existing.confidence,
     verified: updates.verified ?? existing.verified ?? false,
     tags,
     related,
     aliases,
   };
+
+  // Only set optional properties if they have values
+  const source = updates.source ?? existing.source;
+  if (source) result.source = source;
+
+  const confidence = updates.confidence ?? existing.confidence;
+  if (confidence !== undefined) result.confidence = confidence;
+
+  return result;
 }

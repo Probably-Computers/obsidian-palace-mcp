@@ -3,7 +3,7 @@
  */
 
 import { readFile, readdir, stat } from 'fs/promises';
-import { join, relative, extname, basename } from 'path';
+import { join, extname, basename } from 'path';
 import { getConfig } from '../../config/index.js';
 import { parseFrontmatter } from '../../utils/frontmatter.js';
 import { extractTitle } from '../../utils/markdown.js';
