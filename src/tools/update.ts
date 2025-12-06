@@ -12,6 +12,12 @@ import {
   updateFrontmatter,
 } from '../services/vault/index.js';
 import { indexNote } from '../services/index/index.js';
+import {
+  buildCompleteIndex,
+  scanForMatches,
+  autolinkContent,
+} from '../services/autolink/index.js';
+import { logger } from '../utils/logger.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -42,6 +48,7 @@ const inputSchema = z.object({
       aliases: z.array(z.string()).optional(),
     })
     .optional(),
+  autolink: z.boolean().optional().default(true),
 });
 
 // Tool definition
@@ -90,6 +97,10 @@ export const updateTool: Tool = {
           aliases: { type: 'array', items: { type: 'string' } },
         },
       },
+      autolink: {
+        type: 'boolean',
+        description: 'Automatically insert wiki-links for mentions of existing notes (default: true)',
+      },
     },
     required: ['path'],
   },
@@ -111,7 +122,7 @@ export async function updateHandler(
     };
   }
 
-  const { path, mode, content, frontmatter } = parseResult.data;
+  const { path, mode, content, frontmatter, autolink } = parseResult.data;
 
   // Validate that content is provided for replace/append modes
   if ((mode === 'replace' || mode === 'append') && !content) {
@@ -143,6 +154,7 @@ export async function updateHandler(
     }
 
     let updatedNote: Note;
+    let linksAdded = 0;
 
     // Build frontmatter updates - only include defined values
     const frontmatterUpdates: Partial<NoteFrontmatter> = {};
@@ -154,13 +166,31 @@ export async function updateHandler(
     if (frontmatter?.related) frontmatterUpdates.related = frontmatter.related;
     if (frontmatter?.aliases) frontmatterUpdates.aliases = frontmatter.aliases;
 
+    // Auto-link content if enabled and content is being updated
+    let contentToSave = content;
+    if (autolink && contentToSave && (mode === 'replace' || mode === 'append')) {
+      try {
+        const { index } = await buildCompleteIndex();
+        const matches = scanForMatches(contentToSave, index, path);
+        if (matches.length > 0) {
+          const result = autolinkContent(contentToSave, matches);
+          contentToSave = result.linkedContent;
+          linksAdded = result.linksAdded.length;
+          logger.debug(`Auto-linked ${linksAdded} terms in updated note`);
+        }
+      } catch (linkError) {
+        // Log but don't fail - auto-linking is a nice-to-have
+        logger.warn('Auto-linking failed, proceeding without', linkError);
+      }
+    }
+
     switch (mode) {
       case 'replace':
-        updatedNote = await updateNote(path, content!, frontmatterUpdates);
+        updatedNote = await updateNote(path, contentToSave!, frontmatterUpdates);
         break;
 
       case 'append':
-        updatedNote = await appendToNote(path, content!);
+        updatedNote = await appendToNote(path, contentToSave!);
         if (Object.keys(frontmatterUpdates).length > 0) {
           updatedNote = await updateFrontmatter(path, frontmatterUpdates);
         }
@@ -187,8 +217,9 @@ export async function updateHandler(
         path: updatedNote.path,
         title: updatedNote.title,
         mode,
+        linksAdded,
         frontmatter: updatedNote.frontmatter,
-        message: `Note updated successfully (${mode} mode)`,
+        message: `Note updated successfully (${mode} mode)${linksAdded > 0 ? ` (${linksAdded} auto-links added)` : ''}`,
       },
     };
   } catch (error) {

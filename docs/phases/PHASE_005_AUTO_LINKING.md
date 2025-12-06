@@ -1,10 +1,10 @@
 # Phase 005: Auto-Linking
 
-**Status**: Planning
-**Start Date**: TBD
-**Target Completion**: TBD
-**Actual Completion**: -
-**Owner**: TBD
+**Status**: Complete
+**Start Date**: 2025-12-06
+**Target Completion**: 2025-12-06
+**Actual Completion**: 2025-12-06
+**Owner**: Claude
 
 ## Objectives
 
@@ -19,9 +19,9 @@
 - [x] Phase 001 completed
 - [x] Phase 002 completed
 - [x] Phase 003 completed (SQLite index)
-- [ ] Phase 004 completed (graph intelligence)
-- [ ] Note title/alias index available
-- [ ] Test vault configured via PALACE_VAULT_PATH
+- [x] Phase 004 completed (graph intelligence)
+- [x] Note title/alias index available
+- [x] Test vault configured via PALACE_VAULT_PATH
 
 ## Scope
 
@@ -47,55 +47,55 @@
 
 ### Setup
 
-- [ ] Create services/autolink/ directory structure
-- [ ] Define autolink configuration options
+- [x] Create services/autolink/ directory structure
+- [x] Define autolink configuration options
 
 ### Development
 
-- [ ] Implement services/autolink/scanner.ts
-  - [ ] Build title/alias lookup index
-  - [ ] Scan content for matching terms
-  - [ ] Return match positions and targets
-  - [ ] Case-insensitive matching
-  - [ ] Word boundary detection
-- [ ] Implement services/autolink/linker.ts
-  - [ ] Insert [[wiki-links]] at match positions
-  - [ ] Preserve original case in display text
-  - [ ] Handle overlapping matches
-  - [ ] Skip code blocks (``` and `)
-  - [ ] Skip existing wiki-links
-  - [ ] Skip URLs and markdown links
-- [ ] Implement services/autolink/aliases.ts
-  - [ ] Load aliases from all notes
-  - [ ] Map aliases to canonical titles
-  - [ ] Handle alias conflicts
-- [ ] Implement services/autolink/index.ts barrel export
-- [ ] Update tools/remember.ts
-  - [ ] Call autolink before saving
-  - [ ] Option to disable auto-linking
-- [ ] Implement tools/update.ts integration
-  - [ ] Call autolink on content changes
-  - [ ] Option to disable auto-linking
-- [ ] Implement tools/autolink.ts (palace_autolink)
-  - [ ] Process entire vault or path
-  - [ ] Dry-run mode (preview changes)
-  - [ ] Min title length option
-  - [ ] Exclude paths option
-  - [ ] Report changes made
+- [x] Implement services/autolink/scanner.ts
+  - [x] Build title/alias lookup index
+  - [x] Scan content for matching terms
+  - [x] Return match positions and targets
+  - [x] Case-insensitive matching
+  - [x] Word boundary detection
+- [x] Implement services/autolink/linker.ts
+  - [x] Insert [[wiki-links]] at match positions
+  - [x] Preserve original case in display text
+  - [x] Handle overlapping matches
+  - [x] Skip code blocks (``` and `)
+  - [x] Skip existing wiki-links
+  - [x] Skip URLs and markdown links
+- [x] Implement services/autolink/aliases.ts
+  - [x] Load aliases from all notes
+  - [x] Map aliases to canonical titles
+  - [x] Handle alias conflicts
+- [x] Implement services/autolink/index.ts barrel export
+- [x] Update tools/remember.ts
+  - [x] Call autolink before saving
+  - [x] Option to disable auto-linking
+- [x] Implement tools/update.ts integration
+  - [x] Call autolink on content changes
+  - [x] Option to disable auto-linking
+- [x] Implement tools/autolink.ts (palace_autolink)
+  - [x] Process entire vault or path
+  - [x] Dry-run mode (preview changes)
+  - [x] Min title length option
+  - [x] Exclude paths option
+  - [x] Report changes made
 
 ### Testing & Validation
 
-- [ ] Unit tests for scanner
-- [ ] Unit tests for linker
-- [ ] Unit tests for alias resolution
+- [x] Unit tests for scanner
+- [x] Unit tests for linker
+- [x] Unit tests for alias resolution
 - [ ] Integration tests with real notes
-- [ ] Edge case tests (code blocks, nested links)
+- [x] Edge case tests (code blocks, nested links)
 
 ### Documentation
 
-- [ ] Update CLAUDE.md with autolink behavior
-- [ ] Document configuration options
-- [ ] Add examples of autolink results
+- [x] Update CLAUDE.md with autolink behavior
+- [x] Document configuration options
+- [x] Add examples of autolink results
 
 ## Standards & References
 
@@ -192,23 +192,23 @@ Create test notes with overlapping titles and aliases for thorough testing.
 
 ### Quality Checks
 
-- [ ] Code review completed
-- [ ] All tests passing
-- [ ] Linting passes
-- [ ] Documentation updated
-- [ ] No unintended link insertions
-- [ ] Performance acceptable
+- [x] Code review completed
+- [x] All tests passing
+- [x] Linting passes
+- [x] Documentation updated
+- [x] No unintended link insertions
+- [x] Performance acceptable
 
 ## Acceptance Criteria
 
-- [ ] Scanner finds all matching titles and aliases
-- [ ] Linker correctly inserts wiki-links
-- [ ] Code blocks and existing links are preserved
-- [ ] palace_remember auto-links new content
-- [ ] palace_update auto-links modified content
-- [ ] palace_autolink processes vault correctly
-- [ ] Dry-run mode previews without changing
-- [ ] No false positives in short common words
+- [x] Scanner finds all matching titles and aliases
+- [x] Linker correctly inserts wiki-links
+- [x] Code blocks and existing links are preserved
+- [x] palace_remember auto-links new content
+- [x] palace_update auto-links modified content
+- [x] palace_autolink processes vault correctly
+- [x] Dry-run mode previews without changing
+- [x] No false positives in short common words
 
 ## Risks & Mitigation
 
@@ -221,29 +221,32 @@ Create test notes with overlapping titles and aliases for thorough testing.
 
 ## Notes & Decisions
 
-### TBD - Minimum Title Length
+### Minimum Title Length
 
 - Context: Short titles cause false positives
 - Options:
   1. Fixed minimum (3 chars)
   2. Configurable per-run
   3. Common word blocklist
-- Decision: Pending (likely configurable + blocklist)
+- **Decision**: Configurable per-run (default: 3 chars) + common word blocklist
+- Implementation: `DEFAULT_MIN_TITLE_LENGTH = 3`, blocklist of ~40 common words
 
-### TBD - Case Sensitivity
+### Case Sensitivity
 
 - Context: Should "docker" match "Docker"?
 - Options:
   1. Case-insensitive matching, preserve case in link
   2. Exact case matching only
   3. Configurable
-- Decision: Pending (likely case-insensitive)
+- **Decision**: Case-insensitive matching, preserve original case in display text
+- Implementation: Matches `DOCKER` → creates `[[Docker|DOCKER]]`
 
-### TBD - Alias Conflicts
+### Alias Conflicts
 
 - Context: Multiple notes with same alias
 - Options:
   1. First note wins
   2. Error/warning
   3. Don't link ambiguous terms
-- Decision: Pending
+- **Decision**: First note wins + warning logged + conflicts reported in results
+- Implementation: `AliasConflict` type tracks conflicts, returned in tool output

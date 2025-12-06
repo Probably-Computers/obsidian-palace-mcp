@@ -16,6 +16,7 @@ import { queryTool, queryHandler } from './query.js';
 import { linksTool, linksHandler } from './links.js';
 import { orphansTool, orphansHandler } from './orphans.js';
 import { relatedTool, relatedHandler } from './related.js';
+import { autolinkTool, autolinkHandler } from './autolink.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -58,8 +59,11 @@ export function registerTools(): void {
   tools.set('palace_related', relatedTool);
   handlers.set('palace_related', relatedHandler);
 
+  // Phase 005 tools - Auto-linking
+  tools.set('palace_autolink', autolinkTool);
+  handlers.set('palace_autolink', autolinkHandler);
+
   // TODO: Add more tools as implemented
-  // - palace_autolink (Phase 005)
   // - palace_dataview (Phase 006)
   // - palace_session_start (Phase 007)
   // - palace_session_log (Phase 007)

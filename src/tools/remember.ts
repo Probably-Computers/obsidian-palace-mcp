@@ -6,6 +6,12 @@ import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult, KnowledgeType } from '../types/index.js';
 import { createNote } from '../services/vault/index.js';
+import {
+  buildCompleteIndex,
+  scanForMatches,
+  autolinkContent,
+} from '../services/autolink/index.js';
+import { logger } from '../utils/logger.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -25,6 +31,7 @@ const inputSchema = z.object({
   related: z.array(z.string()).optional().default([]),
   confidence: z.number().min(0).max(1).optional().default(0.5),
   source: z.string().optional().default('claude'),
+  autolink: z.boolean().optional().default(true),
 });
 
 // Tool definition
@@ -79,6 +86,10 @@ export const rememberTool: Tool = {
         type: 'string',
         description: 'Where this came from (claude, user, web:url)',
       },
+      autolink: {
+        type: 'boolean',
+        description: 'Automatically insert wiki-links for mentions of existing notes (default: true)',
+      },
     },
     required: ['content', 'title', 'type'],
   },
@@ -103,14 +114,31 @@ export async function rememberHandler(
   const input = parseResult.data;
 
   try {
-    // TODO: Auto-link content before saving
-    // const linkedContent = await autoLinkContent(input.content);
+    let contentToSave = input.content;
+    let linksAdded = 0;
+
+    // Auto-link content if enabled
+    if (input.autolink) {
+      try {
+        const { index } = await buildCompleteIndex();
+        const matches = scanForMatches(contentToSave, index);
+        if (matches.length > 0) {
+          const result = autolinkContent(contentToSave, matches);
+          contentToSave = result.linkedContent;
+          linksAdded = result.linksAdded.length;
+          logger.debug(`Auto-linked ${linksAdded} terms in new note`);
+        }
+      } catch (linkError) {
+        // Log but don't fail - auto-linking is a nice-to-have
+        logger.warn('Auto-linking failed, proceeding without', linkError);
+      }
+    }
 
     const note = await createNote(
       input.type as KnowledgeType,
       input.path,
       input.title,
-      input.content,
+      contentToSave,
       {
         tags: input.tags,
         related: input.related.map((r) => `[[${r}]]`),
@@ -124,7 +152,8 @@ export async function rememberHandler(
       data: {
         path: note.path,
         title: note.title,
-        message: `Created note: ${note.path}`,
+        linksAdded,
+        message: `Created note: ${note.path}${linksAdded > 0 ? ` (${linksAdded} auto-links added)` : ''}`,
       },
     };
   } catch (error) {

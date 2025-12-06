@@ -155,7 +155,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_links | ✅ | Backlink/outlink traversal with multi-hop support |
 | palace_orphans | ✅ | Find disconnected notes (no incoming/outgoing links) |
 | palace_related | ✅ | Discover related content by shared links/tags |
-| palace_autolink | 🔜 | Automatic wiki-link insertion (Phase 005) |
+| palace_autolink | ✅ | Automatic wiki-link insertion |
 | palace_dataview | 🔜 | DQL query execution (Phase 006) |
 
 ### palace_recall
@@ -254,6 +254,27 @@ Find notes related to a given note by shared links or tags:
   limit?: number;                            // Max results (default: 10)
 }
 ```
+
+### palace_autolink
+
+Automatically insert wiki-links in notes by finding mentions of existing note titles:
+
+```typescript
+{
+  path?: string;              // Note path or directory (default: entire vault)
+  dry_run?: boolean;          // Preview only, no changes (default: true)
+  min_title_length?: number;  // Minimum title length to match (default: 3)
+  exclude_paths?: string[];   // Paths to skip
+  include_aliases?: boolean;  // Include note aliases in matching (default: true)
+}
+```
+
+**Auto-linking behavior:**
+- Scans content for mentions of existing note titles and aliases
+- Case-insensitive matching with word boundary detection
+- Preserves original case using display text: `[[Docker|DOCKER]]`
+- Skips code blocks, inline code, existing links, URLs, headings, and frontmatter
+- Built into `palace_remember` and `palace_update` (controlled via `autolink` parameter)
 
 ## Testing
 
