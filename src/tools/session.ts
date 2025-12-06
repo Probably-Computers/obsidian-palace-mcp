@@ -1,0 +1,394 @@
+/**
+ * Session tracking tools - palace_session_start and palace_session_log
+ * Creates and manages daily session logs for AI work tracking
+ */
+
+import { z } from 'zod';
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { ToolResult, Session, SessionEntry } from '../types/index.js';
+import { getConfig } from '../config/index.js';
+import { logger } from '../utils/logger.js';
+
+// Current session state (in-memory for simplicity)
+let currentSession: Session | null = null;
+
+/**
+ * Get today's date in YYYY-MM-DD format
+ */
+function getToday(): string {
+  return new Date().toISOString().split('T')[0]!;
+}
+
+/**
+ * Get current time in HH:MM format
+ */
+function getTime(): string {
+  return new Date().toISOString().split('T')[1]!.slice(0, 5);
+}
+
+/**
+ * Get the path to today's daily log file
+ */
+function getDailyLogPath(date: string): string {
+  const config = getConfig();
+  return join(config.vaultPath, 'daily', `${date}.md`);
+}
+
+/**
+ * Ensure the daily directory exists
+ */
+async function ensureDailyDir(): Promise<void> {
+  const config = getConfig();
+  const dailyDir = join(config.vaultPath, 'daily');
+  try {
+    await mkdir(dailyDir, { recursive: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+      throw error;
+    }
+  }
+}
+
+/**
+ * Read the current daily log content, or return null if it doesn't exist
+ */
+async function readDailyLog(date: string): Promise<string | null> {
+  const logPath = getDailyLogPath(date);
+  try {
+    return await readFile(logPath, 'utf-8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Count sessions in existing daily log
+ */
+function countSessions(content: string): number {
+  const matches = content.match(/^## Session \d+:/gm);
+  return matches ? matches.length : 0;
+}
+
+/**
+ * Create initial daily log content
+ */
+function createDailyLogContent(date: string): string {
+  return `---
+type: daily
+date: ${date}
+sessions: 0
+---
+
+# ${date}
+`;
+}
+
+/**
+ * Format a session section for the daily log
+ */
+function formatSessionSection(session: Session, sessionNumber: number): string {
+  let section = `\n## Session ${sessionNumber}: ${session.topic}\n`;
+  section += `**Started**: ${session.startedAt.split('T')[1]?.slice(0, 5) || getTime()}\n`;
+
+  if (session.context) {
+    section += `**Context**: ${session.context}\n`;
+  }
+
+  section += `\n### Log\n`;
+
+  for (const entry of session.entries) {
+    const time = entry.timestamp.split('T')[1]?.slice(0, 5) || getTime();
+    section += `- ${time} - ${entry.entry}\n`;
+  }
+
+  // Add notes created section if any entries have notes
+  const allNotes = session.entries
+    .flatMap(e => e.notesCreated || [])
+    .filter((note, index, arr) => arr.indexOf(note) === index);
+
+  if (allNotes.length > 0) {
+    section += `\n### Notes Created\n`;
+    for (const note of allNotes) {
+      section += `- [[${note.replace(/\.md$/, '')}]]\n`;
+    }
+  }
+
+  return section;
+}
+
+/**
+ * Update the sessions count in frontmatter
+ */
+function updateSessionsCount(content: string, count: number): string {
+  return content.replace(/^sessions: \d+$/m, `sessions: ${count}`);
+}
+
+// ============================================================================
+// palace_session_start
+// ============================================================================
+
+const startInputSchema = z.object({
+  topic: z.string().min(1, 'Topic is required'),
+  context: z.string().optional(),
+});
+
+export const sessionStartTool: Tool = {
+  name: 'palace_session_start',
+  description: `Start a new session in today's daily log. Creates a session entry to track your research and work. Use this at the beginning of a focused work period.`,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      topic: {
+        type: 'string',
+        description: 'What this session is about (e.g., "Kubernetes networking research")',
+      },
+      context: {
+        type: 'string',
+        description: 'Additional context (e.g., client name, project name)',
+      },
+    },
+    required: ['topic'],
+  },
+};
+
+export async function sessionStartHandler(
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  const parseResult = startInputSchema.safeParse(args);
+  if (!parseResult.success) {
+    return {
+      success: false,
+      error: parseResult.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; '),
+      code: 'VALIDATION_ERROR',
+    };
+  }
+
+  const { topic, context } = parseResult.data;
+
+  try {
+    await ensureDailyDir();
+
+    const today = getToday();
+    const now = new Date().toISOString();
+
+    // Create new session
+    const session: Session = {
+      id: `session-${Date.now()}`,
+      date: today,
+      topic,
+      startedAt: now,
+      entries: [],
+    };
+    if (context) {
+      session.context = context;
+    }
+    currentSession = session;
+
+    // Read or create daily log
+    let content = await readDailyLog(today);
+    if (!content) {
+      content = createDailyLogContent(today);
+    }
+
+    // Count existing sessions and add new one
+    const sessionNumber = countSessions(content) + 1;
+    const sessionSection = formatSessionSection(session, sessionNumber);
+
+    // Update content
+    content = updateSessionsCount(content, sessionNumber);
+    content += sessionSection;
+
+    // Write back
+    const logPath = getDailyLogPath(today);
+    await writeFile(logPath, content, 'utf-8');
+
+    logger.info(`Started session ${sessionNumber}: ${topic}`);
+
+    return {
+      success: true,
+      data: {
+        sessionId: session.id,
+        sessionNumber,
+        topic,
+        context,
+        date: today,
+        logPath: `daily/${today}.md`,
+        message: `Started session ${sessionNumber}: "${topic}"`,
+      },
+    };
+  } catch (error) {
+    currentSession = null;
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      code: 'SESSION_ERROR',
+    };
+  }
+}
+
+// ============================================================================
+// palace_session_log
+// ============================================================================
+
+const logInputSchema = z.object({
+  entry: z.string().min(1, 'Entry is required'),
+  notes_created: z.array(z.string()).optional().default([]),
+});
+
+export const sessionLogTool: Tool = {
+  name: 'palace_session_log',
+  description: `Add an entry to the current session log. Use this to track what you've learned, discovered, or created during the session.`,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      entry: {
+        type: 'string',
+        description: 'What happened or was learned',
+      },
+      notes_created: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Paths of notes created during this entry',
+      },
+    },
+    required: ['entry'],
+  },
+};
+
+export async function sessionLogHandler(
+  args: Record<string, unknown>
+): Promise<ToolResult> {
+  const parseResult = logInputSchema.safeParse(args);
+  if (!parseResult.success) {
+    return {
+      success: false,
+      error: parseResult.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; '),
+      code: 'VALIDATION_ERROR',
+    };
+  }
+
+  const { entry, notes_created } = parseResult.data;
+
+  // Check if we have an active session
+  if (!currentSession) {
+    return {
+      success: false,
+      error: 'No active session. Use palace_session_start first.',
+      code: 'NO_SESSION',
+    };
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const time = now.split('T')[1]!.slice(0, 5);
+
+    // Create the entry
+    const sessionEntry: SessionEntry = {
+      timestamp: now,
+      entry,
+    };
+    if (notes_created.length > 0) {
+      sessionEntry.notesCreated = notes_created;
+    }
+
+    // Add to current session
+    currentSession.entries.push(sessionEntry);
+
+    // Read daily log
+    const today = currentSession.date;
+    let content = await readDailyLog(today);
+
+    if (!content) {
+      return {
+        success: false,
+        error: 'Daily log file not found',
+        code: 'FILE_NOT_FOUND',
+      };
+    }
+
+    // Find the current session's Log section and append the entry
+    const logEntry = `- ${time} - ${entry}`;
+
+    // Find the last "### Log" section and append after it
+    const logSectionRegex = /### Log\n((?:- .+\n)*)/g;
+    let lastMatch: RegExpExecArray | null = null;
+    let match: RegExpExecArray | null;
+
+    while ((match = logSectionRegex.exec(content)) !== null) {
+      lastMatch = match;
+    }
+
+    if (lastMatch) {
+      // Insert new entry after existing log entries
+      const insertPos = lastMatch.index + lastMatch[0].length;
+      content = content.slice(0, insertPos) + logEntry + '\n' + content.slice(insertPos);
+    }
+
+    // If notes were created, update the Notes Created section
+    if (notes_created.length > 0) {
+      const notesSection = content.match(/### Notes Created\n((?:- .+\n)*)/);
+
+      if (notesSection) {
+        // Append to existing Notes Created section
+        const insertPos = notesSection.index! + notesSection[0].length;
+        const newNotes = notes_created
+          .map(n => `- [[${n.replace(/\.md$/, '')}]]`)
+          .join('\n');
+        content = content.slice(0, insertPos) + newNotes + '\n' + content.slice(insertPos);
+      } else {
+        // Add Notes Created section at end
+        const newNotes = notes_created
+          .map(n => `- [[${n.replace(/\.md$/, '')}]]`)
+          .join('\n');
+        content += `\n### Notes Created\n${newNotes}\n`;
+      }
+    }
+
+    // Write back
+    const logPath = getDailyLogPath(today);
+    await writeFile(logPath, content, 'utf-8');
+
+    logger.debug(`Added session log entry: ${entry}`);
+
+    return {
+      success: true,
+      data: {
+        sessionId: currentSession.id,
+        entryNumber: currentSession.entries.length,
+        timestamp: time,
+        entry,
+        notesCreated: notes_created,
+        message: `Logged: "${entry}"`,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      code: 'LOG_ERROR',
+    };
+  }
+}
+
+/**
+ * Get the current session (for testing or internal use)
+ */
+export function getCurrentSession(): Session | null {
+  return currentSession;
+}
+
+/**
+ * Clear the current session (for testing)
+ */
+export function clearSession(): void {
+  currentSession = null;
+}

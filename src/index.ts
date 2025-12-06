@@ -19,6 +19,7 @@ import { logger } from './utils/logger.js';
 import { handleToolCall, getToolDefinitions } from './tools/index.js';
 import { getDatabase, closeDatabase } from './services/index/index.js';
 import { startWatcher, stopWatcher, performInitialScan } from './services/vault/index.js';
+import { startHttpTransport, stopHttpTransport, isHttpEnabled } from './transports/index.js';
 
 async function main(): Promise<void> {
   // Load and validate configuration
@@ -98,17 +99,25 @@ async function main(): Promise<void> {
     }
   });
 
-  // Connect to stdio transport
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-
-  logger.info('Server connected and ready');
+  // Start HTTP transport if enabled, otherwise use stdio
+  if (isHttpEnabled()) {
+    await startHttpTransport();
+    logger.info('Server running with HTTP transport');
+  } else {
+    // Connect to stdio transport
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+    logger.info('Server connected with stdio transport');
+  }
 }
 
 // Graceful shutdown handler
 async function shutdown(): Promise<void> {
   logger.info('Shutting down...');
   await stopWatcher();
+  if (isHttpEnabled()) {
+    await stopHttpTransport();
+  }
   closeDatabase();
   logger.info('Shutdown complete');
   process.exit(0);

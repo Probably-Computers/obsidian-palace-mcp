@@ -18,6 +18,12 @@ import { orphansTool, orphansHandler } from './orphans.js';
 import { relatedTool, relatedHandler } from './related.js';
 import { autolinkTool, autolinkHandler } from './autolink.js';
 import { dataviewTool, dataviewHandler } from './dataview.js';
+import {
+  sessionStartTool,
+  sessionStartHandler,
+  sessionLogTool,
+  sessionLogHandler,
+} from './session.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -68,9 +74,12 @@ export function registerTools(): void {
   tools.set('palace_dataview', dataviewTool);
   handlers.set('palace_dataview', dataviewHandler);
 
-  // TODO: Add more tools as implemented
-  // - palace_session_start (Phase 007)
-  // - palace_session_log (Phase 007)
+  // Phase 007 tools - Session tracking
+  tools.set('palace_session_start', sessionStartTool);
+  handlers.set('palace_session_start', sessionStartHandler);
+
+  tools.set('palace_session_log', sessionLogTool);
+  handlers.set('palace_session_log', sessionLogHandler);
 }
 
 /**

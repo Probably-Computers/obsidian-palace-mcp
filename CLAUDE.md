@@ -101,6 +101,9 @@ npm run inspect  # Test with MCP Inspector
 | PALACE_INDEX_PATH | No | {vault}/.palace/index.sqlite | SQLite database location |
 | PALACE_LOG_LEVEL | No | info | debug, info, warn, error |
 | PALACE_WATCH_ENABLED | No | true | Watch for external file changes |
+| HTTP_ENABLED | No | false | Enable HTTP/SSE transport instead of stdio |
+| HTTP_PORT | No | 3000 | Port for HTTP transport |
+| HTTP_CORS_ORIGIN | No | * | CORS origin for HTTP transport |
 
 ### Development Setup with direnv
 
@@ -157,6 +160,8 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_related | ✅ | Discover related content by shared links/tags |
 | palace_autolink | ✅ | Automatic wiki-link insertion |
 | palace_dataview | ✅ | DQL query execution |
+| palace_session_start | ✅ | Start a work session in daily log |
+| palace_session_log | ✅ | Log entries to current session |
 
 ### palace_recall
 
@@ -303,6 +308,32 @@ TABLE title, type WHERE confidence > 0.8 SORT modified DESC LIMIT 10
 **Supported fields:**
 - `path`, `title`, `type`, `created`, `modified`, `source`, `confidence`, `verified`, `content`
 - Dataview aliases: `file.path`, `file.name`, `file.ctime`, `file.mtime`
+
+### palace_session_start
+
+Start a new work session in today's daily log:
+
+```typescript
+{
+  topic: string;           // What this session is about (required)
+  context?: string;        // Additional context (client, project)
+}
+```
+
+Creates a session entry in `daily/YYYY-MM-DD.md` with proper YAML frontmatter and session structure.
+
+### palace_session_log
+
+Add an entry to the current session:
+
+```typescript
+{
+  entry: string;           // What happened / learned (required)
+  notes_created?: string[]; // Paths of notes created during this entry
+}
+```
+
+Requires an active session (use `palace_session_start` first).
 
 ## Testing
 
