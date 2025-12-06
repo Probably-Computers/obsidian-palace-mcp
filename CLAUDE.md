@@ -156,7 +156,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_orphans | ✅ | Find disconnected notes (no incoming/outgoing links) |
 | palace_related | ✅ | Discover related content by shared links/tags |
 | palace_autolink | ✅ | Automatic wiki-link insertion |
-| palace_dataview | 🔜 | DQL query execution (Phase 006) |
+| palace_dataview | ✅ | DQL query execution |
 
 ### palace_recall
 
@@ -275,6 +275,34 @@ Automatically insert wiki-links in notes by finding mentions of existing note ti
 - Preserves original case using display text: `[[Docker|DOCKER]]`
 - Skips code blocks, inline code, existing links, URLs, headings, and frontmatter
 - Built into `palace_remember` and `palace_update` (controlled via `autolink` parameter)
+
+### palace_dataview
+
+Execute Dataview Query Language (DQL) queries against notes:
+
+```typescript
+{
+  query: string;                              // DQL query string (required)
+  format?: 'table' | 'list' | 'task' | 'json';  // Output format (default: json)
+}
+```
+
+**Supported DQL syntax:**
+- Query types: `TABLE`, `LIST`, `TASK`
+- Clauses: `FROM`, `WHERE`, `SORT`, `LIMIT`
+- Operators: `=`, `!=`, `>`, `<`, `>=`, `<=`, `AND`, `OR`
+- Functions: `contains(field, value)`
+
+**Example queries:**
+```dataview
+TABLE title, confidence FROM "research" WHERE verified = false SORT confidence DESC
+LIST FROM "commands" WHERE contains(tags, "kubernetes")
+TABLE title, type WHERE confidence > 0.8 SORT modified DESC LIMIT 10
+```
+
+**Supported fields:**
+- `path`, `title`, `type`, `created`, `modified`, `source`, `confidence`, `verified`, `content`
+- Dataview aliases: `file.path`, `file.name`, `file.ctime`, `file.mtime`
 
 ## Testing
 
