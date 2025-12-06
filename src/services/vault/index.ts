@@ -25,3 +25,24 @@ export {
   isWatcherRunning,
   performInitialScan,
 } from './watcher.js';
+
+export {
+  getVaultRegistry,
+  initializeRegistry,
+  resetRegistry,
+  resolveVaultPath,
+  canWriteToVault,
+  getDefaultVaultPath,
+  getDefaultVaultAlias,
+} from './registry.js';
+
+export {
+  shouldIgnore,
+  matchesIgnorePatterns,
+  hasIgnoreMarker,
+  hasIgnoreMarkerInPath,
+  hasIgnoreFrontmatter,
+  createIgnoreFilter,
+  mergeIgnorePatterns,
+  DEFAULT_IGNORE_PATTERNS,
+} from './ignore.js';

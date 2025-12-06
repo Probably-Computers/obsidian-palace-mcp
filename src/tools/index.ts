@@ -24,6 +24,7 @@ import {
   sessionLogTool,
   sessionLogHandler,
 } from './session.js';
+import { vaultsTool, vaultsHandler } from './vaults.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -80,6 +81,10 @@ export function registerTools(): void {
 
   tools.set('palace_session_log', sessionLogTool);
   handlers.set('palace_session_log', sessionLogHandler);
+
+  // Phase 008 tools - Multi-vault
+  tools.set('palace_vaults', vaultsTool);
+  handlers.set('palace_vaults', vaultsHandler);
 }
 
 /**

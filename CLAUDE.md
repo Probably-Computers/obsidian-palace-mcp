@@ -6,9 +6,11 @@ An MCP server that enables AI assistants to use Obsidian as a persistent memory 
 
 **Key Features:**
 - AI-agnostic (works with any MCP client)
+- Multi-vault support with read/write access control
 - Auto-linking (creates [[wiki-links]] automatically)
 - Dataview integration (DQL query support)
 - Provenance tracking (source, confidence, verified status)
+- Per-vault configuration with ignore patterns
 
 ## Architecture
 
@@ -31,12 +33,16 @@ An MCP server that enables AI assistants to use Obsidian as a persistent memory 
 src/
 ├── index.ts                    # Entry point, MCP server setup
 ├── config/
-│   └── index.ts               # Environment config with Zod validation
+│   ├── index.ts               # Environment config with Zod validation
+│   ├── global-config.ts       # Global multi-vault config loading
+│   └── vault-config.ts        # Per-vault config loading
 ├── services/
 │   ├── vault/                 # File system operations
 │   │   ├── reader.ts          # Read files from vault
 │   │   ├── writer.ts          # Write files to vault
 │   │   ├── watcher.ts         # File system watcher (chokidar)
+│   │   ├── registry.ts        # Multi-vault registry service
+│   │   ├── ignore.ts          # Ignore pattern matching
 │   │   └── index.ts           # Service exports
 │   ├── index/                 # SQLite index
 │   │   ├── sqlite.ts          # Database setup and migrations
@@ -71,6 +77,7 @@ src/
 │   ├── dataview.ts            # palace_dataview
 │   ├── query.ts               # palace_query
 │   ├── session.ts             # palace_session_*
+│   ├── vaults.ts              # palace_vaults
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -95,15 +102,27 @@ npm run inspect  # Test with MCP Inspector
 
 ## Environment Variables
 
+### Legacy Single-Vault Mode
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| PALACE_VAULT_PATH | Yes | - | Path to Obsidian vault |
+| PALACE_VAULT_PATH | Yes* | - | Path to Obsidian vault |
 | PALACE_INDEX_PATH | No | {vault}/.palace/index.sqlite | SQLite database location |
 | PALACE_LOG_LEVEL | No | info | debug, info, warn, error |
 | PALACE_WATCH_ENABLED | No | true | Watch for external file changes |
 | HTTP_ENABLED | No | false | Enable HTTP/SSE transport instead of stdio |
 | HTTP_PORT | No | 3000 | Port for HTTP transport |
 | HTTP_CORS_ORIGIN | No | * | CORS origin for HTTP transport |
+
+*Required unless using multi-vault configuration
+
+### Multi-Vault Mode
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| PALACE_CONFIG_PATH | No | ~/.config/palace/config.yaml | Global config location |
+| PALACE_VAULTS | No | - | Quick setup: path:alias:mode,... |
+| PALACE_DEFAULT_VAULT | No | First vault | Default vault alias |
 
 ### Development Setup with direnv
 
@@ -113,7 +132,100 @@ export PALACE_VAULT_PATH="/path/to/your/obsidian/vault"
 export PALACE_LOG_LEVEL="debug"
 ```
 
+Or for multi-vault quick setup:
+```bash
+export PALACE_VAULTS="/path/to/work:work:rw,/path/to/personal:personal:rw"
+export PALACE_DEFAULT_VAULT="work"
+```
+
 Run `direnv allow` to activate.
+
+## Multi-Vault Configuration
+
+### Global Config File (~/.config/palace/config.yaml)
+
+```yaml
+version: 1
+
+vaults:
+  - path: "/Users/adam/Documents/Work Palace"
+    alias: work
+    mode: rw
+    default: true
+    description: "Work-related knowledge"
+
+  - path: "/Users/adam/Documents/Personal Palace"
+    alias: personal
+    mode: rw
+
+  - path: "/Users/adam/Documents/Vendor Docs"
+    alias: vendor
+    mode: ro   # Read-only
+
+cross_vault:
+  search: true
+  link_format: "vault:alias/path"
+  standards_source: work
+
+settings:
+  log_level: info
+  watch_enabled: true
+  auto_index: true
+```
+
+### Per-Vault Config ({vault}/.palace.yaml)
+
+```yaml
+vault:
+  name: work-knowledge
+  description: "Work-related knowledge"
+
+structure:
+  technology:
+    path: "technologies/{domain}/"
+    hub_file: "_index.md"
+  command:
+    path: "commands/{domain}/"
+  standard:
+    path: "standards/{domain}/"
+    ai_binding: required
+  project:
+    path: "projects/{project}/"
+    subpaths:
+      decision: "decisions/"
+      configuration: "configurations/"
+
+ignore:
+  patterns:
+    - ".obsidian/"
+    - "templates/"
+    - "private/**"
+  marker_file: ".palace-ignore"
+  frontmatter_key: "palace_ignore"
+
+atomic:
+  max_lines: 200
+  max_sections: 6
+  hub_filename: "_index.md"
+  auto_split: true
+
+stubs:
+  auto_create: true
+  min_confidence: 0.2
+
+graph:
+  require_technology_links: true
+  warn_orphan_depth: 1
+  retroactive_linking: true
+```
+
+### Ignore Mechanism
+
+Notes and directories can be ignored via three layers:
+
+1. **Config patterns** - Glob patterns in .palace.yaml ignore section
+2. **Marker files** - Create `.palace-ignore` in a directory to ignore it
+3. **Frontmatter** - Add `palace_ignore: true` to a note's frontmatter
 
 ## Note Format
 
@@ -162,6 +274,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_dataview | ✅ | DQL query execution |
 | palace_session_start | ✅ | Start a work session in daily log |
 | palace_session_log | ✅ | Log entries to current session |
+| palace_vaults | ✅ | List and manage configured vaults |
 
 ### palace_recall
 
@@ -334,6 +447,23 @@ Add an entry to the current session:
 ```
 
 Requires an active session (use `palace_session_start` first).
+
+### palace_vaults
+
+List all configured vaults with their aliases, paths, and access modes:
+
+```typescript
+{
+  include_counts?: boolean;   // Include note counts (default: false)
+  include_config?: boolean;   // Include vault config details (default: false)
+}
+```
+
+**Output includes:**
+- Vault alias, path, mode (rw/ro)
+- Default vault indicator
+- Cross-vault search status
+- Optional: note counts, config details
 
 ## Testing
 
