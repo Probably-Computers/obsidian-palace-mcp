@@ -3,7 +3,7 @@
  * Converts parsed DQL to SQL and executes against SQLite index
  */
 
-import { getDatabaseSync } from '../index/sqlite.js';
+import Database from 'better-sqlite3';
 import { logger } from '../../utils/logger.js';
 import type {
   ParsedQuery,
@@ -160,8 +160,7 @@ function buildSelectFields(fields: string[] | undefined): string[] {
 /**
  * Execute a parsed DQL query
  */
-export function executeQuery(query: ParsedQuery): ExecutionResult {
-  const db = getDatabaseSync();
+export function executeQuery(db: Database.Database, query: ParsedQuery): ExecutionResult {
   const params: unknown[] = [];
 
   // Determine fields to select
@@ -254,9 +253,8 @@ export function executeQuery(query: ParsedQuery): ExecutionResult {
 /**
  * Execute DQL query with tags fetched
  */
-export function executeQueryWithTags(query: ParsedQuery): ExecutionResult {
-  const result = executeQuery(query);
-  const db = getDatabaseSync();
+export function executeQueryWithTags(db: Database.Database, query: ParsedQuery): ExecutionResult {
+  const result = executeQuery(db, query);
 
   // Fetch tags for each note if tags field is requested
   const requestedFields = query.fields || [];

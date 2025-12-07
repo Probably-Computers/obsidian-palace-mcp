@@ -3,17 +3,15 @@
  * Handles wiki-link parsing and resolving targets to actual note paths
  */
 
+import Database from 'better-sqlite3';
 import { basename } from 'path';
-import { getDatabaseSync } from '../index/sqlite.js';
 import { logger } from '../../utils/logger.js';
 import type { GraphLink, NoteMetadata, NoteFrontmatter, KnowledgeType, KnowledgeSource } from '../../types/index.js';
 
 /**
  * Get outgoing links from a note
  */
-export function getOutgoingLinks(notePath: string): GraphLink[] {
-  const db = getDatabaseSync();
-
+export function getOutgoingLinks(db: Database.Database, notePath: string): GraphLink[] {
   // Get the note ID
   const note = db
     .prepare('SELECT id FROM notes WHERE path = ?')
@@ -32,16 +30,14 @@ export function getOutgoingLinks(notePath: string): GraphLink[] {
   return links.map((link) => ({
     source: notePath,
     target: link.target_path,
-    resolved: isLinkResolved(link.target_path),
+    resolved: isLinkResolved(db, link.target_path),
   }));
 }
 
 /**
  * Get incoming links (backlinks) to a note
  */
-export function getIncomingLinks(notePath: string): GraphLink[] {
-  const db = getDatabaseSync();
-
+export function getIncomingLinks(db: Database.Database, notePath: string): GraphLink[] {
   // Get the note's title for matching
   const targetNote = db
     .prepare('SELECT title FROM notes WHERE path = ?')
@@ -81,9 +77,7 @@ export function getIncomingLinks(notePath: string): GraphLink[] {
 /**
  * Check if a link target resolves to an existing note
  */
-export function isLinkResolved(target: string): boolean {
-  const db = getDatabaseSync();
-
+export function isLinkResolved(db: Database.Database, target: string): boolean {
   // Try exact path match first
   const exactMatch = db
     .prepare('SELECT 1 FROM notes WHERE path = ? LIMIT 1')
@@ -119,9 +113,7 @@ export function isLinkResolved(target: string): boolean {
  * Resolve a link target to an actual note path
  * Returns null if the target doesn't resolve to any note
  */
-export function resolveLinkTarget(target: string): string | null {
-  const db = getDatabaseSync();
-
+export function resolveLinkTarget(db: Database.Database, target: string): string | null {
   // Try exact path match first
   const exactMatch = db
     .prepare('SELECT path FROM notes WHERE path = ? LIMIT 1')
@@ -154,32 +146,26 @@ export function resolveLinkTarget(target: string): string | null {
     return filenameMatch.path;
   }
 
-  // Check aliases
-  // Note: aliases are stored in frontmatter, which is in the notes table as content
-  // For now, we don't parse aliases from content - this could be enhanced later
-
   return null;
 }
 
 /**
  * Get both incoming and outgoing links for a note
  */
-export function getAllLinks(notePath: string): {
+export function getAllLinks(db: Database.Database, notePath: string): {
   incoming: GraphLink[];
   outgoing: GraphLink[];
 } {
   return {
-    incoming: getIncomingLinks(notePath),
-    outgoing: getOutgoingLinks(notePath),
+    incoming: getIncomingLinks(db, notePath),
+    outgoing: getOutgoingLinks(db, notePath),
   };
 }
 
 /**
  * Get all broken (unresolved) links in the vault
  */
-export function getBrokenLinks(): GraphLink[] {
-  const db = getDatabaseSync();
-
+export function getBrokenLinks(db: Database.Database): GraphLink[] {
   // Get all links
   const allLinks = db
     .prepare(
@@ -191,7 +177,7 @@ export function getBrokenLinks(): GraphLink[] {
 
   // Filter to only unresolved links
   return allLinks
-    .filter((link) => !isLinkResolved(link.target_path))
+    .filter((link) => !isLinkResolved(db, link.target_path))
     .map((link) => ({
       source: link.source_path,
       target: link.target_path,
@@ -202,16 +188,19 @@ export function getBrokenLinks(): GraphLink[] {
 /**
  * Convert a database row to NoteMetadata
  */
-export function rowToNoteMetadata(row: {
-  path: string;
-  title: string | null;
-  type: string | null;
-  created: string | null;
-  modified: string | null;
-  source: string | null;
-  confidence: number | null;
-  verified: number | null;
-}): NoteMetadata {
+export function rowToNoteMetadata(
+  db: Database.Database,
+  row: {
+    path: string;
+    title: string | null;
+    type: string | null;
+    created: string | null;
+    modified: string | null;
+    source: string | null;
+    confidence: number | null;
+    verified: number | null;
+  }
+): NoteMetadata {
   const frontmatter: NoteFrontmatter = {
     type: (row.type as KnowledgeType) ?? 'research',
     created: row.created ?? new Date().toISOString(),
@@ -229,7 +218,6 @@ export function rowToNoteMetadata(row: {
   }
 
   // Get tags for this note
-  const db = getDatabaseSync();
   const noteId = db
     .prepare('SELECT id FROM notes WHERE path = ?')
     .get(row.path) as { id: number } | undefined;
@@ -254,9 +242,7 @@ export function rowToNoteMetadata(row: {
 /**
  * Get note metadata by path
  */
-export function getNoteMetadataByPath(path: string): NoteMetadata | null {
-  const db = getDatabaseSync();
-
+export function getNoteMetadataByPath(db: Database.Database, path: string): NoteMetadata | null {
   const row = db
     .prepare(
       `SELECT path, title, type, created, modified, source, confidence, verified
@@ -277,5 +263,5 @@ export function getNoteMetadataByPath(path: string): NoteMetadata | null {
     return null;
   }
 
-  return rowToNoteMetadata(row);
+  return rowToNoteMetadata(db, row);
 }

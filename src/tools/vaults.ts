@@ -4,9 +4,9 @@
 
 import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolResult, ResolvedVault } from '../types/index.js';
+import type { ToolResult } from '../types/index.js';
 import { getVaultRegistry } from '../services/vault/registry.js';
-import { countNotes } from '../services/index/query.js';
+import { countNotesInVault, getIndexManager } from '../services/index/index.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -79,6 +79,7 @@ export async function vaultsHandler(
     const registry = getVaultRegistry();
     const vaults = registry.listVaults();
     const globalConfig = registry.getGlobalConfig();
+    const manager = getIndexManager();
 
     const vaultInfos: VaultOutputInfo[] = [];
 
@@ -94,9 +95,8 @@ export async function vaultsHandler(
       // Get note count if requested
       if (input.include_counts) {
         try {
-          // Note: This will need to be updated to use vault-specific index
-          // For now, we only count from the current/default vault
-          const count = await countNotes({});
+          const db = await manager.getIndex(vault.alias);
+          const count = countNotesInVault(db, {});
           info.note_count = count;
         } catch {
           info.note_count = -1; // Indicate error

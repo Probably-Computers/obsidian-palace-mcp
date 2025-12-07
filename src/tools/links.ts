@@ -11,6 +11,7 @@ import {
   traverseGraph,
   getNoteMetadataByPath,
 } from '../services/graph/index.js';
+import { getIndexManager } from '../services/index/index.js';
 import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
@@ -68,12 +69,13 @@ export async function linksHandler(args: Record<string, unknown>): Promise<ToolR
   const { path, direction, depth, vault: vaultParam } = parseResult.data;
 
   try {
-    // Resolve vault
+    // Resolve vault and get database
     const vault = resolveVaultParam(vaultParam);
+    const manager = getIndexManager();
+    const db = await manager.getIndex(vault.alias);
 
     // Verify note exists
-    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
-    const noteMeta = getNoteMetadataByPath(path);
+    const noteMeta = getNoteMetadataByPath(db, path);
     if (!noteMeta) {
       return {
         success: false,
@@ -95,11 +97,11 @@ export async function linksHandler(args: Record<string, unknown>): Promise<ToolR
       };
 
       if (direction === 'incoming' || direction === 'both') {
-        result.incoming = getIncomingLinks(path);
+        result.incoming = getIncomingLinks(db, path);
       }
 
       if (direction === 'outgoing' || direction === 'both') {
-        result.outgoing = getOutgoingLinks(path);
+        result.outgoing = getOutgoingLinks(db, path);
       }
 
       return {
@@ -115,7 +117,7 @@ export async function linksHandler(args: Record<string, unknown>): Promise<ToolR
     }
 
     // For depth > 1, use traversal
-    const traversalResults = traverseGraph(path, direction, depth);
+    const traversalResults = traverseGraph(db, path, direction, depth);
 
     // Group results by depth
     const byDepth: Record<number, typeof traversalResults> = {};

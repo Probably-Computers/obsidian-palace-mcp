@@ -3,8 +3,8 @@
  * Loads and manages note aliases for expanded matching
  */
 
+import Database from 'better-sqlite3';
 import { readNote } from '../vault/index.js';
-import { getDatabaseSync } from '../index/sqlite.js';
 import { logger } from '../../utils/logger.js';
 import type { LinkableTitle } from './scanner.js';
 import { DEFAULT_MIN_TITLE_LENGTH } from './scanner.js';
@@ -32,10 +32,10 @@ export async function loadNoteAliases(path: string): Promise<string[]> {
  * Returns the updated index with aliases and any conflicts found
  */
 export async function mergeAliasesIntoIndex(
+  db: Database.Database,
   index: Map<string, LinkableTitle>,
   minTitleLength: number = DEFAULT_MIN_TITLE_LENGTH,
 ): Promise<{ index: Map<string, LinkableTitle>; conflicts: AliasConflict[] }> {
-  const db = getDatabaseSync();
   const conflicts: AliasConflict[] = [];
 
   // Get all notes paths
@@ -108,11 +108,12 @@ export async function mergeAliasesIntoIndex(
  * This is the main entry point for building an index with aliases
  */
 export async function buildCompleteIndex(
+  db: Database.Database,
   minTitleLength: number = DEFAULT_MIN_TITLE_LENGTH,
 ): Promise<{ index: Map<string, LinkableTitle>; conflicts: AliasConflict[] }> {
   // Import here to avoid circular dependency
   const { buildLinkableIndex } = await import('./scanner.js');
 
-  const index = buildLinkableIndex(minTitleLength);
-  return mergeAliasesIntoIndex(index, minTitleLength);
+  const index = buildLinkableIndex(db, minTitleLength);
+  return mergeAliasesIntoIndex(db, index, minTitleLength);
 }

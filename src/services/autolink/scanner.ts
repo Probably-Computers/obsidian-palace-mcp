@@ -2,7 +2,7 @@
  * Autolink scanner - finds linkable terms in content
  */
 
-import { getDatabaseSync } from '../index/sqlite.js';
+import Database from 'better-sqlite3';
 import { logger } from '../../utils/logger.js';
 
 // Minimum title length to consider for auto-linking (avoid common short words)
@@ -39,8 +39,7 @@ export interface AutolinkMatch {
 /**
  * Build lookup index from all notes in the database
  */
-export function buildTitleIndex(): Map<string, LinkableTitle> {
-  const db = getDatabaseSync();
+export function buildTitleIndex(db: Database.Database): Map<string, LinkableTitle> {
   const index = new Map<string, LinkableTitle>();
 
   // Get all notes with their titles and paths
@@ -68,8 +67,10 @@ export function buildTitleIndex(): Map<string, LinkableTitle> {
 /**
  * Build combined index including aliases
  */
-export function buildLinkableIndex(minTitleLength: number = DEFAULT_MIN_TITLE_LENGTH): Map<string, LinkableTitle> {
-  const db = getDatabaseSync();
+export function buildLinkableIndex(
+  db: Database.Database,
+  minTitleLength: number = DEFAULT_MIN_TITLE_LENGTH
+): Map<string, LinkableTitle> {
   const index = new Map<string, LinkableTitle>();
 
   // Get all notes with their titles

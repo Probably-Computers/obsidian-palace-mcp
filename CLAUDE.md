@@ -26,6 +26,7 @@ An MCP server that enables AI assistants to use Obsidian as a persistent memory 
 3. **Type safety** - Full TypeScript with Zod validation for all inputs
 4. **Test coverage** - Unit tests for all services and tools
 5. **No duplication** - Shared logic in utils/, reference don't repeat
+6. **Vault isolation** - Each vault is an independent "brain"; vaults never reference or share knowledge with each other. Cross-vault linking is NOT supported. When creating new knowledge, always know which vault it belongs to (ask the user if unsure).
 
 ## Directory Structure
 
@@ -163,9 +164,8 @@ vaults:
     mode: ro   # Read-only
 
 cross_vault:
-  search: true
-  link_format: "vault:alias/path"
-  standards_source: work
+  search: true                  # Allow searching multiple vaults at once
+  # Note: Cross-vault linking is NOT supported by design - vaults are isolated
 
 settings:
   log_level: info

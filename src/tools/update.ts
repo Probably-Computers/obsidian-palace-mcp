@@ -11,7 +11,7 @@ import {
   appendToNote,
   updateFrontmatter,
 } from '../services/vault/index.js';
-import { indexNote } from '../services/index/index.js';
+import { indexNote, getIndexManager } from '../services/index/index.js';
 import {
   buildCompleteIndex,
   scanForMatches,
@@ -165,6 +165,10 @@ export async function updateHandler(args: Record<string, unknown>): Promise<Tool
       };
     }
 
+    // Get the database for this vault
+    const manager = getIndexManager();
+    const db = await manager.getIndex(vault.alias);
+
     let updatedNote: Note;
     let linksAdded = 0;
 
@@ -179,11 +183,10 @@ export async function updateHandler(args: Record<string, unknown>): Promise<Tool
     if (frontmatter?.aliases) frontmatterUpdates.aliases = frontmatter.aliases;
 
     // Auto-link content if enabled and content is being updated
-    // Note: Auto-linking currently uses the default vault's index
     let contentToSave = content;
     if (autolink && contentToSave && (mode === 'replace' || mode === 'append')) {
       try {
-        const { index } = await buildCompleteIndex();
+        const { index } = await buildCompleteIndex(db);
         const matches = scanForMatches(contentToSave, index, path);
         if (matches.length > 0) {
           const result = autolinkContent(contentToSave, matches);
@@ -222,7 +225,7 @@ export async function updateHandler(args: Record<string, unknown>): Promise<Tool
     }
 
     // Update the index
-    indexNote(updatedNote);
+    indexNote(db, updatedNote);
 
     return {
       success: true,

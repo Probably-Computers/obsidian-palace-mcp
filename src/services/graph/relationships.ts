@@ -3,8 +3,8 @@
  * Multi-hop relationships, orphan detection, and related note discovery
  */
 
+import Database from 'better-sqlite3';
 import { basename } from 'path';
-import { getDatabaseSync } from '../index/sqlite.js';
 import {
   getOutgoingLinks,
   getIncomingLinks,
@@ -23,9 +23,7 @@ import type {
 /**
  * Get a graph node with link counts
  */
-export function getGraphNode(path: string): GraphNode | null {
-  const db = getDatabaseSync();
-
+export function getGraphNode(db: Database.Database, path: string): GraphNode | null {
   const note = db
     .prepare('SELECT path, title FROM notes WHERE path = ?')
     .get(path) as { path: string; title: string } | undefined;
@@ -34,8 +32,8 @@ export function getGraphNode(path: string): GraphNode | null {
     return null;
   }
 
-  const incoming = getIncomingLinks(path);
-  const outgoing = getOutgoingLinks(path);
+  const incoming = getIncomingLinks(db, path);
+  const outgoing = getOutgoingLinks(db, path);
 
   return {
     path: note.path,
@@ -50,6 +48,7 @@ export function getGraphNode(path: string): GraphNode | null {
  * Uses BFS for level-by-level exploration
  */
 export function traverseGraph(
+  db: Database.Database,
   startPath: string,
   direction: 'incoming' | 'outgoing' | 'both',
   maxDepth: number = 1
@@ -69,11 +68,11 @@ export function traverseGraph(
     const connectedPaths: string[] = [];
 
     if (direction === 'outgoing' || direction === 'both') {
-      const outgoing = getOutgoingLinks(current.path);
+      const outgoing = getOutgoingLinks(db, current.path);
       for (const link of outgoing) {
         if (link.resolved) {
           // Resolve the target to actual path
-          const targetPath = resolveToPath(link.target);
+          const targetPath = resolveToPath(db, link.target);
           if (targetPath) {
             connectedPaths.push(targetPath);
           }
@@ -82,7 +81,7 @@ export function traverseGraph(
     }
 
     if (direction === 'incoming' || direction === 'both') {
-      const incoming = getIncomingLinks(current.path);
+      const incoming = getIncomingLinks(db, current.path);
       for (const link of incoming) {
         connectedPaths.push(link.source);
       }
@@ -99,7 +98,7 @@ export function traverseGraph(
       const newTrail = [...current.trail, connectedPath];
 
       // Get note metadata
-      const noteMeta = getNoteMetadataByPath(connectedPath);
+      const noteMeta = getNoteMetadataByPath(db, connectedPath);
       if (noteMeta) {
         results.push({
           depth: newDepth,
@@ -121,9 +120,7 @@ export function traverseGraph(
 /**
  * Resolve a link target to an actual note path
  */
-function resolveToPath(target: string): string | null {
-  const db = getDatabaseSync();
-
+function resolveToPath(db: Database.Database, target: string): string | null {
   // Try exact path match
   const exactMatch = db
     .prepare('SELECT path FROM notes WHERE path = ? LIMIT 1')
@@ -159,11 +156,10 @@ function resolveToPath(target: string): string | null {
  * Find orphan notes based on orphan type
  */
 export function findOrphans(
+  db: Database.Database,
   orphanType: OrphanType,
   pathPrefix?: string
 ): NoteMetadata[] {
-  const db = getDatabaseSync();
-
   // Build path filter
   const pathFilter = pathPrefix
     ? `AND n.path LIKE '${pathPrefix}%'`
@@ -243,19 +239,18 @@ export function findOrphans(
     verified: number | null;
   }>;
 
-  return rows.map(rowToNoteMetadata);
+  return rows.map((row) => rowToNoteMetadata(db, row));
 }
 
 /**
  * Find notes related to a given note
  */
 export function findRelatedNotes(
+  db: Database.Database,
   path: string,
   method: RelatednessMethod,
   limit: number = 10
 ): RelatedNote[] {
-  const db = getDatabaseSync();
-
   // Get the source note's ID
   const sourceNote = db
     .prepare('SELECT id FROM notes WHERE path = ?')
@@ -269,7 +264,7 @@ export function findRelatedNotes(
 
   if (method === 'links' || method === 'both') {
     // Find notes that share link targets with this note
-    const sharedLinkNotes = findNotesWithSharedLinks(sourceNote.id, path);
+    const sharedLinkNotes = findNotesWithSharedLinks(db, sourceNote.id, path);
     for (const related of sharedLinkNotes) {
       const existing = candidates.get(related.note.path);
       if (existing) {
@@ -285,7 +280,7 @@ export function findRelatedNotes(
 
   if (method === 'tags' || method === 'both') {
     // Find notes that share tags with this note
-    const sharedTagNotes = findNotesWithSharedTags(sourceNote.id, path);
+    const sharedTagNotes = findNotesWithSharedTags(db, sourceNote.id, path);
     for (const related of sharedTagNotes) {
       const existing = candidates.get(related.note.path);
       if (existing) {
@@ -309,11 +304,10 @@ export function findRelatedNotes(
  * Find notes that share link targets with a given note
  */
 function findNotesWithSharedLinks(
+  db: Database.Database,
   noteId: number,
   notePath: string
 ): RelatedNote[] {
-  const db = getDatabaseSync();
-
   // Get this note's link targets
   const myLinks = db
     .prepare('SELECT target_path FROM links WHERE source_id = ?')
@@ -361,7 +355,7 @@ function findNotesWithSharedLinks(
       const score = sharedLinks.length / (myTargets.size + theirTargets.length - sharedLinks.length);
 
       results.push({
-        note: rowToNoteMetadata(row),
+        note: rowToNoteMetadata(db, row),
         score,
         sharedLinks,
       });
@@ -375,11 +369,10 @@ function findNotesWithSharedLinks(
  * Find notes that share tags with a given note
  */
 function findNotesWithSharedTags(
+  db: Database.Database,
   noteId: number,
   notePath: string
 ): RelatedNote[] {
-  const db = getDatabaseSync();
-
   // Get this note's tags
   const myTags = db
     .prepare('SELECT tag FROM note_tags WHERE note_id = ?')
@@ -425,7 +418,7 @@ function findNotesWithSharedTags(
       const score = sharedTags.length / (myTagSet.size + theirTags.length - sharedTags.length);
 
       results.push({
-        note: rowToNoteMetadata(row),
+        note: rowToNoteMetadata(db, row),
         score,
         sharedTags,
       });
@@ -438,9 +431,9 @@ function findNotesWithSharedTags(
 /**
  * Find common links between two notes
  */
-export function findCommonLinks(path1: string, path2: string): string[] {
-  const links1 = getOutgoingLinks(path1);
-  const links2 = getOutgoingLinks(path2);
+export function findCommonLinks(db: Database.Database, path1: string, path2: string): string[] {
+  const links1 = getOutgoingLinks(db, path1);
+  const links2 = getOutgoingLinks(db, path2);
 
   const targets1 = new Set(links1.map((l) => l.target.toLowerCase()));
   const targets2 = links2.map((l) => l.target);
@@ -452,10 +445,11 @@ export function findCommonLinks(path1: string, path2: string): string[] {
  * Check if there's a path between two notes
  */
 export function hasPath(
+  db: Database.Database,
   fromPath: string,
   toPath: string,
   maxDepth: number = 5
 ): boolean {
-  const results = traverseGraph(fromPath, 'outgoing', maxDepth);
+  const results = traverseGraph(db, fromPath, 'outgoing', maxDepth);
   return results.some((r) => r.note.path === toPath);
 }

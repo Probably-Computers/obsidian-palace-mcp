@@ -1,171 +1,266 @@
 /**
- * File system watcher using chokidar
- * Monitors vault for external changes and triggers index updates
+ * Multi-vault file system watcher using chokidar
+ * Monitors vaults for external changes and triggers index updates
  */
 
 import chokidar from 'chokidar';
 import { extname, relative } from 'path';
-import { getConfig } from '../../config/index.js';
+import { getVaultRegistry } from './registry.js';
+import { getIndexManager } from '../index/manager.js';
+import { indexNote, removeFromIndex } from '../index/sync.js';
 import { logger } from '../../utils/logger.js';
 import { readNote } from './reader.js';
-import { indexNote, removeFromIndex } from '../index/index.js';
+import type { ResolvedVault } from '../../types/index.js';
 
-// Watcher instance
-let watcher: chokidar.FSWatcher | null = null;
+/**
+ * Vault watcher entry
+ */
+interface VaultWatcher {
+  vault: ResolvedVault;
+  watcher: chokidar.FSWatcher;
+  debounceMap: Map<string, NodeJS.Timeout>;
+}
 
-// Debounce map for rapid changes
-const debounceMap = new Map<string, NodeJS.Timeout>();
+// Map of vault alias to watcher
+const watchers = new Map<string, VaultWatcher>();
+
 const DEBOUNCE_MS = 300;
 
 /**
- * Debounce file change handling
+ * Debounce file change handling for a vault
  */
-function debounce(path: string, callback: () => void): void {
-  const existing = debounceMap.get(path);
+function debounce(entry: VaultWatcher, path: string, callback: () => void): void {
+  const existing = entry.debounceMap.get(path);
   if (existing) {
     clearTimeout(existing);
   }
 
   const timeout = setTimeout(() => {
-    debounceMap.delete(path);
+    entry.debounceMap.delete(path);
     callback();
   }, DEBOUNCE_MS);
 
-  debounceMap.set(path, timeout);
+  entry.debounceMap.set(path, timeout);
 }
 
 /**
- * Handle file add/change event
+ * Handle file add/change event for a vault
  */
-async function handleFileChange(fullPath: string): Promise<void> {
-  const config = getConfig();
-  const relativePath = relative(config.vaultPath, fullPath);
+async function handleFileChange(vault: ResolvedVault, fullPath: string): Promise<void> {
+  const relativePath = relative(vault.path, fullPath);
 
-  logger.debug(`File changed: ${relativePath}`);
+  logger.debug(`File changed in ${vault.alias}: ${relativePath}`);
 
   try {
-    const note = await readNote(relativePath);
+    const note = await readNote(relativePath, { vaultPath: vault.path });
     if (note) {
-      indexNote(note);
+      const manager = getIndexManager();
+      const db = await manager.getIndex(vault.alias);
+      indexNote(db, note);
     }
   } catch (error) {
-    logger.error(`Failed to index file: ${relativePath}`, error);
+    logger.error(`Failed to index file in ${vault.alias}: ${relativePath}`, error);
   }
 }
 
 /**
- * Handle file delete event
+ * Handle file delete event for a vault
  */
-function handleFileDelete(fullPath: string): void {
-  const config = getConfig();
-  const relativePath = relative(config.vaultPath, fullPath);
+async function handleFileDelete(vault: ResolvedVault, fullPath: string): Promise<void> {
+  const relativePath = relative(vault.path, fullPath);
 
-  logger.debug(`File deleted: ${relativePath}`);
-  removeFromIndex(relativePath);
+  logger.debug(`File deleted in ${vault.alias}: ${relativePath}`);
+
+  try {
+    const manager = getIndexManager();
+    const db = await manager.getIndex(vault.alias);
+    removeFromIndex(db, relativePath);
+  } catch (error) {
+    logger.error(`Failed to remove from index in ${vault.alias}: ${relativePath}`, error);
+  }
 }
 
 /**
- * Start watching the vault for changes
+ * Build ignore patterns for a vault
  */
-export function startWatcher(): void {
-  const config = getConfig();
+function getIgnorePatterns(vault: ResolvedVault): (string | RegExp)[] {
+  const patterns: (string | RegExp)[] = [
+    /(^|[/\\])\../, // Ignore dotfiles
+    '**/node_modules/**',
+    '**/.obsidian/**',
+    '**/.palace/**',
+  ];
 
-  if (!config.watchEnabled) {
-    logger.info('File watcher disabled by configuration');
+  // Add vault-specific ignore patterns
+  if (vault.config.ignore?.patterns) {
+    for (const pattern of vault.config.ignore.patterns) {
+      patterns.push(`**/${pattern}`);
+    }
+  }
+
+  return patterns;
+}
+
+/**
+ * Start watching a single vault
+ */
+export function startVaultWatcher(vault: ResolvedVault): void {
+  if (watchers.has(vault.alias)) {
+    logger.warn(`Watcher already running for vault: ${vault.alias}`);
     return;
   }
 
-  if (watcher) {
-    logger.warn('Watcher already running');
-    return;
-  }
+  logger.info(`Starting file watcher for vault '${vault.alias}' at: ${vault.path}`);
 
-  logger.info(`Starting file watcher on: ${config.vaultPath}`);
-
-  watcher = chokidar.watch(config.vaultPath, {
-    ignored: [
-      /(^|[/\\])\../, // Ignore dotfiles
-      '**/node_modules/**',
-      '**/.obsidian/**',
-      '**/.palace/**',
-    ],
+  const watcher = chokidar.watch(vault.path, {
+    ignored: getIgnorePatterns(vault),
     persistent: true,
-    ignoreInitial: true, // Don't fire for existing files
+    ignoreInitial: true,
     awaitWriteFinish: {
       stabilityThreshold: 200,
       pollInterval: 100,
     },
   });
 
+  const entry: VaultWatcher = {
+    vault,
+    watcher,
+    debounceMap: new Map(),
+  };
+
   watcher
     .on('add', (path) => {
       if (extname(path) !== '.md') return;
-      debounce(path, () => handleFileChange(path));
+      debounce(entry, path, () => handleFileChange(vault, path));
     })
     .on('change', (path) => {
       if (extname(path) !== '.md') return;
-      debounce(path, () => handleFileChange(path));
+      debounce(entry, path, () => handleFileChange(vault, path));
     })
     .on('unlink', (path) => {
       if (extname(path) !== '.md') return;
-      handleFileDelete(path);
+      handleFileDelete(vault, path);
     })
     .on('error', (error) => {
-      logger.error('Watcher error:', error);
+      logger.error(`Watcher error for vault ${vault.alias}:`, error);
     })
     .on('ready', () => {
-      logger.info('File watcher ready');
+      logger.info(`File watcher ready for vault: ${vault.alias}`);
     });
+
+  watchers.set(vault.alias, entry);
 }
 
 /**
- * Stop the file watcher
+ * Stop watching a single vault
  */
-export async function stopWatcher(): Promise<void> {
-  if (watcher) {
-    await watcher.close();
-    watcher = null;
+export async function stopVaultWatcher(vaultAlias: string): Promise<void> {
+  const entry = watchers.get(vaultAlias);
+  if (entry) {
+    await entry.watcher.close();
 
     // Clear any pending debounces
-    for (const timeout of debounceMap.values()) {
+    for (const timeout of entry.debounceMap.values()) {
       clearTimeout(timeout);
     }
-    debounceMap.clear();
+    entry.debounceMap.clear();
 
-    logger.info('File watcher stopped');
+    watchers.delete(vaultAlias);
+    logger.info(`File watcher stopped for vault: ${vaultAlias}`);
   }
 }
 
 /**
- * Check if watcher is running
+ * Start watching all vaults
  */
-export function isWatcherRunning(): boolean {
-  return watcher !== null;
+export function startAllWatchers(): void {
+  const registry = getVaultRegistry();
+  const globalConfig = registry.getGlobalConfig();
+
+  if (!globalConfig.settings.watch_enabled) {
+    logger.info('File watchers disabled by configuration');
+    return;
+  }
+
+  for (const vault of registry.listVaults()) {
+    try {
+      startVaultWatcher(vault);
+    } catch (error) {
+      logger.error(`Failed to start watcher for vault ${vault.alias}:`, error);
+    }
+  }
 }
 
 /**
- * Perform initial vault scan and index all notes
+ * Stop all watchers
  */
-export async function performInitialScan(): Promise<number> {
+export async function stopAllWatchers(): Promise<void> {
+  const aliases = Array.from(watchers.keys());
+  for (const alias of aliases) {
+    await stopVaultWatcher(alias);
+  }
+  logger.info('All file watchers stopped');
+}
+
+/**
+ * Check if a vault is being watched
+ */
+export function isVaultWatched(vaultAlias: string): boolean {
+  return watchers.has(vaultAlias);
+}
+
+/**
+ * List all watched vault aliases
+ */
+export function listWatchedVaults(): string[] {
+  return Array.from(watchers.keys());
+}
+
+/**
+ * Perform initial scan and index for a vault
+ */
+export async function performVaultScan(vault: ResolvedVault): Promise<number> {
   const { listNotes } = await import('./reader.js');
+  const manager = getIndexManager();
+  const db = await manager.getIndex(vault.alias);
 
-  logger.info('Performing initial vault scan...');
+  logger.info(`Performing initial scan for vault: ${vault.alias}`);
 
-  const allNotes = await listNotes('', true);
+  const allNotes = await listNotes('', true, { vaultPath: vault.path });
   let indexed = 0;
 
   for (const meta of allNotes) {
     try {
-      const note = await readNote(meta.path);
+      const note = await readNote(meta.path, { vaultPath: vault.path });
       if (note) {
-        indexNote(note);
+        indexNote(db, note);
         indexed++;
       }
     } catch (error) {
-      logger.error(`Failed to index: ${meta.path}`, error);
+      logger.error(`Failed to index in ${vault.alias}: ${meta.path}`, error);
     }
   }
 
-  logger.info(`Initial scan complete: ${indexed} notes indexed`);
+  logger.info(`Vault scan complete for ${vault.alias}: ${indexed} notes indexed`);
   return indexed;
+}
+
+/**
+ * Perform initial scan for all vaults
+ */
+export async function performAllVaultScans(): Promise<Map<string, number>> {
+  const registry = getVaultRegistry();
+  const results = new Map<string, number>();
+
+  for (const vault of registry.listVaults()) {
+    try {
+      const count = await performVaultScan(vault);
+      results.set(vault.alias, count);
+    } catch (error) {
+      logger.error(`Failed to scan vault ${vault.alias}:`, error);
+      results.set(vault.alias, 0);
+    }
+  }
+
+  return results;
 }

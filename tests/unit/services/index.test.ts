@@ -7,15 +7,15 @@ import { join } from 'path';
 import { mkdir, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
+import Database from 'better-sqlite3';
 
 // Set up test environment before importing services
 const testDir = join(tmpdir(), `palace-test-${randomUUID()}`);
 const testVault = join(testDir, 'vault');
-const testIndex = join(testDir, 'index.sqlite');
+const testPalace = join(testVault, '.palace');
 
 // Configure environment before imports
 process.env.PALACE_VAULT_PATH = testVault;
-process.env.PALACE_INDEX_PATH = testIndex;
 process.env.PALACE_LOG_LEVEL = 'error';
 process.env.PALACE_WATCH_ENABLED = 'false';
 
@@ -23,26 +23,38 @@ process.env.PALACE_WATCH_ENABLED = 'false';
 import { resetConfig } from '../../../src/config/index';
 
 describe('Index Service', () => {
+  let db: Database.Database;
+
   beforeAll(async () => {
     // Create test vault directory
     await mkdir(testVault, { recursive: true });
+    await mkdir(testPalace, { recursive: true });
     resetConfig();
+
+    // Create database for testing
+    const { createDatabase, initializeSchema } = await import('../../../src/services/index/sqlite');
+    db = createDatabase(join(testPalace, 'index.sqlite'));
+    initializeSchema(db);
   });
 
   afterAll(async () => {
-    // Clean up test directory
-    const { closeDatabase } = await import('../../../src/services/index/index');
-    closeDatabase();
+    // Close database
+    if (db && db.open) {
+      db.close();
+    }
     await rm(testDir, { recursive: true, force: true });
   });
 
+  beforeEach(() => {
+    // Clear tables between tests
+    db.exec('DELETE FROM links');
+    db.exec('DELETE FROM note_tags');
+    db.exec('DELETE FROM notes');
+    db.exec('DELETE FROM notes_fts');
+  });
+
   describe('SQLite Database', () => {
-    it('creates database on first access', async () => {
-      const { getDatabase, closeDatabase } = await import('../../../src/services/index/index');
-
-      const db = await getDatabase();
-      expect(db).toBeDefined();
-
+    it('creates database with proper schema', async () => {
       // Verify schema was created
       const tables = db
         .prepare("SELECT name FROM sqlite_master WHERE type='table'")
@@ -55,28 +67,18 @@ describe('Index Service', () => {
       expect(tableNames).toContain('schema_version');
     });
 
-    it('returns same instance on subsequent calls', async () => {
-      const { getDatabase } = await import('../../../src/services/index/index');
+    it('has FTS5 virtual table', async () => {
+      const tables = db
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='notes_fts'")
+        .all() as { name: string }[];
 
-      const db1 = await getDatabase();
-      const db2 = await getDatabase();
-      expect(db1).toBe(db2);
+      expect(tables.length).toBe(1);
     });
   });
 
   describe('Index Sync', () => {
-    beforeEach(async () => {
-      const { clearIndex, getDatabase } = await import('../../../src/services/index/index');
-      await getDatabase();
-      clearIndex();
-    });
-
     it('indexes a note', async () => {
-      const { indexNote, getNoteByPath, getDatabase } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
+      const { indexNote } = await import('../../../src/services/index/sync');
 
       const testNote = {
         path: 'research/test-note.md',
@@ -95,20 +97,16 @@ describe('Index Service', () => {
         raw: '---\ntype: research\n---\n\n# Test Note\n\nThis is test content.',
       };
 
-      indexNote(testNote);
+      indexNote(db, testNote);
 
-      const indexed = getNoteByPath('research/test-note.md');
+      const indexed = db.prepare('SELECT * FROM notes WHERE path = ?').get('research/test-note.md') as { title: string; type: string } | undefined;
       expect(indexed).not.toBeNull();
       expect(indexed?.title).toBe('Test Note');
-      expect(indexed?.frontmatter.type).toBe('research');
+      expect(indexed?.type).toBe('research');
     });
 
     it('extracts and stores tags', async () => {
-      const { indexNote, getNoteTags, getDatabase, getDatabaseSync } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
+      const { indexNote } = await import('../../../src/services/index/sync');
 
       const testNote = {
         path: 'research/tagged-note.md',
@@ -127,23 +125,19 @@ describe('Index Service', () => {
         raw: '---\ntype: research\ntags: [kubernetes, docker]\n---\n\n# Tagged Note',
       };
 
-      indexNote(testNote);
+      indexNote(db, testNote);
 
       // Get note ID
-      const db = getDatabaseSync();
       const row = db.prepare('SELECT id FROM notes WHERE path = ?').get('research/tagged-note.md') as { id: number };
 
-      const tags = getNoteTags(row.id);
-      expect(tags).toContain('kubernetes');
-      expect(tags).toContain('docker');
+      const tags = db.prepare('SELECT tag FROM note_tags WHERE note_id = ?').all(row.id) as { tag: string }[];
+      const tagNames = tags.map(t => t.tag);
+      expect(tagNames).toContain('kubernetes');
+      expect(tagNames).toContain('docker');
     });
 
     it('removes note from index', async () => {
-      const { indexNote, removeFromIndex, getNoteByPath, getDatabase } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
+      const { indexNote, removeFromIndex } = await import('../../../src/services/index/sync');
 
       const testNote = {
         path: 'research/to-remove.md',
@@ -162,22 +156,17 @@ describe('Index Service', () => {
         raw: '---\ntype: research\n---\n\n# To Remove',
       };
 
-      indexNote(testNote);
-      expect(getNoteByPath('research/to-remove.md')).not.toBeNull();
+      indexNote(db, testNote);
+      expect(db.prepare('SELECT * FROM notes WHERE path = ?').get('research/to-remove.md')).not.toBeNull();
 
-      removeFromIndex('research/to-remove.md');
-      expect(getNoteByPath('research/to-remove.md')).toBeNull();
+      removeFromIndex(db, 'research/to-remove.md');
+      expect(db.prepare('SELECT * FROM notes WHERE path = ?').get('research/to-remove.md')).toBeUndefined();
     });
   });
 
   describe('Query Builder', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase, indexNote } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
-      clearIndex();
+      const { indexNote } = await import('../../../src/services/index/sync');
 
       // Index test notes
       const notes = [
@@ -218,60 +207,60 @@ describe('Index Service', () => {
       ];
 
       for (const note of notes) {
-        indexNote(note);
+        indexNote(db, note);
       }
     });
 
     it('searches notes with FTS5', async () => {
-      const { searchNotes } = await import('../../../src/services/index/index');
+      const { searchNotesInVault } = await import('../../../src/services/index/query');
 
-      const results = searchNotes({ query: 'kubernetes' });
+      const results = searchNotesInVault(db, { query: 'kubernetes' });
       expect(results.length).toBeGreaterThan(0);
       expect(results[0]?.note.title).toBe('Kubernetes Basics');
     });
 
     it('filters by type', async () => {
-      const { queryNotes } = await import('../../../src/services/index/index');
+      const { queryNotesInVault } = await import('../../../src/services/index/query');
 
-      const commands = queryNotes({ type: 'command' });
+      const commands = queryNotesInVault(db, { type: 'command' });
       expect(commands.length).toBe(1);
       expect(commands[0]?.frontmatter.type).toBe('command');
     });
 
     it('filters by tags', async () => {
-      const { queryNotes } = await import('../../../src/services/index/index');
+      const { queryNotesInVault } = await import('../../../src/services/index/query');
 
-      const devops = queryNotes({ tags: ['devops'] });
+      const devops = queryNotesInVault(db, { tags: ['devops'] });
       expect(devops.length).toBe(2);
 
-      const k8s = queryNotes({ tags: ['kubernetes'] });
+      const k8s = queryNotesInVault(db, { tags: ['kubernetes'] });
       expect(k8s.length).toBe(1);
     });
 
     it('filters by confidence', async () => {
-      const { queryNotes } = await import('../../../src/services/index/index');
+      const { queryNotesInVault } = await import('../../../src/services/index/query');
 
-      const highConfidence = queryNotes({ minConfidence: 0.8 });
+      const highConfidence = queryNotesInVault(db, { minConfidence: 0.8 });
       expect(highConfidence.length).toBe(1);
       expect(highConfidence[0]?.title).toBe('Kubernetes Basics');
     });
 
     it('filters by verified status', async () => {
-      const { queryNotes } = await import('../../../src/services/index/index');
+      const { queryNotesInVault } = await import('../../../src/services/index/query');
 
-      const verified = queryNotes({ verified: true });
+      const verified = queryNotesInVault(db, { verified: true });
       expect(verified.length).toBe(1);
 
-      const unverified = queryNotes({ verified: false });
+      const unverified = queryNotesInVault(db, { verified: false });
       expect(unverified.length).toBe(1);
     });
 
     it('counts notes', async () => {
-      const { countNotes } = await import('../../../src/services/index/index');
+      const { countNotesInVault } = await import('../../../src/services/index/query');
 
-      expect(countNotes({})).toBe(2);
-      expect(countNotes({ type: 'research' })).toBe(1);
-      expect(countNotes({ tags: ['devops'] })).toBe(2);
+      expect(countNotesInVault(db, {})).toBe(2);
+      expect(countNotesInVault(db, { type: 'research' })).toBe(1);
+      expect(countNotesInVault(db, { tags: ['devops'] })).toBe(2);
     });
   });
 });

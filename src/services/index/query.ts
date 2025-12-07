@@ -1,8 +1,20 @@
 /**
  * Query builder for SQLite FTS5 search and filtering
+ * Supports single-vault and cross-vault queries
  */
 
-import { getDatabaseSync } from './sqlite.js';
+import Database from 'better-sqlite3';
+import { getIndexManager } from './manager.js';
+import { getVaultRegistry } from '../vault/registry.js';
+import {
+  addVaultAttribution,
+  addVaultAttributionToNote,
+  aggregateSearchResults,
+  aggregateQueryResults,
+  filterByVaults,
+  type VaultSearchResult,
+  type VaultQueryResult,
+} from './aggregator.js';
 import { logger } from '../../utils/logger.js';
 import type { NoteMetadata, NoteFrontmatter, SearchResult, KnowledgeSource } from '../../types/index.js';
 
@@ -18,6 +30,14 @@ export interface SearchOptions {
   verified?: boolean;
   limit?: number;
   offset?: number;
+}
+
+/**
+ * Cross-vault search options
+ */
+export interface CrossVaultSearchOptions extends SearchOptions {
+  vaults?: string[]; // Limit to specific vaults
+  excludeVaults?: string[]; // Exclude specific vaults
 }
 
 /**
@@ -42,6 +62,14 @@ export interface FilterOptions {
 }
 
 /**
+ * Cross-vault filter options
+ */
+export interface CrossVaultFilterOptions extends FilterOptions {
+  vaults?: string[];
+  excludeVaults?: string[];
+}
+
+/**
  * Convert a note row to NoteMetadata
  */
 function rowToMetadata(row: Record<string, unknown>): NoteMetadata {
@@ -50,12 +78,11 @@ function rowToMetadata(row: Record<string, unknown>): NoteMetadata {
     created: row.created as string,
     modified: row.modified as string,
     verified: Boolean(row.verified),
-    tags: [], // Will be populated separately if needed
+    tags: [],
     related: [],
     aliases: [],
   };
 
-  // Only set optional properties if they have values
   const source = row.source as string | null;
   if (source) {
     frontmatter.source = source as KnowledgeSource;
@@ -76,9 +103,8 @@ function rowToMetadata(row: Record<string, unknown>): NoteMetadata {
  * Escape FTS5 special characters in search query
  */
 function escapeFtsQuery(query: string): string {
-  // FTS5 special characters that need quoting
   return query
-    .replace(/"/g, '""') // Escape double quotes
+    .replace(/"/g, '""')
     .split(/\s+/)
     .filter((word) => word.length > 0)
     .map((word) => `"${word}"`)
@@ -86,18 +112,18 @@ function escapeFtsQuery(query: string): string {
 }
 
 /**
- * Search notes using FTS5 full-text search
+ * Search notes in a single vault using FTS5
  */
-export function searchNotes(options: SearchOptions): SearchResult[] {
-  const db = getDatabaseSync();
+export function searchNotesInVault(
+  db: Database.Database,
+  options: SearchOptions
+): SearchResult[] {
   const { query, type, tags, path, minConfidence, limit = 20, offset = 0 } = options;
 
   logger.debug('FTS5 search:', { query, type, tags, path, minConfidence });
 
-  // Build the FTS5 query
   const ftsQuery = escapeFtsQuery(query);
 
-  // Base query with FTS5 search and ranking
   let sql = `
     SELECT
       n.id, n.path, n.title, n.type, n.created, n.modified,
@@ -110,7 +136,6 @@ export function searchNotes(options: SearchOptions): SearchResult[] {
 
   const params: unknown[] = [ftsQuery];
 
-  // Add filters
   if (type && type !== 'all') {
     sql += ' AND n.type = ?';
     params.push(type);
@@ -126,7 +151,6 @@ export function searchNotes(options: SearchOptions): SearchResult[] {
     params.push(minConfidence);
   }
 
-  // Handle tags filter (notes must have ALL specified tags)
   if (tags && tags.length > 0) {
     sql += `
       AND n.id IN (
@@ -139,7 +163,6 @@ export function searchNotes(options: SearchOptions): SearchResult[] {
     params.push(...tags, tags.length);
   }
 
-  // Order by relevance (bm25 score, lower is better)
   sql += ' ORDER BY rank';
   sql += ` LIMIT ? OFFSET ?`;
   params.push(limit, offset);
@@ -149,7 +172,7 @@ export function searchNotes(options: SearchOptions): SearchResult[] {
 
     return rows.map((row) => ({
       note: rowToMetadata(row),
-      score: Math.abs(row.rank as number) * 10, // Convert bm25 score to positive
+      score: Math.abs(row.rank as number) * 10,
     }));
   } catch (error) {
     logger.error('FTS5 search error:', error);
@@ -158,10 +181,60 @@ export function searchNotes(options: SearchOptions): SearchResult[] {
 }
 
 /**
- * Query notes by properties (without full-text search)
+ * Search across all vaults (or specified vaults)
  */
-export function queryNotes(options: FilterOptions): NoteMetadata[] {
-  const db = getDatabaseSync();
+export async function searchAllVaults(
+  options: CrossVaultSearchOptions
+): Promise<VaultSearchResult[]> {
+  const registry = getVaultRegistry();
+  const manager = getIndexManager();
+
+  // Check if cross-vault search is enabled
+  if (!registry.isCrossVaultSearchEnabled()) {
+    // Search only default vault
+    const defaultVault = registry.getDefaultVault();
+    const db = await manager.getIndex(defaultVault.alias);
+    const results = searchNotesInVault(db, options);
+    return results.map((r) => addVaultAttribution(r, defaultVault.alias));
+  }
+
+  // Determine which vaults to search
+  let vaultsToSearch = registry.listVaults();
+
+  if (options.vaults && options.vaults.length > 0) {
+    vaultsToSearch = vaultsToSearch.filter((v) => options.vaults!.includes(v.alias));
+  }
+
+  if (options.excludeVaults && options.excludeVaults.length > 0) {
+    vaultsToSearch = vaultsToSearch.filter((v) => !options.excludeVaults!.includes(v.alias));
+  }
+
+  // Search all vaults in parallel
+  const searchPromises = vaultsToSearch.map(async (vault) => {
+    try {
+      const db = await manager.getIndex(vault.alias);
+      const results = searchNotesInVault(db, options);
+      return results.map((r) => addVaultAttribution(r, vault.alias));
+    } catch (error) {
+      logger.error(`Failed to search vault ${vault.alias}:`, error);
+      return [];
+    }
+  });
+
+  const allResults = await Promise.all(searchPromises);
+  const flatResults = allResults.flat();
+
+  // Aggregate and rank
+  return aggregateSearchResults(flatResults, options.limit);
+}
+
+/**
+ * Query notes in a single vault by properties
+ */
+export function queryNotesInVault(
+  db: Database.Database,
+  options: FilterOptions
+): NoteMetadata[] {
   const {
     type,
     tags,
@@ -183,7 +256,6 @@ export function queryNotes(options: FilterOptions): NoteMetadata[] {
   let sql = 'SELECT * FROM notes WHERE 1=1';
   const params: unknown[] = [];
 
-  // Build filter conditions
   if (type && type !== 'all') {
     sql += ' AND type = ?';
     params.push(type);
@@ -234,7 +306,6 @@ export function queryNotes(options: FilterOptions): NoteMetadata[] {
     params.push(modifiedBefore);
   }
 
-  // Handle tags filter
   if (tags && tags.length > 0) {
     sql += `
       AND id IN (
@@ -247,13 +318,11 @@ export function queryNotes(options: FilterOptions): NoteMetadata[] {
     params.push(...tags, tags.length);
   }
 
-  // Sorting
   const validSortColumns = ['created', 'modified', 'title', 'confidence'];
   const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'modified';
   const order = sortOrder === 'asc' ? 'ASC' : 'DESC';
   sql += ` ORDER BY ${sortColumn} ${order}`;
 
-  // Pagination
   sql += ' LIMIT ? OFFSET ?';
   params.push(limit, offset);
 
@@ -267,10 +336,48 @@ export function queryNotes(options: FilterOptions): NoteMetadata[] {
 }
 
 /**
- * Get tags for a note
+ * Query across all vaults (or specified vaults)
  */
-export function getNoteTags(noteId: number): string[] {
-  const db = getDatabaseSync();
+export async function queryAllVaults(
+  options: CrossVaultFilterOptions
+): Promise<VaultQueryResult[]> {
+  const registry = getVaultRegistry();
+  const manager = getIndexManager();
+
+  // Determine which vaults to query
+  let vaultsToQuery = registry.listVaults();
+
+  if (options.vaults && options.vaults.length > 0) {
+    vaultsToQuery = vaultsToQuery.filter((v) => options.vaults!.includes(v.alias));
+  }
+
+  if (options.excludeVaults && options.excludeVaults.length > 0) {
+    vaultsToQuery = vaultsToQuery.filter((v) => !options.excludeVaults!.includes(v.alias));
+  }
+
+  // Query all vaults in parallel
+  const queryPromises = vaultsToQuery.map(async (vault) => {
+    try {
+      const db = await manager.getIndex(vault.alias);
+      const results = queryNotesInVault(db, options);
+      return results.map((note) => addVaultAttributionToNote(note, vault.alias));
+    } catch (error) {
+      logger.error(`Failed to query vault ${vault.alias}:`, error);
+      return [];
+    }
+  });
+
+  const allResults = await Promise.all(queryPromises);
+  const flatResults = allResults.flat();
+
+  // Aggregate
+  return aggregateQueryResults(flatResults, options.limit);
+}
+
+/**
+ * Get tags for a note in a specific vault
+ */
+export function getNoteTags(db: Database.Database, noteId: number): string[] {
   const rows = db
     .prepare('SELECT tag FROM note_tags WHERE note_id = ?')
     .all(noteId) as { tag: string }[];
@@ -278,10 +385,9 @@ export function getNoteTags(noteId: number): string[] {
 }
 
 /**
- * Get note by path
+ * Get note by path in a specific vault
  */
-export function getNoteByPath(path: string): NoteMetadata | null {
-  const db = getDatabaseSync();
+export function getNoteByPath(db: Database.Database, path: string): NoteMetadata | null {
   const row = db
     .prepare('SELECT * FROM notes WHERE path = ?')
     .get(path) as Record<string, unknown> | undefined;
@@ -289,15 +395,17 @@ export function getNoteByPath(path: string): NoteMetadata | null {
   if (!row) return null;
 
   const metadata = rowToMetadata(row);
-  metadata.frontmatter.tags = getNoteTags(row.id as number);
+  metadata.frontmatter.tags = getNoteTags(db, row.id as number);
   return metadata;
 }
 
 /**
- * Get total count of notes matching filter
+ * Get total count of notes matching filter in a vault
  */
-export function countNotes(options: Omit<FilterOptions, 'limit' | 'offset' | 'sortBy' | 'sortOrder'>): number {
-  const db = getDatabaseSync();
+export function countNotesInVault(
+  db: Database.Database,
+  options: Omit<FilterOptions, 'limit' | 'offset' | 'sortBy' | 'sortOrder'>
+): number {
   const { type, tags, path, minConfidence, verified } = options;
 
   let sql = 'SELECT COUNT(*) as count FROM notes WHERE 1=1';
@@ -337,4 +445,37 @@ export function countNotes(options: Omit<FilterOptions, 'limit' | 'offset' | 'so
 
   const row = db.prepare(sql).get(...params) as { count: number };
   return row.count;
+}
+
+/**
+ * Count notes across all vaults
+ */
+export async function countNotesAllVaults(
+  options: Omit<CrossVaultFilterOptions, 'limit' | 'offset' | 'sortBy' | 'sortOrder'>
+): Promise<number> {
+  const registry = getVaultRegistry();
+  const manager = getIndexManager();
+
+  let vaultsToCount = registry.listVaults();
+
+  if (options.vaults && options.vaults.length > 0) {
+    vaultsToCount = vaultsToCount.filter((v) => options.vaults!.includes(v.alias));
+  }
+
+  if (options.excludeVaults && options.excludeVaults.length > 0) {
+    vaultsToCount = vaultsToCount.filter((v) => !options.excludeVaults!.includes(v.alias));
+  }
+
+  const countPromises = vaultsToCount.map(async (vault) => {
+    try {
+      const db = await manager.getIndex(vault.alias);
+      return countNotesInVault(db, options);
+    } catch (error) {
+      logger.error(`Failed to count notes in vault ${vault.alias}:`, error);
+      return 0;
+    }
+  });
+
+  const counts = await Promise.all(countPromises);
+  return counts.reduce((sum, count) => sum + count, 0);
 }

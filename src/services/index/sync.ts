@@ -1,9 +1,11 @@
 /**
  * Index synchronization - keeps SQLite index in sync with vault files
+ * Supports per-vault synchronization
  */
 
+import Database from 'better-sqlite3';
 import { createHash } from 'crypto';
-import { getDatabaseSync } from './sqlite.js';
+import { getIndexManager } from './manager.js';
 import { logger } from '../../utils/logger.js';
 import { extractWikiLinks } from '../../utils/wikilinks.js';
 import type { Note } from '../../types/index.js';
@@ -16,10 +18,9 @@ function hashContent(content: string): string {
 }
 
 /**
- * Index a note in the database
+ * Index a note in the specified vault's database
  */
-export function indexNote(note: Note): void {
-  const db = getDatabaseSync();
+export function indexNote(db: Database.Database, note: Note): void {
   const contentHash = hashContent(note.raw);
 
   // Check if note exists and has changed
@@ -61,7 +62,7 @@ export function indexNote(note: Note): void {
       db.prepare('DELETE FROM links WHERE source_id = ?').run(existing.id);
 
       // Re-insert tags and links
-      insertTagsAndLinks(existing.id, frontmatter.tags ?? [], content);
+      insertTagsAndLinks(db, existing.id, frontmatter.tags ?? [], content);
 
       logger.debug(`Updated note in index: ${path}`);
     } else {
@@ -87,7 +88,7 @@ export function indexNote(note: Note): void {
       const noteId = result.lastInsertRowid as number;
 
       // Insert tags and links
-      insertTagsAndLinks(noteId, frontmatter.tags ?? [], content);
+      insertTagsAndLinks(db, noteId, frontmatter.tags ?? [], content);
 
       logger.debug(`Indexed new note: ${path}`);
     }
@@ -97,9 +98,12 @@ export function indexNote(note: Note): void {
 /**
  * Insert tags and wiki-links for a note
  */
-function insertTagsAndLinks(noteId: number, tags: string[], content: string): void {
-  const db = getDatabaseSync();
-
+function insertTagsAndLinks(
+  db: Database.Database,
+  noteId: number,
+  tags: string[],
+  content: string
+): void {
   // Insert tags
   const insertTag = db.prepare(
     'INSERT OR IGNORE INTO note_tags (note_id, tag) VALUES (?, ?)'
@@ -119,11 +123,9 @@ function insertTagsAndLinks(noteId: number, tags: string[], content: string): vo
 }
 
 /**
- * Remove a note from the index
+ * Remove a note from the specified vault's index
  */
-export function removeFromIndex(path: string): void {
-  const db = getDatabaseSync();
-
+export function removeFromIndex(db: Database.Database, path: string): void {
   const note = db
     .prepare('SELECT id FROM notes WHERE path = ?')
     .get(path) as { id: number } | undefined;
@@ -142,8 +144,7 @@ export function removeFromIndex(path: string): void {
 /**
  * Check if a note needs reindexing
  */
-export function needsReindex(path: string, content: string): boolean {
-  const db = getDatabaseSync();
+export function needsReindex(db: Database.Database, path: string, content: string): boolean {
   const contentHash = hashContent(content);
 
   const existing = db
@@ -154,20 +155,17 @@ export function needsReindex(path: string, content: string): boolean {
 }
 
 /**
- * Get all indexed paths
+ * Get all indexed paths from a vault
  */
-export function getIndexedPaths(): string[] {
-  const db = getDatabaseSync();
+export function getIndexedPaths(db: Database.Database): string[] {
   const rows = db.prepare('SELECT path FROM notes').all() as { path: string }[];
   return rows.map((r) => r.path);
 }
 
 /**
- * Clear the entire index
+ * Clear the entire index for a vault
  */
-export function clearIndex(): void {
-  const db = getDatabaseSync();
-
+export function clearIndex(db: Database.Database): void {
   db.transaction(() => {
     db.prepare('DELETE FROM links').run();
     db.prepare('DELETE FROM note_tags').run();
@@ -180,22 +178,19 @@ export function clearIndex(): void {
 /**
  * Rebuild the FTS5 index (useful after bulk operations)
  */
-export function rebuildFtsIndex(): void {
-  const db = getDatabaseSync();
+export function rebuildFtsIndex(db: Database.Database): void {
   db.prepare("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')").run();
   logger.info('FTS index rebuilt');
 }
 
 /**
- * Get index statistics
+ * Get index statistics for a vault
  */
-export function getIndexStats(): {
+export function getIndexStats(db: Database.Database): {
   noteCount: number;
   tagCount: number;
   linkCount: number;
 } {
-  const db = getDatabaseSync();
-
   const noteCount = (
     db.prepare('SELECT COUNT(*) as count FROM notes').get() as { count: number }
   ).count;
@@ -211,4 +206,65 @@ export function getIndexStats(): {
   ).count;
 
   return { noteCount, tagCount, linkCount };
+}
+
+/**
+ * Sync a single vault's index with its files
+ */
+export async function syncVault(
+  vaultAlias: string,
+  listNotes: (path: string, recursive: boolean) => Promise<{ path: string }[]>,
+  readNote: (path: string) => Promise<Note | null>
+): Promise<number> {
+  const manager = getIndexManager();
+  const db = await manager.getIndex(vaultAlias);
+
+  logger.info(`Syncing index for vault: ${vaultAlias}`);
+
+  const allNotes = await listNotes('', true);
+  let indexed = 0;
+
+  for (const meta of allNotes) {
+    try {
+      const note = await readNote(meta.path);
+      if (note) {
+        indexNote(db, note);
+        indexed++;
+      }
+    } catch (error) {
+      logger.error(`Failed to index: ${meta.path}`, error);
+    }
+  }
+
+  logger.info(`Vault sync complete: ${indexed} notes indexed in ${vaultAlias}`);
+  return indexed;
+}
+
+/**
+ * Sync all vaults
+ */
+export async function syncAllVaults(
+  listNotesForVault: (vaultAlias: string, path: string, recursive: boolean) => Promise<{ path: string }[]>,
+  readNoteFromVault: (vaultAlias: string, path: string) => Promise<Note | null>
+): Promise<Map<string, number>> {
+  const manager = getIndexManager();
+  const registry = await import('../vault/registry.js').then((m) => m.getVaultRegistry());
+
+  const results = new Map<string, number>();
+
+  for (const vault of registry.listVaults()) {
+    try {
+      const count = await syncVault(
+        vault.alias,
+        (path, recursive) => listNotesForVault(vault.alias, path, recursive),
+        (path) => readNoteFromVault(vault.alias, path)
+      );
+      results.set(vault.alias, count);
+    } catch (error) {
+      logger.error(`Failed to sync vault ${vault.alias}:`, error);
+      results.set(vault.alias, 0);
+    }
+  }
+
+  return results;
 }

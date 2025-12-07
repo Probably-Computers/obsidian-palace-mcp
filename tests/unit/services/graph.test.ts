@@ -7,15 +7,15 @@ import { join } from 'path';
 import { mkdir, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
+import Database from 'better-sqlite3';
 
 // Set up test environment before importing services
 const testDir = join(tmpdir(), `palace-graph-test-${randomUUID()}`);
 const testVault = join(testDir, 'vault');
-const testIndex = join(testDir, 'index.sqlite');
+const testPalace = join(testVault, '.palace');
 
 // Configure environment before imports
 process.env.PALACE_VAULT_PATH = testVault;
-process.env.PALACE_INDEX_PATH = testIndex;
 process.env.PALACE_LOG_LEVEL = 'error';
 process.env.PALACE_WATCH_ENABLED = 'false';
 
@@ -49,27 +49,39 @@ function createTestNote(
 }
 
 describe('Graph Service', () => {
+  let db: Database.Database;
+
   beforeAll(async () => {
     // Create test vault directory
     await mkdir(testVault, { recursive: true });
+    await mkdir(testPalace, { recursive: true });
     resetConfig();
+
+    // Create database for testing
+    const { createDatabase, initializeSchema } = await import('../../../src/services/index/sqlite');
+    db = createDatabase(join(testPalace, 'index.sqlite'));
+    initializeSchema(db);
   });
 
   afterAll(async () => {
-    // Clean up test directory
-    const { closeDatabase } = await import('../../../src/services/index/index');
-    closeDatabase();
+    // Close database
+    if (db && db.open) {
+      db.close();
+    }
     await rm(testDir, { recursive: true, force: true });
+  });
+
+  beforeEach(() => {
+    // Clear tables between tests
+    db.exec('DELETE FROM links');
+    db.exec('DELETE FROM note_tags');
+    db.exec('DELETE FROM notes');
+    db.exec('DELETE FROM notes_fts');
   });
 
   describe('Link Extraction', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase, indexNote } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
-      clearIndex();
+      const { indexNote } = await import('../../../src/services/index/sync');
 
       // Create a graph structure:
       // NoteA -> NoteB, NoteC
@@ -105,14 +117,14 @@ describe('Graph Service', () => {
       ];
 
       for (const note of notes) {
-        indexNote(note);
+        indexNote(db, note);
       }
     });
 
     it('gets outgoing links from a note', async () => {
       const { getOutgoingLinks } = await import('../../../src/services/graph/index');
 
-      const links = getOutgoingLinks('research/note-a.md');
+      const links = getOutgoingLinks(db, 'research/note-a.md');
       expect(links.length).toBe(2);
 
       const targets = links.map((l) => l.target);
@@ -123,7 +135,7 @@ describe('Graph Service', () => {
     it('gets incoming links (backlinks) to a note', async () => {
       const { getIncomingLinks } = await import('../../../src/services/graph/index');
 
-      const backlinks = getIncomingLinks('research/note-c.md');
+      const backlinks = getIncomingLinks(db, 'research/note-c.md');
       expect(backlinks.length).toBe(2);
 
       const sources = backlinks.map((l) => l.source);
@@ -134,34 +146,29 @@ describe('Graph Service', () => {
     it('returns empty for notes with no outgoing links', async () => {
       const { getOutgoingLinks } = await import('../../../src/services/graph/index');
 
-      const links = getOutgoingLinks('research/note-c.md');
+      const links = getOutgoingLinks(db, 'research/note-c.md');
       expect(links.length).toBe(0);
     });
 
     it('returns empty for notes with no incoming links', async () => {
       const { getIncomingLinks } = await import('../../../src/services/graph/index');
 
-      const backlinks = getIncomingLinks('research/note-a.md');
+      const backlinks = getIncomingLinks(db, 'research/note-a.md');
       expect(backlinks.length).toBe(0);
     });
 
     it('resolves link targets to actual notes', async () => {
       const { isLinkResolved } = await import('../../../src/services/graph/index');
 
-      expect(isLinkResolved('Note B')).toBe(true);
-      expect(isLinkResolved('Note C')).toBe(true);
-      expect(isLinkResolved('Non Existent Note')).toBe(false);
+      expect(isLinkResolved(db, 'Note B')).toBe(true);
+      expect(isLinkResolved(db, 'Note C')).toBe(true);
+      expect(isLinkResolved(db, 'Non Existent Note')).toBe(false);
     });
   });
 
   describe('Graph Traversal', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase, indexNote } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
-      clearIndex();
+      const { indexNote } = await import('../../../src/services/index/sync');
 
       // Create a deeper graph for traversal testing:
       // Root -> Level1A, Level1B
@@ -209,14 +216,14 @@ describe('Graph Service', () => {
       ];
 
       for (const note of notes) {
-        indexNote(note);
+        indexNote(db, note);
       }
     });
 
     it('traverses outgoing links at depth 1', async () => {
       const { traverseGraph } = await import('../../../src/services/graph/index');
 
-      const results = traverseGraph('research/root.md', 'outgoing', 1);
+      const results = traverseGraph(db, 'research/root.md', 'outgoing', 1);
       expect(results.length).toBe(2);
 
       const titles = results.map((r) => r.note.title);
@@ -227,7 +234,7 @@ describe('Graph Service', () => {
     it('traverses outgoing links at depth 2', async () => {
       const { traverseGraph } = await import('../../../src/services/graph/index');
 
-      const results = traverseGraph('research/root.md', 'outgoing', 2);
+      const results = traverseGraph(db, 'research/root.md', 'outgoing', 2);
 
       // Should include Level1A, Level1B (depth 1) + Level2A, Level2B (depth 2)
       expect(results.length).toBe(4);
@@ -242,7 +249,7 @@ describe('Graph Service', () => {
     it('traverses incoming links (backlinks)', async () => {
       const { traverseGraph } = await import('../../../src/services/graph/index');
 
-      const results = traverseGraph('research/level2a.md', 'incoming', 1);
+      const results = traverseGraph(db, 'research/level2a.md', 'incoming', 1);
       expect(results.length).toBe(2);
 
       const titles = results.map((r) => r.note.title);
@@ -253,7 +260,7 @@ describe('Graph Service', () => {
     it('tracks traversal path', async () => {
       const { traverseGraph } = await import('../../../src/services/graph/index');
 
-      const results = traverseGraph('research/root.md', 'outgoing', 3);
+      const results = traverseGraph(db, 'research/root.md', 'outgoing', 3);
 
       // Find Level3A in results
       const level3 = results.find((r) => r.note.title === 'Level3A');
@@ -265,12 +272,7 @@ describe('Graph Service', () => {
 
   describe('Orphan Detection', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase, indexNote } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
-      clearIndex();
+      const { indexNote } = await import('../../../src/services/index/sync');
 
       const notes = [
         createTestNote(
@@ -309,14 +311,14 @@ describe('Graph Service', () => {
       notes[0].content = '# Connected\n\nLinks to [[Target]] and [[No Outgoing]].';
 
       for (const note of notes) {
-        indexNote(note);
+        indexNote(db, note);
       }
     });
 
     it('finds notes with no incoming links', async () => {
       const { findOrphans } = await import('../../../src/services/graph/index');
 
-      const orphans = findOrphans('no_incoming');
+      const orphans = findOrphans(db, 'no_incoming');
       const titles = orphans.map((o) => o.title);
 
       // No Incoming, No Outgoing, Isolated should have no backlinks
@@ -327,7 +329,7 @@ describe('Graph Service', () => {
     it('finds notes with no outgoing links', async () => {
       const { findOrphans } = await import('../../../src/services/graph/index');
 
-      const orphans = findOrphans('no_outgoing');
+      const orphans = findOrphans(db, 'no_outgoing');
       const titles = orphans.map((o) => o.title);
 
       expect(titles).toContain('No Outgoing');
@@ -337,7 +339,7 @@ describe('Graph Service', () => {
     it('finds completely isolated notes', async () => {
       const { findOrphans } = await import('../../../src/services/graph/index');
 
-      const orphans = findOrphans('isolated');
+      const orphans = findOrphans(db, 'isolated');
       const titles = orphans.map((o) => o.title);
 
       expect(titles).toContain('Isolated');
@@ -347,12 +349,7 @@ describe('Graph Service', () => {
 
   describe('Related Notes', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase, indexNote } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
-      clearIndex();
+      const { indexNote } = await import('../../../src/services/index/sync');
 
       // Create notes with shared links and tags
       const notes = [
@@ -395,14 +392,14 @@ describe('Graph Service', () => {
       ];
 
       for (const note of notes) {
-        indexNote(note);
+        indexNote(db, note);
       }
     });
 
     it('finds related notes by shared links', async () => {
       const { findRelatedNotes } = await import('../../../src/services/graph/index');
 
-      const related = findRelatedNotes('research/main.md', 'links', 10);
+      const related = findRelatedNotes(db, 'research/main.md', 'links', 10);
 
       // Similar should be related (shares SharedTarget link)
       const titles = related.map((r) => r.note.title);
@@ -412,7 +409,7 @@ describe('Graph Service', () => {
     it('finds related notes by shared tags', async () => {
       const { findRelatedNotes } = await import('../../../src/services/graph/index');
 
-      const related = findRelatedNotes('research/main.md', 'tags', 10);
+      const related = findRelatedNotes(db, 'research/main.md', 'tags', 10);
 
       // Similar (shares javascript) and Also Similar (shares web) should be related
       const titles = related.map((r) => r.note.title);
@@ -423,7 +420,7 @@ describe('Graph Service', () => {
     it('ranks related notes by score', async () => {
       const { findRelatedNotes } = await import('../../../src/services/graph/index');
 
-      const related = findRelatedNotes('research/main.md', 'tags', 10);
+      const related = findRelatedNotes(db, 'research/main.md', 'tags', 10);
 
       // Results should be sorted by score descending
       for (let i = 1; i < related.length; i++) {
@@ -434,7 +431,7 @@ describe('Graph Service', () => {
     it('includes shared links in results', async () => {
       const { findRelatedNotes } = await import('../../../src/services/graph/index');
 
-      const related = findRelatedNotes('research/main.md', 'links', 10);
+      const related = findRelatedNotes(db, 'research/main.md', 'links', 10);
       const similar = related.find((r) => r.note.title === 'Similar');
 
       expect(similar?.sharedLinks).toBeDefined();
@@ -444,7 +441,7 @@ describe('Graph Service', () => {
     it('includes shared tags in results', async () => {
       const { findRelatedNotes } = await import('../../../src/services/graph/index');
 
-      const related = findRelatedNotes('research/main.md', 'tags', 10);
+      const related = findRelatedNotes(db, 'research/main.md', 'tags', 10);
       const similar = related.find((r) => r.note.title === 'Similar');
 
       expect(similar?.sharedTags).toBeDefined();
@@ -454,12 +451,7 @@ describe('Graph Service', () => {
 
   describe('Graph Node', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase, indexNote } = await import(
-        '../../../src/services/index/index'
-      );
-
-      await getDatabase();
-      clearIndex();
+      const { indexNote } = await import('../../../src/services/index/sync');
 
       const notes = [
         createTestNote(
@@ -489,14 +481,14 @@ describe('Graph Service', () => {
       ];
 
       for (const note of notes) {
-        indexNote(note);
+        indexNote(db, note);
       }
     });
 
     it('gets graph node with link counts', async () => {
       const { getGraphNode } = await import('../../../src/services/graph/index');
 
-      const hub = getGraphNode('research/hub.md');
+      const hub = getGraphNode(db, 'research/hub.md');
       expect(hub).not.toBeNull();
       expect(hub!.title).toBe('Hub');
       expect(hub!.outgoingCount).toBe(3);
@@ -506,7 +498,7 @@ describe('Graph Service', () => {
     it('returns null for non-existent note', async () => {
       const { getGraphNode } = await import('../../../src/services/graph/index');
 
-      const node = getGraphNode('research/non-existent.md');
+      const node = getGraphNode(db, 'research/non-existent.md');
       expect(node).toBeNull();
     });
   });

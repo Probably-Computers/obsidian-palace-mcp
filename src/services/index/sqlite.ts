@@ -1,18 +1,18 @@
 /**
- * SQLite database setup and migrations for the index
+ * SQLite database schema and initialization utilities
+ *
+ * Database connections are managed by VaultIndexManager in manager.ts.
+ * This module provides schema definitions and initialization helpers.
  */
 
 import Database from 'better-sqlite3';
-import { mkdir } from 'fs/promises';
-import { dirname } from 'path';
-import { getConfig } from '../../config/index.js';
 import { logger } from '../../utils/logger.js';
 
 // Schema version for migrations
-const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 1;
 
 // SQL statements for schema creation
-const SCHEMA_SQL = `
+export const SCHEMA_SQL = `
 -- Notes table
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
@@ -61,7 +61,7 @@ CREATE INDEX IF NOT EXISTS idx_links_source_id ON links(source_id);
 `;
 
 // FTS5 virtual table for full-text search
-const FTS_SQL = `
+export const FTS_SQL = `
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
     title,
     content,
@@ -88,49 +88,10 @@ CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
 END;
 `;
 
-// Singleton database instance
-let dbInstance: Database.Database | null = null;
-
-/**
- * Ensure the database directory exists
- */
-async function ensureDbDirectory(dbPath: string): Promise<void> {
-  const dir = dirname(dbPath);
-  await mkdir(dir, { recursive: true });
-}
-
-/**
- * Get or create the database connection
- */
-export async function getDatabase(): Promise<Database.Database> {
-  if (dbInstance) {
-    return dbInstance;
-  }
-
-  const config = getConfig();
-  const dbPath = config.indexPath!;
-
-  // Ensure directory exists
-  await ensureDbDirectory(dbPath);
-
-  logger.info(`Opening database at: ${dbPath}`);
-
-  // Open database with WAL mode for better concurrency
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  // Initialize schema
-  initializeSchema(db);
-
-  dbInstance = db;
-  return db;
-}
-
 /**
  * Initialize database schema
  */
-function initializeSchema(db: Database.Database): void {
+export function initializeSchema(db: Database.Database): void {
   // Check current schema version
   const hasVersionTable = db
     .prepare(
@@ -147,7 +108,7 @@ function initializeSchema(db: Database.Database): void {
   }
 
   if (currentVersion < SCHEMA_VERSION) {
-    logger.info(`Migrating database from version ${currentVersion} to ${SCHEMA_VERSION}`);
+    logger.debug(`Migrating database from version ${currentVersion} to ${SCHEMA_VERSION}`);
     runMigrations(db, currentVersion);
   }
 }
@@ -170,7 +131,7 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
     // if (fromVersion < 2) { ... }
 
     db.exec('COMMIT');
-    logger.info('Database migration completed');
+    logger.debug('Database migration completed');
   } catch (error) {
     db.exec('ROLLBACK');
     logger.error('Database migration failed', error);
@@ -179,29 +140,18 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
 }
 
 /**
- * Close the database connection
+ * Create and initialize a new database connection
  */
-export function closeDatabase(): void {
-  if (dbInstance) {
-    dbInstance.close();
-    dbInstance = null;
-    logger.info('Database connection closed');
-  }
-}
+export function createDatabase(dbPath: string): Database.Database {
+  logger.info(`Opening database at: ${dbPath}`);
 
-/**
- * Reset the database (for testing)
- */
-export function resetDatabase(): void {
-  closeDatabase();
-}
+  // Open database with WAL mode for better concurrency
+  const db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
 
-/**
- * Get database instance synchronously (throws if not initialized)
- */
-export function getDatabaseSync(): Database.Database {
-  if (!dbInstance) {
-    throw new Error('Database not initialized. Call getDatabase() first.');
-  }
-  return dbInstance;
+  // Initialize schema
+  initializeSchema(db);
+
+  return db;
 }

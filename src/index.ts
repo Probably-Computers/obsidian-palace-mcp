@@ -14,36 +14,49 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { getConfig } from './config/index.js';
 import { logger } from './utils/logger.js';
 import { handleToolCall, getToolDefinitions } from './tools/index.js';
-import { getDatabase, closeDatabase } from './services/index/index.js';
-import { startWatcher, stopWatcher, performInitialScan } from './services/vault/index.js';
+import { getIndexManager, resetIndexManager } from './services/index/index.js';
+import {
+  startAllWatchers,
+  stopAllWatchers,
+  performAllVaultScans,
+  getVaultRegistry,
+  initializeRegistry,
+} from './services/vault/index.js';
 import { startHttpTransport, stopHttpTransport, isHttpEnabled } from './transports/index.js';
 
 async function main(): Promise<void> {
-  // Load and validate configuration
-  const config = getConfig();
-  logger.setLevel(config.logLevel);
+  // Initialize vault registry from global config
+  const registry = initializeRegistry();
+  const globalConfig = registry.getGlobalConfig();
+  logger.setLevel(globalConfig.settings.log_level);
 
+  const vaults = registry.listVaults();
   logger.info('Starting Obsidian Palace MCP Server', {
-    vaultPath: config.vaultPath,
-    logLevel: config.logLevel,
-    indexPath: config.indexPath,
-    watchEnabled: config.watchEnabled,
+    vaultCount: vaults.length,
+    defaultVault: registry.getDefaultVault().alias,
+    logLevel: globalConfig.settings.log_level,
+    watchEnabled: globalConfig.settings.watch_enabled,
   });
 
-  // Initialize SQLite database and index
-  await getDatabase();
-  logger.info('Database initialized');
+  // Initialize index manager and databases for all vaults
+  const manager = getIndexManager();
+  await manager.initializeAllVaults();
+  logger.info('All vault databases initialized');
 
-  // Perform initial vault scan to populate index
-  const indexedCount = await performInitialScan();
-  logger.info(`Indexed ${indexedCount} notes`);
+  // Perform initial scan for all vaults
+  const scanResults = await performAllVaultScans();
+  let totalIndexed = 0;
+  for (const [alias, count] of scanResults) {
+    logger.info(`Indexed ${count} notes in vault '${alias}'`);
+    totalIndexed += count;
+  }
+  logger.info(`Total: ${totalIndexed} notes indexed across ${scanResults.size} vaults`);
 
-  // Start file watcher for external changes
-  if (config.watchEnabled) {
-    startWatcher();
+  // Start file watchers for all vaults
+  if (globalConfig.settings.watch_enabled) {
+    startAllWatchers();
   }
 
   // Create MCP server
@@ -114,11 +127,11 @@ async function main(): Promise<void> {
 // Graceful shutdown handler
 async function shutdown(): Promise<void> {
   logger.info('Shutting down...');
-  await stopWatcher();
+  await stopAllWatchers();
   if (isHttpEnabled()) {
     await stopHttpTransport();
   }
-  closeDatabase();
+  resetIndexManager();
   logger.info('Shutdown complete');
   process.exit(0);
 }

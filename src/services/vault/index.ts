@@ -22,10 +22,14 @@ export {
 } from './writer.js';
 
 export {
-  startWatcher,
-  stopWatcher,
-  isWatcherRunning,
-  performInitialScan,
+  startVaultWatcher,
+  stopVaultWatcher,
+  startAllWatchers,
+  stopAllWatchers,
+  isVaultWatched,
+  listWatchedVaults,
+  performVaultScan,
+  performAllVaultScans,
 } from './watcher.js';
 
 export {

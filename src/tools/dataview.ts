@@ -12,6 +12,7 @@ import {
   formatResult,
   type OutputFormat,
 } from '../services/dataview/index.js';
+import { getIndexManager } from '../services/index/index.js';
 import { logger } from '../utils/logger.js';
 import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
@@ -74,8 +75,10 @@ export async function dataviewHandler(args: Record<string, unknown>): Promise<To
   const { query, format, vault: vaultParam } = parseResult.data;
 
   try {
-    // Resolve vault
+    // Resolve vault and get database
     const vault = resolveVaultParam(vaultParam);
+    const manager = getIndexManager();
+    const db = await manager.getIndex(vault.alias);
 
     logger.info(`Executing DQL query: ${query}`);
 
@@ -84,8 +87,7 @@ export async function dataviewHandler(args: Record<string, unknown>): Promise<To
     logger.debug('Parsed query:', parsedQuery);
 
     // Execute the query
-    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
-    const result = executeQueryWithTags(parsedQuery);
+    const result = executeQueryWithTags(db, parsedQuery);
     logger.debug(`Query returned ${result.total} results`);
 
     // Format the result

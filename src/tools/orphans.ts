@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult, OrphanType } from '../types/index.js';
 import { findOrphans } from '../services/graph/index.js';
+import { getIndexManager } from '../services/index/index.js';
 import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
@@ -61,12 +62,13 @@ export async function orphansHandler(args: Record<string, unknown>): Promise<Too
   const { type, path, limit, vault: vaultParam } = parseResult.data;
 
   try {
-    // Resolve vault
+    // Resolve vault and get database
     const vault = resolveVaultParam(vaultParam);
+    const manager = getIndexManager();
+    const db = await manager.getIndex(vault.alias);
 
     // Find orphans
-    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
-    const orphans = findOrphans(type as OrphanType, path);
+    const orphans = findOrphans(db, type as OrphanType, path);
 
     // Limit results
     const limited = orphans.slice(0, limit);

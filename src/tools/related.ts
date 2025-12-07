@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult, RelatednessMethod } from '../types/index.js';
 import { findRelatedNotes, getNoteMetadataByPath } from '../services/graph/index.js';
+import { getIndexManager } from '../services/index/index.js';
 import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
@@ -62,12 +63,13 @@ export async function relatedHandler(args: Record<string, unknown>): Promise<Too
   const { path, method, limit, vault: vaultParam } = parseResult.data;
 
   try {
-    // Resolve vault
+    // Resolve vault and get database
     const vault = resolveVaultParam(vaultParam);
+    const manager = getIndexManager();
+    const db = await manager.getIndex(vault.alias);
 
     // Verify note exists
-    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
-    const noteMeta = getNoteMetadataByPath(path);
+    const noteMeta = getNoteMetadataByPath(db, path);
     if (!noteMeta) {
       return {
         success: false,
@@ -77,7 +79,7 @@ export async function relatedHandler(args: Record<string, unknown>): Promise<Too
     }
 
     // Find related notes
-    const related = findRelatedNotes(path, method as RelatednessMethod, limit);
+    const related = findRelatedNotes(db, path, method as RelatednessMethod, limit);
 
     // Build method description
     let methodDescription: string;

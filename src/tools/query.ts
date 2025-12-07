@@ -1,13 +1,23 @@
 /**
  * palace_query - Query notes by properties
+ * Supports cross-vault queries when enabled
  */
 
 import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
-import { queryNotes, countNotes, type FilterOptions } from '../services/index/index.js';
+import {
+  queryAllVaults,
+  queryNotesInVault,
+  countNotesInVault,
+  countNotesAllVaults,
+  getIndexManager,
+  type FilterOptions,
+  type VaultQueryResult,
+} from '../services/index/index.js';
 import { readNote } from '../services/vault/index.js';
-import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
+import { resolveVaultParam } from '../utils/vault-param.js';
+import { getVaultRegistry } from '../services/vault/registry.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -39,14 +49,16 @@ const inputSchema = z.object({
   limit: z.number().min(1).max(100).optional().default(20),
   offset: z.number().min(0).optional().default(0),
   include_content: z.boolean().optional().default(false),
-  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
+  vault: z.string().optional().describe('Vault alias or path. Limits query to this vault.'),
+  vaults: z.array(z.string()).optional().describe('List of vault aliases to query.'),
+  exclude_vaults: z.array(z.string()).optional().describe('Vault aliases to exclude from query.'),
 });
 
 // Tool definition
 export const queryTool: Tool = {
   name: 'palace_query',
   description:
-    'Query notes by properties like type, tags, confidence, verified status, and dates. Use this for filtering without full-text search.',
+    'Query notes by properties like type, tags, confidence, verified status, and dates. Use this for filtering without full-text search. Supports cross-vault queries.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -129,7 +141,17 @@ export const queryTool: Tool = {
       },
       vault: {
         type: 'string',
-        description: 'Vault alias or path to query (defaults to default vault)',
+        description: 'Vault alias or path to query (limits query to this vault)',
+      },
+      vaults: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'List of vault aliases to query (for multi-vault query)',
+      },
+      exclude_vaults: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Vault aliases to exclude from query',
       },
     },
   },
@@ -150,15 +172,10 @@ export async function queryHandler(args: Record<string, unknown>): Promise<ToolR
   const input = parseResult.data;
 
   try {
-    // Resolve vault
-    const vault = resolveVaultParam(input.vault);
-    const readOptions = {
-      vaultPath: vault.path,
-      ignoreConfig: vault.config.ignore,
-    };
+    const registry = getVaultRegistry();
+    const manager = getIndexManager();
 
-    // Build filter options - only include defined values
-    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
+    // Build filter options
     const filterOptions: FilterOptions = {
       sortBy: input.sort_by,
       sortOrder: input.sort_order,
@@ -178,45 +195,98 @@ export async function queryHandler(args: Record<string, unknown>): Promise<ToolR
     if (input.modified_after) filterOptions.modifiedAfter = input.modified_after;
     if (input.modified_before) filterOptions.modifiedBefore = input.modified_before;
 
-    // Execute query
-    const notes = queryNotes(filterOptions);
+    let results: VaultQueryResult[];
+    let total: number;
+    let queryMode: 'single' | 'cross';
 
     // Build count options - only include defined values
-    const countOptions: Parameters<typeof countNotes>[0] = {};
+    const countOptions: {
+      type?: string;
+      tags?: string[];
+      path?: string;
+      minConfidence?: number;
+      verified?: boolean;
+      vaults?: string[];
+      excludeVaults?: string[];
+    } = {};
+
     if (filterOptions.type) countOptions.type = filterOptions.type;
     if (filterOptions.tags) countOptions.tags = filterOptions.tags;
     if (filterOptions.path) countOptions.path = filterOptions.path;
-    if (filterOptions.minConfidence !== undefined)
-      countOptions.minConfidence = filterOptions.minConfidence;
+    if (filterOptions.minConfidence !== undefined) countOptions.minConfidence = filterOptions.minConfidence;
     if (filterOptions.verified !== undefined) countOptions.verified = filterOptions.verified;
+    if (input.vaults && input.vaults.length > 0) countOptions.vaults = input.vaults;
+    if (input.exclude_vaults && input.exclude_vaults.length > 0) countOptions.excludeVaults = input.exclude_vaults;
 
-    // Get total count for pagination
-    const total = countNotes(countOptions);
+    // If specific vault is provided, query only that vault
+    if (input.vault) {
+      const vault = resolveVaultParam(input.vault);
+      const db = await manager.getIndex(vault.alias);
+      const singleResults = queryNotesInVault(db, filterOptions);
+
+      // Add vault attribution
+      results = singleResults.map((note) => ({
+        vault: vault.alias,
+        vaultPath: note.path,
+        prefixedPath: `vault:${vault.alias}/${note.path}`,
+        note,
+      }));
+
+      total = countNotesInVault(db, countOptions);
+      queryMode = 'single';
+    } else {
+      // Cross-vault query - build options with only defined values
+      const crossOptions: typeof filterOptions & { vaults?: string[]; excludeVaults?: string[] } = {
+        ...filterOptions,
+      };
+
+      if (input.vaults && input.vaults.length > 0) crossOptions.vaults = input.vaults;
+      if (input.exclude_vaults && input.exclude_vaults.length > 0) crossOptions.excludeVaults = input.exclude_vaults;
+
+      results = await queryAllVaults(crossOptions);
+      total = await countNotesAllVaults(countOptions);
+      queryMode = 'cross';
+    }
 
     // Optionally include content
-    const results = await Promise.all(
-      notes.map(async (meta) => {
+    const finalResults = await Promise.all(
+      results.map(async (result) => {
         if (input.include_content) {
-          const fullNote = await readNote(meta.path, readOptions);
-          return {
-            ...meta,
-            content: fullNote?.content,
-          };
+          const vault = registry.getVault(result.vault);
+          if (vault) {
+            const fullNote = await readNote(result.vaultPath, { vaultPath: vault.path });
+            return {
+              ...result,
+              content: fullNote?.content,
+            };
+          }
         }
-        return meta;
+        return result;
       })
     );
 
     return {
       success: true,
       data: {
-        ...getVaultResultInfo(vault),
-        count: results.length,
+        query_mode: queryMode,
+        count: finalResults.length,
         total,
         offset: input.offset,
         limit: input.limit,
-        hasMore: input.offset + results.length < total,
-        results,
+        hasMore: input.offset + finalResults.length < total,
+        results: finalResults.map((r) => ({
+          vault: r.vault,
+          path: r.vaultPath,
+          prefixed_path: r.prefixedPath,
+          title: r.note.title,
+          type: r.note.frontmatter.type,
+          created: r.note.frontmatter.created,
+          modified: r.note.frontmatter.modified,
+          confidence: r.note.frontmatter.confidence,
+          verified: r.note.frontmatter.verified,
+          tags: r.note.frontmatter.tags,
+          content: 'content' in r ? r.content : undefined,
+        })),
       },
     };
   } catch (error) {

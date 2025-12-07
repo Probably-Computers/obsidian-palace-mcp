@@ -7,9 +7,10 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import { readNote, listNotes } from '../services/vault/index.js';
 import { updateNote } from '../services/vault/writer.js';
-import { indexNote } from '../services/index/index.js';
+import { indexNote, getIndexManager } from '../services/index/index.js';
 import {
   buildCompleteIndex,
+  buildLinkableIndex,
   scanForMatches,
   autolinkContent,
   DEFAULT_MIN_TITLE_LENGTH,
@@ -110,8 +111,11 @@ export async function autolinkHandler(args: Record<string, unknown>): Promise<To
       ignoreConfig: vault.config.ignore,
     };
 
+    // Get the database for this vault
+    const manager = getIndexManager();
+    const db = await manager.getIndex(vault.alias);
+
     // Build the linkable index
-    // Note: Currently uses shared index, multi-vault autolink will be enhanced in future
     logger.info(
       `Building linkable index (min_title_length: ${min_title_length}, include_aliases: ${include_aliases})`
     );
@@ -120,13 +124,11 @@ export async function autolinkHandler(args: Record<string, unknown>): Promise<To
     let conflicts: AliasConflict[] = [];
 
     if (include_aliases) {
-      const result = await buildCompleteIndex(min_title_length);
+      const result = await buildCompleteIndex(db, min_title_length);
       index = result.index;
       conflicts = result.conflicts;
     } else {
-      // Import buildLinkableIndex directly
-      const { buildLinkableIndex } = await import('../services/autolink/scanner.js');
-      index = buildLinkableIndex(min_title_length);
+      index = buildLinkableIndex(db, min_title_length);
     }
 
     logger.info(`Index built with ${index.size} linkable terms`);
@@ -190,7 +192,7 @@ export async function autolinkHandler(args: Record<string, unknown>): Promise<To
         // Apply changes if not dry run
         if (!dry_run) {
           const updatedNote = await updateNote(notePath, result.linkedContent, {}, readOptions);
-          indexNote(updatedNote);
+          indexNote(db, updatedNote);
           logger.info(`Updated ${notePath} with ${result.linksAdded.length} links`);
         }
       }

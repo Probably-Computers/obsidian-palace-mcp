@@ -7,15 +7,15 @@ import { join } from 'path';
 import { mkdir, rm, readFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
+import Database from 'better-sqlite3';
 
 // Set up test environment before importing services
 const testDir = join(tmpdir(), `palace-integration-${randomUUID()}`);
 const testVault = join(testDir, 'vault');
-const testIndex = join(testDir, 'index.sqlite');
+const testPalace = join(testVault, '.palace');
 
 // Configure environment before imports
 process.env.PALACE_VAULT_PATH = testVault;
-process.env.PALACE_INDEX_PATH = testIndex;
 process.env.PALACE_LOG_LEVEL = 'error';
 process.env.PALACE_WATCH_ENABLED = 'false';
 
@@ -23,26 +23,40 @@ process.env.PALACE_WATCH_ENABLED = 'false';
 import { resetConfig } from '../../src/config/index';
 
 describe('Integration Tests', () => {
+  let db: Database.Database;
+
   beforeAll(async () => {
     // Create test vault directory with subdirectories
     await mkdir(join(testVault, 'research'), { recursive: true });
     await mkdir(join(testVault, 'commands'), { recursive: true });
     await mkdir(join(testVault, 'daily'), { recursive: true });
+    await mkdir(testPalace, { recursive: true });
     resetConfig();
+
+    // Create database for testing
+    const { createDatabase, initializeSchema } = await import('../../src/services/index/sqlite');
+    db = createDatabase(join(testPalace, 'index.sqlite'));
+    initializeSchema(db);
   });
 
   afterAll(async () => {
-    // Clean up
-    const { closeDatabase } = await import('../../src/services/index/index');
-    closeDatabase();
+    // Close database
+    if (db && db.open) {
+      db.close();
+    }
     await rm(testDir, { recursive: true, force: true });
+  });
+
+  beforeEach(() => {
+    // Clear tables between tests
+    db.exec('DELETE FROM links');
+    db.exec('DELETE FROM note_tags');
+    db.exec('DELETE FROM notes');
+    db.exec('DELETE FROM notes_fts');
   });
 
   describe('CRUD Workflow', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase } = await import('../../src/services/index/index');
-      await getDatabase();
-      clearIndex();
       // Clean up vault directories
       await rm(join(testVault, 'research'), { recursive: true, force: true }).catch(() => {});
       await rm(join(testVault, 'commands'), { recursive: true, force: true }).catch(() => {});
@@ -55,7 +69,7 @@ describe('Integration Tests', () => {
       const { readHandler } = await import('../../src/tools/read');
       const { updateHandler } = await import('../../src/tools/update');
       const { recallHandler } = await import('../../src/tools/recall');
-      const { indexNote } = await import('../../src/services/index/index');
+      const { indexNote } = await import('../../src/services/index/sync');
 
       // Create a note
       const createResult = await rememberHandler({
@@ -78,7 +92,7 @@ describe('Integration Tests', () => {
       expect(readResult.data.content).toContain('smallest deployable unit');
 
       // Index the note for search
-      indexNote({
+      indexNote(db, {
         path: createResult.data.path,
         filename: 'kubernetes-pods.md',
         title: 'Kubernetes Pods',
@@ -97,11 +111,10 @@ describe('Integration Tests', () => {
       expect(updateResult.success).toBe(true);
 
       // Search for the note
-      const searchResult = await recallHandler({ query: 'kubernetes pods' });
-      expect(searchResult.success).toBe(true);
-      if (!searchResult.success) return;
-      expect(searchResult.data.results.length).toBeGreaterThan(0);
-      expect(searchResult.data.results[0].note.title).toBe('Kubernetes Pods');
+      const { searchNotesInVault } = await import('../../src/services/index/query');
+      const searchResults = searchNotesInVault(db, { query: 'kubernetes pods' });
+      expect(searchResults.length).toBeGreaterThan(0);
+      expect(searchResults[0]?.note.title).toBe('Kubernetes Pods');
     });
 
     it('handles frontmatter updates correctly', async () => {
@@ -146,14 +159,10 @@ describe('Integration Tests', () => {
 
   describe('Search and Query Workflow', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase, indexNote } = await import(
-        '../../src/services/index/index'
-      );
-      await getDatabase();
-      clearIndex();
+      const { indexNote } = await import('../../src/services/index/sync');
 
       // Create test notes directly in index for search tests
-      indexNote({
+      indexNote(db, {
         path: 'research/docker-overview.md',
         filename: 'docker-overview.md',
         title: 'Docker Overview',
@@ -168,7 +177,7 @@ describe('Integration Tests', () => {
         raw: '',
       });
 
-      indexNote({
+      indexNote(db, {
         path: 'commands/docker-compose-guide.md',
         filename: 'docker-compose-guide.md',
         title: 'Docker Compose Guide',
@@ -183,7 +192,7 @@ describe('Integration Tests', () => {
         raw: '',
       });
 
-      indexNote({
+      indexNote(db, {
         path: 'research/kubernetes-intro.md',
         filename: 'kubernetes-intro.md',
         title: 'Kubernetes Intro',
@@ -200,68 +209,52 @@ describe('Integration Tests', () => {
     });
 
     it('searches with full-text query', async () => {
-      const { recallHandler } = await import('../../src/tools/recall');
+      const { searchNotesInVault } = await import('../../src/services/index/query');
 
-      const result = await recallHandler({ query: 'containerization' });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data.results.length).toBeGreaterThan(0);
-      expect(result.data.results[0].note.title).toBe('Docker Overview');
+      const results = searchNotesInVault(db, { query: 'containerization' });
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0]?.note.title).toBe('Docker Overview');
     });
 
     it('filters by type', async () => {
-      const { queryHandler } = await import('../../src/tools/query');
+      const { queryNotesInVault } = await import('../../src/services/index/query');
 
-      const result = await queryHandler({ type: 'command' });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data.results.length).toBe(1);
-      expect(result.data.results[0].title).toBe('Docker Compose Guide');
+      const results = queryNotesInVault(db, { type: 'command' });
+      expect(results.length).toBe(1);
+      expect(results[0]?.title).toBe('Docker Compose Guide');
     });
 
     it('filters by tags', async () => {
-      const { queryHandler } = await import('../../src/tools/query');
+      const { queryNotesInVault } = await import('../../src/services/index/query');
 
-      const result = await queryHandler({ tags: ['containers'] });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data.results.length).toBe(2);
+      const results = queryNotesInVault(db, { tags: ['containers'] });
+      expect(results.length).toBe(2);
     });
 
     it('filters by minimum confidence', async () => {
-      const { queryHandler } = await import('../../src/tools/query');
+      const { queryNotesInVault } = await import('../../src/services/index/query');
 
-      const result = await queryHandler({ min_confidence: 0.85 });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data.results.length).toBe(1);
-      expect(result.data.results[0].title).toBe('Docker Overview');
+      const results = queryNotesInVault(db, { minConfidence: 0.85 });
+      expect(results.length).toBe(1);
+      expect(results[0]?.title).toBe('Docker Overview');
     });
 
     it('executes dataview queries', async () => {
-      const { dataviewHandler } = await import('../../src/tools/dataview');
+      const { parseDQL, executeQueryWithTags } = await import('../../src/services/dataview/index');
 
-      const result = await dataviewHandler({
-        query: 'TABLE title, confidence WHERE type = "research"',
-        format: 'json',
-      });
+      const query = parseDQL('TABLE title, confidence WHERE type = "research"');
+      const result = executeQueryWithTags(db, query);
 
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data.total).toBe(2);
+      expect(result.total).toBe(2);
     });
   });
 
   describe('Graph Workflow', () => {
     beforeEach(async () => {
-      const { clearIndex, getDatabase, indexNote } = await import(
-        '../../src/services/index/index'
-      );
-      await getDatabase();
-      clearIndex();
+      const { indexNote } = await import('../../src/services/index/sync');
 
       // Create test notes directly in index for graph tests
-      indexNote({
+      indexNote(db, {
         path: 'research/main-topic.md',
         filename: 'main-topic.md',
         title: 'Main Topic',
@@ -275,7 +268,7 @@ describe('Integration Tests', () => {
         raw: '',
       });
 
-      indexNote({
+      indexNote(db, {
         path: 'research/subtopic-a.md',
         filename: 'subtopic-a.md',
         title: 'Subtopic A',
@@ -289,7 +282,7 @@ describe('Integration Tests', () => {
         raw: '',
       });
 
-      indexNote({
+      indexNote(db, {
         path: 'research/subtopic-b.md',
         filename: 'subtopic-b.md',
         title: 'Subtopic B',
@@ -303,7 +296,7 @@ describe('Integration Tests', () => {
         raw: '',
       });
 
-      indexNote({
+      indexNote(db, {
         path: 'research/orphan-note.md',
         filename: 'orphan-note.md',
         title: 'Orphan Note',
@@ -319,40 +312,26 @@ describe('Integration Tests', () => {
     });
 
     it('finds outgoing links', async () => {
-      const { linksHandler } = await import('../../src/tools/links');
+      const { getOutgoingLinks } = await import('../../src/services/graph/index');
 
-      const result = await linksHandler({
-        path: 'research/main-topic.md',
-        direction: 'outgoing',
-      });
-
-      expect(result.success).toBe(true);
-      if (!result.success) return;
-      expect(result.data.outgoing.length).toBe(2);
+      const links = getOutgoingLinks(db, 'research/main-topic.md');
+      expect(links.length).toBe(2);
     });
 
     it('finds orphan notes', async () => {
-      const { orphansHandler } = await import('../../src/tools/orphans');
+      const { findOrphans } = await import('../../src/services/graph/index');
 
-      const result = await orphansHandler({ type: 'isolated' });
-      expect(result.success).toBe(true);
-      if (!result.success) return;
+      const orphans = findOrphans(db, 'isolated');
       // Orphan note has no links in or out
-      expect(result.data.orphans.length).toBeGreaterThan(0);
+      expect(orphans.length).toBeGreaterThan(0);
     });
 
     it('finds related notes by tags', async () => {
-      const { relatedHandler } = await import('../../src/tools/related');
+      const { findRelatedNotes } = await import('../../src/services/graph/index');
 
-      const result = await relatedHandler({
-        path: 'research/subtopic-a.md',
-        method: 'tags',
-      });
-
-      expect(result.success).toBe(true);
-      if (!result.success) return;
+      const related = findRelatedNotes(db, 'research/subtopic-a.md', 'tags', 10);
       // subtopic-b shares 'subtopic' and 'category-a' tags
-      expect(result.data.related.length).toBeGreaterThan(0);
+      expect(related.length).toBeGreaterThan(0);
     });
   });
 

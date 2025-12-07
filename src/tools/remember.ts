@@ -11,6 +11,7 @@ import {
   scanForMatches,
   autolinkContent,
 } from '../services/autolink/index.js';
+import { getIndexManager } from '../services/index/index.js';
 import { logger } from '../utils/logger.js';
 import {
   resolveVaultParam,
@@ -132,11 +133,11 @@ export async function rememberHandler(
     let linksAdded = 0;
 
     // Auto-link content if enabled
-    // Note: Auto-linking currently uses the default vault's index
-    // Multi-vault autolink support will be added in a future update
     if (input.autolink) {
       try {
-        const { index } = await buildCompleteIndex();
+        const manager = getIndexManager();
+        const db = await manager.getIndex(vault.alias);
+        const { index } = await buildCompleteIndex(db);
         const matches = scanForMatches(contentToSave, index);
         if (matches.length > 0) {
           const result = autolinkContent(contentToSave, matches);
