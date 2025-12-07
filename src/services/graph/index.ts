@@ -21,3 +21,10 @@ export {
   findCommonLinks,
   hasPath,
 } from './relationships.js';
+
+export {
+  findUnlinkedMentions,
+  addRetroactiveLinks,
+  updateStubCreators,
+  getRetroactiveLinkStats,
+} from './retroactive.js';

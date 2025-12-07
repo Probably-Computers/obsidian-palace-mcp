@@ -35,6 +35,13 @@ export function indexNote(db: Database.Database, note: Note): void {
 
   const { frontmatter, content, path, title } = note;
 
+  // Extract additional frontmatter fields
+  const fm = frontmatter as unknown as Record<string, unknown>;
+  const status = (fm.status as string | undefined) ?? 'active';
+  const mentionedIn = fm.mentioned_in as string[] | undefined;
+  const palaceObj = fm.palace as Record<string, unknown> | undefined;
+  const palaceVersion = (palaceObj?.version as number | undefined) ?? 1;
+
   db.transaction(() => {
     if (existing) {
       // Update existing note
@@ -42,7 +49,9 @@ export function indexNote(db: Database.Database, note: Note): void {
         `UPDATE notes SET
           title = ?, type = ?, created = ?, modified = ?,
           source = ?, confidence = ?, verified = ?,
-          content = ?, content_hash = ?
+          content = ?, content_hash = ?,
+          status = ?, mentioned_in = ?, tags = ?, related = ?, aliases = ?,
+          palace_version = ?
         WHERE id = ?`
       ).run(
         title,
@@ -54,6 +63,12 @@ export function indexNote(db: Database.Database, note: Note): void {
         frontmatter.verified ? 1 : 0,
         content,
         contentHash,
+        status,
+        mentionedIn ? JSON.stringify(mentionedIn) : null,
+        frontmatter.tags ? JSON.stringify(frontmatter.tags) : null,
+        frontmatter.related ? JSON.stringify(frontmatter.related) : null,
+        frontmatter.aliases ? JSON.stringify(frontmatter.aliases) : null,
+        palaceVersion,
         existing.id
       );
 
@@ -70,8 +85,9 @@ export function indexNote(db: Database.Database, note: Note): void {
       const result = db.prepare(
         `INSERT INTO notes (
           path, title, type, created, modified,
-          source, confidence, verified, content, content_hash
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          source, confidence, verified, content, content_hash,
+          status, mentioned_in, tags, related, aliases, palace_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         path,
         title,
@@ -82,7 +98,13 @@ export function indexNote(db: Database.Database, note: Note): void {
         frontmatter.confidence ?? null,
         frontmatter.verified ? 1 : 0,
         content,
-        contentHash
+        contentHash,
+        status,
+        mentionedIn ? JSON.stringify(mentionedIn) : null,
+        frontmatter.tags ? JSON.stringify(frontmatter.tags) : null,
+        frontmatter.related ? JSON.stringify(frontmatter.related) : null,
+        frontmatter.aliases ? JSON.stringify(frontmatter.aliases) : null,
+        palaceVersion
       );
 
       const noteId = result.lastInsertRowid as number;
@@ -267,4 +289,123 @@ export async function syncAllVaults(
   }
 
   return results;
+}
+
+/**
+ * Track technology mentions for a note
+ */
+export function trackTechnologyMentions(
+  db: Database.Database,
+  notePath: string,
+  technologies: string[]
+): void {
+  if (technologies.length === 0) return;
+
+  const note = db
+    .prepare('SELECT id FROM notes WHERE path = ?')
+    .get(notePath) as { id: number } | undefined;
+
+  if (!note) {
+    logger.debug(`Note not found for tech tracking: ${notePath}`);
+    return;
+  }
+
+  const now = new Date().toISOString();
+
+  // Clear existing mentions for this note
+  db.prepare('DELETE FROM technology_mentions WHERE note_id = ?').run(note.id);
+
+  // Insert new mentions
+  const insertMention = db.prepare(
+    `INSERT OR REPLACE INTO technology_mentions
+     (note_id, technology, mention_count, first_mentioned)
+     VALUES (?, ?, 1, ?)`
+  );
+
+  for (const tech of technologies) {
+    insertMention.run(note.id, tech.toLowerCase(), now);
+  }
+
+  logger.debug(`Tracked ${technologies.length} technology mentions for: ${notePath}`);
+}
+
+/**
+ * Get all notes that mention a technology
+ */
+export function getNotesMentioningTechnology(
+  db: Database.Database,
+  technology: string
+): Array<{ path: string; title: string; mentionCount: number }> {
+  const results = db
+    .prepare(
+      `SELECT n.path, n.title, tm.mention_count
+       FROM technology_mentions tm
+       JOIN notes n ON n.id = tm.note_id
+       WHERE tm.technology = ?
+       ORDER BY tm.mention_count DESC`
+    )
+    .all(technology.toLowerCase()) as Array<{
+    path: string;
+    title: string;
+    mention_count: number;
+  }>;
+
+  return results.map((r) => ({
+    path: r.path,
+    title: r.title,
+    mentionCount: r.mention_count,
+  }));
+}
+
+/**
+ * Get all technologies mentioned by a note
+ */
+export function getTechnologiesMentionedBy(
+  db: Database.Database,
+  notePath: string
+): string[] {
+  const note = db
+    .prepare('SELECT id FROM notes WHERE path = ?')
+    .get(notePath) as { id: number } | undefined;
+
+  if (!note) return [];
+
+  const results = db
+    .prepare(
+      `SELECT technology FROM technology_mentions
+       WHERE note_id = ?
+       ORDER BY technology`
+    )
+    .all(note.id) as Array<{ technology: string }>;
+
+  return results.map((r) => r.technology);
+}
+
+/**
+ * Get technology mention statistics
+ */
+export function getTechnologyStats(
+  db: Database.Database
+): Array<{ technology: string; noteCount: number; totalMentions: number }> {
+  const results = db
+    .prepare(
+      `SELECT
+         technology,
+         COUNT(DISTINCT note_id) as note_count,
+         SUM(mention_count) as total_mentions
+       FROM technology_mentions
+       GROUP BY technology
+       ORDER BY note_count DESC, total_mentions DESC`
+    )
+    .all() as Array<{
+    technology: string;
+    note_count: number;
+    total_mentions: number;
+  }>;
+
+  return results.map((r) => ({
+    technology: r.technology,
+    noteCount: r.note_count,
+    totalMentions: r.total_mentions,
+  }));
 }

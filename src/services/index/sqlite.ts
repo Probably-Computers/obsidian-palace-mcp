@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { logger } from '../../utils/logger.js';
 
 // Schema version for migrations
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 3;
 
 // SQL statements for schema creation
 export const SCHEMA_SQL = `
@@ -127,8 +127,50 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
       db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(1);
     }
 
+    // Migration 2: Add status and stub tracking
+    if (fromVersion < 2) {
+      // Add status column for stub/active tracking
+      db.exec(`
+        ALTER TABLE notes ADD COLUMN status TEXT DEFAULT 'active';
+        ALTER TABLE notes ADD COLUMN mentioned_in TEXT;
+        ALTER TABLE notes ADD COLUMN tags TEXT;
+        ALTER TABLE notes ADD COLUMN related TEXT;
+        ALTER TABLE notes ADD COLUMN aliases TEXT;
+        ALTER TABLE notes ADD COLUMN palace_version INTEGER DEFAULT 1;
+      `);
+
+      // Create index for status queries
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_notes_status ON notes(status);
+      `);
+
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(2);
+    }
+
+    // Migration 3: Add technology mentions tracking
+    if (fromVersion < 3) {
+      db.exec(`
+        -- Technology mentions table
+        CREATE TABLE IF NOT EXISTS technology_mentions (
+          id INTEGER PRIMARY KEY,
+          note_id INTEGER NOT NULL,
+          technology TEXT NOT NULL,
+          mention_count INTEGER DEFAULT 1,
+          first_mentioned TEXT,
+          FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
+          UNIQUE(note_id, technology)
+        );
+
+        -- Index for technology lookups
+        CREATE INDEX IF NOT EXISTS idx_tech_mentions_tech ON technology_mentions(technology);
+        CREATE INDEX IF NOT EXISTS idx_tech_mentions_note ON technology_mentions(note_id);
+      `);
+
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(3);
+    }
+
     // Future migrations go here:
-    // if (fromVersion < 2) { ... }
+    // if (fromVersion < 4) { ... }
 
     db.exec('COMMIT');
     logger.debug('Database migration completed');

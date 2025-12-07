@@ -286,6 +286,23 @@ Before marking a phase file as ready:
 - Check that referenced standards are followed
 - Ensure phase documentation is updated
 
+### Testing During Phase Work
+
+**Test Efficiently**: Full test suites can take significant time. Use targeted testing strategies for faster feedback during development:
+
+1. **During active development**: Run only tests for the component you're modifying
+2. **Before committing**: Run unit tests for quick validation
+3. **Before marking phase complete**: Run the full test suite
+4. **For CI/CD pipelines**: Full test suite with coverage reports
+
+**Testing Workflow Best Practices:**
+- Configure test runners to support running individual files or directories
+- Use minimal/quiet reporters during development for faster output
+- Reserve comprehensive test runs for phase completion verification
+- Document project-specific test commands in CLAUDE.md or README
+
+**Important**: Avoid waiting for full test suites when quick feedback is needed. Target specific test files or use fast reporters for rapid iteration. This prevents long wait times that interrupt development flow.
+
 ## Templates
 
 A blank phase template is available at `docs/templates/PHASE_TEMPLATE.md` for quick phase creation.

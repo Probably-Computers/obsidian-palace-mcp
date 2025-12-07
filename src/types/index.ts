@@ -26,6 +26,7 @@ export interface NoteFrontmatter {
   tags?: string[];
   related?: string[]; // Wiki-link targets
   aliases?: string[];
+  authors?: string[]; // Contributors to this note (e.g., ['ai:claude', 'human'])
 }
 
 // Full note representation

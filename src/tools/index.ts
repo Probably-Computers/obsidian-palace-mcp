@@ -25,6 +25,9 @@ import {
   sessionLogHandler,
 } from './session.js';
 import { vaultsTool, vaultsHandler } from './vaults.js';
+import { storeTool, storeHandler } from './store.js';
+import { checkTool, checkHandler } from './check.js';
+import { improveTool, improveHandler } from './improve.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -85,6 +88,16 @@ export function registerTools(): void {
   // Phase 008 tools - Multi-vault
   tools.set('palace_vaults', vaultsTool);
   handlers.set('palace_vaults', vaultsHandler);
+
+  // Phase 011 tools - Intent-based storage
+  tools.set('palace_store', storeTool);
+  handlers.set('palace_store', storeHandler);
+
+  tools.set('palace_check', checkTool);
+  handlers.set('palace_check', checkHandler);
+
+  tools.set('palace_improve', improveTool);
+  handlers.set('palace_improve', improveHandler);
 }
 
 /**

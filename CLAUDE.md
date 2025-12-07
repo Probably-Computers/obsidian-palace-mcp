@@ -96,9 +96,27 @@ src/
 npm run dev      # Run with hot reload (tsx watch)
 npm run build    # Compile TypeScript to dist/
 npm run start    # Run compiled version
-npm run test     # Run tests with vitest
 npm run lint     # ESLint check
+npm run typecheck # Type check without emitting
 npm run inspect  # Test with MCP Inspector
+```
+
+### Test Commands
+
+```bash
+npm run test             # Run all tests once (default)
+npm run test:fast        # Run all tests with minimal output (dot reporter)
+npm run test:unit        # Run only unit tests (fastest)
+npm run test:integration # Run only integration tests
+npm run test:watch       # Run tests in watch mode
+npm run test:coverage    # Run tests with coverage report
+```
+
+**Important**: When verifying implementation, use `npm run test:fast` or `npm run test:unit` for quick feedback. The full test suite can take several minutes. For phase completion verification, run the specific test file:
+
+```bash
+npx vitest run tests/unit/services/specific-test.test.ts  # Single file
+npx vitest run tests/unit/services --reporter=dot         # Directory
 ```
 
 ## Environment Variables
@@ -275,6 +293,9 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_session_start | ✅ | Start a work session in daily log |
 | palace_session_log | ✅ | Log entries to current session |
 | palace_vaults | ✅ | List and manage configured vaults |
+| palace_store | ✅ | Intent-based knowledge storage (AI expresses WHAT, Palace decides WHERE) |
+| palace_check | ✅ | Check for existing knowledge before creating (prevents duplicates) |
+| palace_improve | ✅ | Intelligently update existing notes with multiple modes |
 
 ### palace_recall
 
@@ -464,6 +485,89 @@ List all configured vaults with their aliases, paths, and access modes:
 - Default vault indicator
 - Cross-vault search status
 - Optional: note counts, config details
+
+### palace_store
+
+Intent-based knowledge storage. AI expresses WHAT to store, Palace determines WHERE based on vault configuration:
+
+```typescript
+{
+  title: string;           // Note title (required)
+  content: string;         // Note content in markdown (required)
+  intent: {                // Storage intent (required)
+    knowledge_type: 'technology' | 'command' | 'reference' | 'standard' |
+                    'pattern' | 'research' | 'decision' | 'configuration' |
+                    'troubleshooting' | 'note';
+    domain: string[];      // Domain classification (e.g., ['kubernetes', 'networking'])
+    scope: 'general' | 'project-specific';
+    project?: string;      // Project name for project-specific
+    client?: string;       // Client name for client-specific
+    technologies?: string[]; // Technologies mentioned (stubs created if missing)
+    references?: string[]; // Explicit links to create
+  };
+  options?: {
+    vault?: string;        // Vault alias (default: default vault)
+    create_stubs?: boolean; // Create stubs for mentioned tech (default: true)
+    retroactive_link?: boolean; // Update existing notes with links (default: true)
+    autolink?: boolean;    // Auto-link to existing notes (default: true)
+    dry_run?: boolean;     // Preview without saving (default: false)
+  };
+  source?: {
+    origin: string;        // e.g., 'ai:research', 'human', 'web:url'
+    confidence?: number;   // 0.0 - 1.0
+  };
+}
+```
+
+**Knowledge Layers:**
+- **Layer 1 (Technical)**: technology, command, reference → Never trapped in projects
+- **Layer 2 (Domain)**: standard, pattern, research → Best practices
+- **Layer 3 (Contextual)**: decision, configuration → Project/client-specific
+
+### palace_check
+
+Check for existing knowledge before creating new notes (prevents duplicates):
+
+```typescript
+{
+  query: string;           // Topic or title to check for (required)
+  knowledge_type?: string; // Optional filter by knowledge type
+  domain?: string[];       // Optional filter by domain
+  include_stubs?: boolean; // Include stub notes (default: true)
+  vault?: string;          // Vault alias
+}
+```
+
+**Returns:**
+- `found`: Whether matches exist
+- `matches`: Ranked list of similar notes with relevance scores
+- `recommendation`: 'create_new' | 'expand_stub' | 'improve_existing' | 'reference_existing'
+- `suggestions`: Stub candidates and similar titles
+
+### palace_improve
+
+Intelligently update existing notes with multiple modes:
+
+```typescript
+{
+  path: string;            // Path to note (required)
+  mode: 'append' | 'append_section' | 'update_section' |
+        'merge' | 'replace' | 'frontmatter';
+  content?: string;        // New content (not needed for frontmatter mode)
+  section?: string;        // Section name for update_section mode
+  frontmatter?: object;    // Frontmatter fields to update
+  autolink?: boolean;      // Auto-link new content (default: true)
+  vault?: string;          // Vault alias
+}
+```
+
+**Update Modes:**
+- `append`: Add content to end of note
+- `append_section`: Add as new H2 section
+- `update_section`: Replace specific H2 section content
+- `merge`: Intelligently merge (avoid duplicate sections)
+- `replace`: Full content replacement
+- `frontmatter`: Update only metadata
 
 ## Testing
 

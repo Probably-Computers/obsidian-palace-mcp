@@ -23,10 +23,14 @@ export function parseFrontmatter(content: string): {
  * Stringify frontmatter and content back to markdown
  */
 export function stringifyFrontmatter(
-  frontmatter: NoteFrontmatter,
-  body: string
+  frontmatter: NoteFrontmatter | Record<string, unknown>,
+  body?: string
 ): string {
-  return matter.stringify(body, frontmatter);
+  if (body !== undefined) {
+    return matter.stringify(body, frontmatter);
+  }
+  // Just stringify the frontmatter with empty body
+  return matter.stringify('', frontmatter);
 }
 
 /**

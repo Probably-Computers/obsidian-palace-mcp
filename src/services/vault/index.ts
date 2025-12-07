@@ -52,3 +52,30 @@ export {
   mergeIgnorePatterns,
   DEFAULT_IGNORE_PATTERNS,
 } from './ignore.js';
+
+export {
+  resolveStorage,
+  checkPathConflict,
+  generateAlternativePath,
+  isPathWithinVault,
+  getPossiblePaths,
+} from './resolver.js';
+
+export {
+  determineLayer,
+  getLayerBaseFolders,
+  getKnowledgeTypeFolder,
+  isReusableKnowledge,
+  suggestLayer,
+} from './layer-detector.js';
+
+export {
+  createStub,
+  isStub,
+  expandStub,
+  addStubMention,
+  findStubs,
+  findStubByTitle,
+  getStubsMentionedBy,
+  createStubsForUnresolvedLinks,
+} from './stub-manager.js';
