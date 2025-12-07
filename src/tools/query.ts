@@ -7,6 +7,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import { queryNotes, countNotes, type FilterOptions } from '../services/index/index.js';
 import { readNote } from '../services/vault/index.js';
+import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -33,14 +34,12 @@ const inputSchema = z.object({
   created_before: z.string().optional(),
   modified_after: z.string().optional(),
   modified_before: z.string().optional(),
-  sort_by: z
-    .enum(['created', 'modified', 'title', 'confidence'])
-    .optional()
-    .default('modified'),
+  sort_by: z.enum(['created', 'modified', 'title', 'confidence']).optional().default('modified'),
   sort_order: z.enum(['asc', 'desc']).optional().default('desc'),
   limit: z.number().min(1).max(100).optional().default(20),
   offset: z.number().min(0).optional().default(0),
   include_content: z.boolean().optional().default(false),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -128,22 +127,22 @@ export const queryTool: Tool = {
         type: 'boolean',
         description: 'Include full note content in results (default: false)',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to query (defaults to default vault)',
+      },
     },
   },
 };
 
 // Tool handler
-export async function queryHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function queryHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
@@ -151,7 +150,15 @@ export async function queryHandler(
   const input = parseResult.data;
 
   try {
+    // Resolve vault
+    const vault = resolveVaultParam(input.vault);
+    const readOptions = {
+      vaultPath: vault.path,
+      ignoreConfig: vault.config.ignore,
+    };
+
     // Build filter options - only include defined values
+    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
     const filterOptions: FilterOptions = {
       sortBy: input.sort_by,
       sortOrder: input.sort_order,
@@ -179,7 +186,8 @@ export async function queryHandler(
     if (filterOptions.type) countOptions.type = filterOptions.type;
     if (filterOptions.tags) countOptions.tags = filterOptions.tags;
     if (filterOptions.path) countOptions.path = filterOptions.path;
-    if (filterOptions.minConfidence !== undefined) countOptions.minConfidence = filterOptions.minConfidence;
+    if (filterOptions.minConfidence !== undefined)
+      countOptions.minConfidence = filterOptions.minConfidence;
     if (filterOptions.verified !== undefined) countOptions.verified = filterOptions.verified;
 
     // Get total count for pagination
@@ -189,7 +197,7 @@ export async function queryHandler(
     const results = await Promise.all(
       notes.map(async (meta) => {
         if (input.include_content) {
-          const fullNote = await readNote(meta.path);
+          const fullNote = await readNote(meta.path, readOptions);
           return {
             ...meta,
             content: fullNote?.content,
@@ -202,6 +210,7 @@ export async function queryHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         count: results.length,
         total,
         offset: input.offset,

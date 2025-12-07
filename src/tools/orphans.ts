@@ -6,15 +6,14 @@ import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult, OrphanType } from '../types/index.js';
 import { findOrphans } from '../services/graph/index.js';
+import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
-  type: z
-    .enum(['no_incoming', 'no_outgoing', 'isolated'])
-    .optional()
-    .default('isolated'),
+  type: z.enum(['no_incoming', 'no_outgoing', 'isolated']).optional().default('isolated'),
   path: z.string().optional(),
   limit: z.number().min(1).max(100).optional().default(50),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -33,37 +32,40 @@ export const orphansTool: Tool = {
       },
       path: {
         type: 'string',
-        description:
-          'Optional path prefix to limit search to a specific directory',
+        description: 'Optional path prefix to limit search to a specific directory',
       },
       limit: {
         type: 'number',
         description: 'Maximum number of results (default: 50, max: 100)',
+      },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to search in (defaults to default vault)',
       },
     },
   },
 };
 
 // Tool handler
-export async function orphansHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function orphansHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
 
-  const { type, path, limit } = parseResult.data;
+  const { type, path, limit, vault: vaultParam } = parseResult.data;
 
   try {
+    // Resolve vault
+    const vault = resolveVaultParam(vaultParam);
+
     // Find orphans
+    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
     const orphans = findOrphans(type as OrphanType, path);
 
     // Limit results
@@ -86,6 +88,7 @@ export async function orphansHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         type,
         description,
         count: limited.length,

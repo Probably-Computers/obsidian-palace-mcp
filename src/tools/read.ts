@@ -6,15 +6,25 @@ import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import { readNote, findNoteByTitle } from '../services/vault/index.js';
+import {
+  resolveVaultParam,
+  resolvePathWithVault,
+  getVaultResultInfo,
+} from '../utils/vault-param.js';
 
 // Input schema
-const inputSchema = z.object({
-  path: z.string().optional(),
-  title: z.string().optional(),
-}).refine(
-  (data) => data.path || data.title,
-  { message: 'Either path or title is required' }
-);
+const inputSchema = z
+  .object({
+    path: z.string().optional(),
+    title: z.string().optional(),
+    vault: z
+      .string()
+      .optional()
+      .describe('Vault alias or path. Defaults to the default vault.'),
+  })
+  .refine((data) => data.path || data.title, {
+    message: 'Either path or title is required',
+  });
 
 // Tool definition
 export const readTool: Tool = {
@@ -26,28 +36,29 @@ export const readTool: Tool = {
     properties: {
       path: {
         type: 'string',
-        description: 'Full path to note (relative to vault root, e.g., "commands/docker/build.md")',
+        description:
+          'Full path to note (relative to vault root, e.g., "commands/docker/build.md"). Supports cross-vault format: "vault:alias/path"',
       },
       title: {
         type: 'string',
         description: 'Note title (will search for matching file, also checks aliases)',
+      },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to read from (defaults to default vault)',
       },
     },
   },
 };
 
 // Tool handler
-export async function readHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function readHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
@@ -56,13 +67,27 @@ export async function readHandler(
 
   try {
     let note;
+    let resolvedVault;
 
     if (input.path) {
-      // Read by path
-      note = await readNote(input.path);
+      // Handle cross-vault path format or use explicit vault parameter
+      const { vault, notePath } = resolvePathWithVault(input.path, input.vault);
+      resolvedVault = vault;
+
+      note = await readNote(notePath, {
+        vaultPath: vault.path,
+        ignoreConfig: vault.config.ignore,
+      });
     } else if (input.title) {
-      // Search by title
-      note = await findNoteByTitle(input.title);
+      // Search by title in specified vault
+      resolvedVault = resolveVaultParam(input.vault);
+
+      note = await findNoteByTitle(input.title, {
+        vaultPath: resolvedVault.path,
+        ignoreConfig: resolvedVault.config.ignore,
+      });
+    } else {
+      resolvedVault = resolveVaultParam(input.vault);
     }
 
     if (!note) {
@@ -78,6 +103,7 @@ export async function readHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(resolvedVault!),
         path: note.path,
         title: note.title,
         frontmatter: note.frontmatter,

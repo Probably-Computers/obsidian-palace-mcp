@@ -35,3 +35,13 @@ export {
   wordCount,
   isEmptyContent,
 } from './markdown.js';
+
+export {
+  vaultParamSchema,
+  resolveVaultParam,
+  enforceWriteAccess,
+  parseCrossVaultPath,
+  resolvePathWithVault,
+  formatCrossVaultPath,
+  getVaultResultInfo,
+} from './vault-param.js';

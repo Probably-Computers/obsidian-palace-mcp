@@ -7,12 +7,16 @@ import { z } from 'zod';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { ToolResult, Session, SessionEntry } from '../types/index.js';
-import { getConfig } from '../config/index.js';
+import type { ToolResult, Session, SessionEntry, ResolvedVault } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import {
+  resolveVaultParam,
+  enforceWriteAccess,
+  getVaultResultInfo,
+} from '../utils/vault-param.js';
 
 // Current session state (in-memory for simplicity)
-let currentSession: Session | null = null;
+let currentSession: (Session & { vault: ResolvedVault }) | null = null;
 
 /**
  * Get today's date in YYYY-MM-DD format
@@ -31,17 +35,15 @@ function getTime(): string {
 /**
  * Get the path to today's daily log file
  */
-function getDailyLogPath(date: string): string {
-  const config = getConfig();
-  return join(config.vaultPath, 'daily', `${date}.md`);
+function getDailyLogPath(date: string, vaultPath: string): string {
+  return join(vaultPath, 'daily', `${date}.md`);
 }
 
 /**
  * Ensure the daily directory exists
  */
-async function ensureDailyDir(): Promise<void> {
-  const config = getConfig();
-  const dailyDir = join(config.vaultPath, 'daily');
+async function ensureDailyDir(vaultPath: string): Promise<void> {
+  const dailyDir = join(vaultPath, 'daily');
   try {
     await mkdir(dailyDir, { recursive: true });
   } catch (error) {
@@ -54,8 +56,8 @@ async function ensureDailyDir(): Promise<void> {
 /**
  * Read the current daily log content, or return null if it doesn't exist
  */
-async function readDailyLog(date: string): Promise<string | null> {
-  const logPath = getDailyLogPath(date);
+async function readDailyLog(date: string, vaultPath: string): Promise<string | null> {
+  const logPath = getDailyLogPath(date, vaultPath);
   try {
     return await readFile(logPath, 'utf-8');
   } catch (error) {
@@ -108,7 +110,7 @@ function formatSessionSection(session: Session, sessionNumber: number): string {
 
   // Add notes created section if any entries have notes
   const allNotes = session.entries
-    .flatMap(e => e.notesCreated || [])
+    .flatMap((e) => e.notesCreated || [])
     .filter((note, index, arr) => arr.indexOf(note) === index);
 
   if (allNotes.length > 0) {
@@ -135,6 +137,7 @@ function updateSessionsCount(content: string, count: number): string {
 const startInputSchema = z.object({
   topic: z.string().min(1, 'Topic is required'),
   context: z.string().optional(),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 export const sessionStartTool: Tool = {
@@ -151,29 +154,33 @@ export const sessionStartTool: Tool = {
         type: 'string',
         description: 'Additional context (e.g., client name, project name)',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to store the session in (defaults to default vault)',
+      },
     },
     required: ['topic'],
   },
 };
 
-export async function sessionStartHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function sessionStartHandler(args: Record<string, unknown>): Promise<ToolResult> {
   const parseResult = startInputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
 
-  const { topic, context } = parseResult.data;
+  const { topic, context, vault: vaultParam } = parseResult.data;
 
   try {
-    await ensureDailyDir();
+    // Resolve and validate vault
+    const vault = resolveVaultParam(vaultParam);
+    enforceWriteAccess(vault);
+
+    await ensureDailyDir(vault.path);
 
     const today = getToday();
     const now = new Date().toISOString();
@@ -189,10 +196,10 @@ export async function sessionStartHandler(
     if (context) {
       session.context = context;
     }
-    currentSession = session;
+    currentSession = { ...session, vault };
 
     // Read or create daily log
-    let content = await readDailyLog(today);
+    let content = await readDailyLog(today, vault.path);
     if (!content) {
       content = createDailyLogContent(today);
     }
@@ -206,7 +213,7 @@ export async function sessionStartHandler(
     content += sessionSection;
 
     // Write back
-    const logPath = getDailyLogPath(today);
+    const logPath = getDailyLogPath(today, vault.path);
     await writeFile(logPath, content, 'utf-8');
 
     logger.info(`Started session ${sessionNumber}: ${topic}`);
@@ -214,6 +221,7 @@ export async function sessionStartHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         sessionId: session.id,
         sessionNumber,
         topic,
@@ -262,16 +270,12 @@ export const sessionLogTool: Tool = {
   },
 };
 
-export async function sessionLogHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function sessionLogHandler(args: Record<string, unknown>): Promise<ToolResult> {
   const parseResult = logInputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
@@ -288,6 +292,7 @@ export async function sessionLogHandler(
   }
 
   try {
+    const vault = currentSession.vault;
     const now = new Date().toISOString();
     const time = now.split('T')[1]!.slice(0, 5);
 
@@ -305,7 +310,7 @@ export async function sessionLogHandler(
 
     // Read daily log
     const today = currentSession.date;
-    let content = await readDailyLog(today);
+    let content = await readDailyLog(today, vault.path);
 
     if (!content) {
       return {
@@ -340,21 +345,17 @@ export async function sessionLogHandler(
       if (notesSection) {
         // Append to existing Notes Created section
         const insertPos = notesSection.index! + notesSection[0].length;
-        const newNotes = notes_created
-          .map(n => `- [[${n.replace(/\.md$/, '')}]]`)
-          .join('\n');
+        const newNotes = notes_created.map((n) => `- [[${n.replace(/\.md$/, '')}]]`).join('\n');
         content = content.slice(0, insertPos) + newNotes + '\n' + content.slice(insertPos);
       } else {
         // Add Notes Created section at end
-        const newNotes = notes_created
-          .map(n => `- [[${n.replace(/\.md$/, '')}]]`)
-          .join('\n');
+        const newNotes = notes_created.map((n) => `- [[${n.replace(/\.md$/, '')}]]`).join('\n');
         content += `\n### Notes Created\n${newNotes}\n`;
       }
     }
 
     // Write back
-    const logPath = getDailyLogPath(today);
+    const logPath = getDailyLogPath(today, vault.path);
     await writeFile(logPath, content, 'utf-8');
 
     logger.debug(`Added session log entry: ${entry}`);
@@ -362,6 +363,7 @@ export async function sessionLogHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         sessionId: currentSession.id,
         entryNumber: currentSession.entries.length,
         timestamp: time,

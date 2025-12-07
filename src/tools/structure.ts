@@ -6,11 +6,13 @@ import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult, DirectoryEntry } from '../types/index.js';
 import { getDirectoryTree } from '../services/vault/index.js';
+import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
   depth: z.number().min(1).max(10).optional().default(3),
   path: z.string().optional().default(''),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -28,6 +30,10 @@ export const structureTool: Tool = {
       path: {
         type: 'string',
         description: 'Start from this subdirectory',
+      },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to show structure of (defaults to default vault)',
       },
     },
   },
@@ -80,17 +86,13 @@ function countEntries(entries: DirectoryEntry[]): { files: number; dirs: number 
 }
 
 // Tool handler
-export async function structureHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function structureHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
@@ -98,13 +100,20 @@ export async function structureHandler(
   const input = parseResult.data;
 
   try {
-    const tree = await getDirectoryTree(input.path, input.depth);
+    // Resolve vault
+    const vault = resolveVaultParam(input.vault);
+
+    const tree = await getDirectoryTree(input.path, input.depth, {
+      vaultPath: vault.path,
+      ignoreConfig: vault.config.ignore,
+    });
     const counts = countEntries(tree);
     const formatted = formatTree(tree);
 
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         path: input.path || '/',
         depth: input.depth,
         stats: {

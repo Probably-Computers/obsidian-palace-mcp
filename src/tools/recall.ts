@@ -8,6 +8,7 @@ import type { ToolResult, SearchResult } from '../types/index.js';
 import { readNote, listNotes } from '../services/vault/index.js';
 import { searchNotes, getDatabaseSync } from '../services/index/index.js';
 import { logger } from '../utils/logger.js';
+import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -30,6 +31,7 @@ const inputSchema = z.object({
   min_confidence: z.number().min(0).max(1).optional(),
   limit: z.number().min(1).max(50).optional().default(10),
   include_content: z.boolean().optional().default(true),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -79,6 +81,10 @@ export const recallTool: Tool = {
         type: 'boolean',
         description: 'Include full content in results (default: true)',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to search in (defaults to default vault)',
+      },
     },
     required: ['query'],
   },
@@ -123,12 +129,15 @@ async function fallbackSearch(
   path: string | undefined,
   minConfidence: number | undefined,
   limit: number,
-  includeContent: boolean
+  includeContent: boolean,
+  vaultPath: string,
+  ignoreConfig: { patterns: string[]; marker_file: string; frontmatter_key: string }
 ): Promise<SearchResult[]> {
   logger.debug('Using fallback search (index not available)');
 
   const basePath = type !== 'all' ? type : '';
-  const allNotes = await listNotes(basePath || path || '', true);
+  const readOptions = { vaultPath, ignoreConfig };
+  const allNotes = await listNotes(basePath || path || '', true, readOptions);
   const results: SearchResult[] = [];
 
   for (const meta of allNotes) {
@@ -150,7 +159,7 @@ async function fallbackSearch(
     let score = scoreMatch(meta.title, query);
 
     if (includeContent || score === 0) {
-      const fullNote = await readNote(meta.path);
+      const fullNote = await readNote(meta.path, readOptions);
       if (fullNote) {
         score += scoreMatch(fullNote.content, query) * 0.5;
       }
@@ -181,17 +190,13 @@ function isIndexAvailable(): boolean {
 }
 
 // Tool handler
-export async function recallHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function recallHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
@@ -199,9 +204,17 @@ export async function recallHandler(
   const input = parseResult.data;
 
   try {
+    // Resolve vault
+    const vault = resolveVaultParam(input.vault);
+    const readOptions = {
+      vaultPath: vault.path,
+      ignoreConfig: vault.config.ignore,
+    };
+
     let results: SearchResult[];
 
     // Try FTS5 search first, fallback to simple search
+    // Note: Currently the index is shared, multi-vault indexing will be added in Phase 010
     if (isIndexAvailable()) {
       logger.debug('Using FTS5 search');
       const searchOptions: Parameters<typeof searchNotes>[0] = {
@@ -222,7 +235,9 @@ export async function recallHandler(
         input.path,
         input.min_confidence,
         input.limit,
-        input.include_content
+        input.include_content,
+        vault.path,
+        vault.config.ignore
       );
     }
 
@@ -230,7 +245,7 @@ export async function recallHandler(
     const finalResults = await Promise.all(
       results.map(async (result) => {
         if (input.include_content) {
-          const fullNote = await readNote(result.note.path);
+          const fullNote = await readNote(result.note.path, readOptions);
           return {
             ...result,
             content: fullNote?.content,
@@ -243,6 +258,7 @@ export async function recallHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         query: input.query,
         count: finalResults.length,
         indexed: isIndexAvailable(),

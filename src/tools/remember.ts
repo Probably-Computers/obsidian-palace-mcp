@@ -12,6 +12,11 @@ import {
   autolinkContent,
 } from '../services/autolink/index.js';
 import { logger } from '../utils/logger.js';
+import {
+  resolveVaultParam,
+  enforceWriteAccess,
+  getVaultResultInfo,
+} from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -32,6 +37,7 @@ const inputSchema = z.object({
   confidence: z.number().min(0).max(1).optional().default(0.5),
   source: z.string().optional().default('claude'),
   autolink: z.boolean().optional().default(true),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -90,6 +96,10 @@ export const rememberTool: Tool = {
         type: 'boolean',
         description: 'Automatically insert wiki-links for mentions of existing notes (default: true)',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to create the note in (defaults to default vault)',
+      },
     },
     required: ['content', 'title', 'type'],
   },
@@ -114,10 +124,16 @@ export async function rememberHandler(
   const input = parseResult.data;
 
   try {
+    // Resolve and validate vault
+    const vault = resolveVaultParam(input.vault);
+    enforceWriteAccess(vault);
+
     let contentToSave = input.content;
     let linksAdded = 0;
 
     // Auto-link content if enabled
+    // Note: Auto-linking currently uses the default vault's index
+    // Multi-vault autolink support will be added in a future update
     if (input.autolink) {
       try {
         const { index } = await buildCompleteIndex();
@@ -144,12 +160,14 @@ export async function rememberHandler(
         related: input.related.map((r) => `[[${r}]]`),
         confidence: input.confidence,
         source: input.source as 'claude' | 'user',
-      }
+      },
+      { vaultPath: vault.path, ignoreConfig: vault.config.ignore }
     );
 
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         path: note.path,
         title: note.title,
         linksAdded,

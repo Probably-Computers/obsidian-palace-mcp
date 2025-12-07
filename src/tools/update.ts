@@ -18,14 +18,16 @@ import {
   autolinkContent,
 } from '../services/autolink/index.js';
 import { logger } from '../utils/logger.js';
+import {
+  resolveVaultParam,
+  enforceWriteAccess,
+  getVaultResultInfo,
+} from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
   path: z.string().min(1, 'Path is required'),
-  mode: z
-    .enum(['replace', 'append', 'frontmatter'])
-    .optional()
-    .default('replace'),
+  mode: z.enum(['replace', 'append', 'frontmatter']).optional().default('replace'),
   content: z.string().optional(),
   frontmatter: z
     .object({
@@ -49,6 +51,7 @@ const inputSchema = z.object({
     })
     .optional(),
   autolink: z.boolean().optional().default(true),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -101,28 +104,28 @@ export const updateTool: Tool = {
         type: 'boolean',
         description: 'Automatically insert wiki-links for mentions of existing notes (default: true)',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to update in (defaults to default vault)',
+      },
     },
     required: ['path'],
   },
 };
 
 // Tool handler
-export async function updateHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function updateHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
 
-  const { path, mode, content, frontmatter, autolink } = parseResult.data;
+  const { path, mode, content, frontmatter, autolink, vault: vaultParam } = parseResult.data;
 
   // Validate that content is provided for replace/append modes
   if ((mode === 'replace' || mode === 'append') && !content) {
@@ -143,8 +146,17 @@ export async function updateHandler(
   }
 
   try {
+    // Resolve and validate vault
+    const vault = resolveVaultParam(vaultParam);
+    enforceWriteAccess(vault);
+
+    const writeOptions = {
+      vaultPath: vault.path,
+      ignoreConfig: vault.config.ignore,
+    };
+
     // Check if note exists
-    const existing = await readNote(path);
+    const existing = await readNote(path, writeOptions);
     if (!existing) {
       return {
         success: false,
@@ -167,6 +179,7 @@ export async function updateHandler(
     if (frontmatter?.aliases) frontmatterUpdates.aliases = frontmatter.aliases;
 
     // Auto-link content if enabled and content is being updated
+    // Note: Auto-linking currently uses the default vault's index
     let contentToSave = content;
     if (autolink && contentToSave && (mode === 'replace' || mode === 'append')) {
       try {
@@ -186,18 +199,18 @@ export async function updateHandler(
 
     switch (mode) {
       case 'replace':
-        updatedNote = await updateNote(path, contentToSave!, frontmatterUpdates);
+        updatedNote = await updateNote(path, contentToSave!, frontmatterUpdates, writeOptions);
         break;
 
       case 'append':
-        updatedNote = await appendToNote(path, contentToSave!);
+        updatedNote = await appendToNote(path, contentToSave!, writeOptions);
         if (Object.keys(frontmatterUpdates).length > 0) {
-          updatedNote = await updateFrontmatter(path, frontmatterUpdates);
+          updatedNote = await updateFrontmatter(path, frontmatterUpdates, writeOptions);
         }
         break;
 
       case 'frontmatter':
-        updatedNote = await updateFrontmatter(path, frontmatterUpdates);
+        updatedNote = await updateFrontmatter(path, frontmatterUpdates, writeOptions);
         break;
 
       default:
@@ -214,6 +227,7 @@ export async function updateHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         path: updatedNote.path,
         title: updatedNote.title,
         mode,

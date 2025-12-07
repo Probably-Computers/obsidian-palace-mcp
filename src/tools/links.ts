@@ -11,15 +11,14 @@ import {
   traverseGraph,
   getNoteMetadataByPath,
 } from '../services/graph/index.js';
+import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
   path: z.string().min(1, 'Path is required'),
-  direction: z
-    .enum(['incoming', 'outgoing', 'both'])
-    .optional()
-    .default('both'),
+  direction: z.enum(['incoming', 'outgoing', 'both']).optional().default('both'),
   depth: z.number().min(1).max(5).optional().default(1),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -45,31 +44,35 @@ export const linksTool: Tool = {
         description:
           'Traversal depth for multi-hop links (1-5, default: 1). Depth 1 returns direct links only.',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to search in (defaults to default vault)',
+      },
     },
     required: ['path'],
   },
 };
 
 // Tool handler
-export async function linksHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function linksHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
 
-  const { path, direction, depth } = parseResult.data;
+  const { path, direction, depth, vault: vaultParam } = parseResult.data;
 
   try {
+    // Resolve vault
+    const vault = resolveVaultParam(vaultParam);
+
     // Verify note exists
+    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
     const noteMeta = getNoteMetadataByPath(path);
     if (!noteMeta) {
       return {
@@ -102,6 +105,7 @@ export async function linksHandler(
       return {
         success: true,
         data: {
+          ...getVaultResultInfo(vault),
           ...result,
           depth: 1,
           incomingCount: result.incoming?.length ?? 0,
@@ -126,6 +130,7 @@ export async function linksHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         path: noteMeta.path,
         title: noteMeta.title,
         direction,

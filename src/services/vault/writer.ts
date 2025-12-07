@@ -12,8 +12,22 @@ import {
 } from '../../utils/frontmatter.js';
 import { filenameFromTitle } from '../../utils/slugify.js';
 import { logger } from '../../utils/logger.js';
-import { readNote, noteExists } from './reader.js';
+import { readNote, noteExists, type ReadOptions } from './reader.js';
 import type { Note, NoteFrontmatter, KnowledgeType } from '../../types/index.js';
+
+/**
+ * Options for write operations
+ */
+export interface WriteOptions extends ReadOptions {
+  // Extends ReadOptions to include vaultPath
+}
+
+/**
+ * Get the effective vault path from options or config
+ */
+function getVaultPath(options?: WriteOptions): string {
+  return options?.vaultPath ?? getConfig().vaultPath;
+}
 
 /**
  * Ensure directory exists
@@ -36,29 +50,30 @@ export async function createNote(
   subPath: string,
   title: string,
   content: string,
-  options: Partial<NoteFrontmatter> = {}
+  frontmatterOptions: Partial<NoteFrontmatter> = {},
+  writeOptions?: WriteOptions
 ): Promise<Note> {
-  const config = getConfig();
+  const vaultPath = getVaultPath(writeOptions);
 
   // Build the path: {type}/{subPath}/{filename}.md
   const filename = filenameFromTitle(title);
   const relativePath = subPath
     ? join(type, subPath, filename)
     : join(type, filename);
-  const fullPath = join(config.vaultPath, relativePath);
+  const fullPath = join(vaultPath, relativePath);
 
   // Ensure directory exists
   await ensureDir(dirname(fullPath));
 
   // Check if file already exists
-  if (await noteExists(relativePath)) {
+  if (await noteExists(relativePath, writeOptions)) {
     throw new Error(`Note already exists: ${relativePath}`);
   }
 
   // Create frontmatter
   const frontmatter = mergeFrontmatter(
-    createDefaultFrontmatter(type, options.source, options.confidence),
-    options
+    createDefaultFrontmatter(type, frontmatterOptions.source, frontmatterOptions.confidence),
+    frontmatterOptions
   );
 
   // Build markdown content with title
@@ -85,13 +100,14 @@ export async function createNote(
 export async function updateNote(
   notePath: string,
   content: string,
-  frontmatterUpdates: Partial<NoteFrontmatter> = {}
+  frontmatterUpdates: Partial<NoteFrontmatter> = {},
+  writeOptions?: WriteOptions
 ): Promise<Note> {
-  const config = getConfig();
-  const fullPath = join(config.vaultPath, notePath);
+  const vaultPath = getVaultPath(writeOptions);
+  const fullPath = join(vaultPath, notePath);
 
   // Read existing note
-  const existing = await readNote(notePath);
+  const existing = await readNote(notePath, writeOptions);
   if (!existing) {
     throw new Error(`Note not found: ${notePath}`);
   }
@@ -121,15 +137,16 @@ export async function updateNote(
  */
 export async function appendToNote(
   notePath: string,
-  content: string
+  content: string,
+  writeOptions?: WriteOptions
 ): Promise<Note> {
-  const existing = await readNote(notePath);
+  const existing = await readNote(notePath, writeOptions);
   if (!existing) {
     throw new Error(`Note not found: ${notePath}`);
   }
 
   const newContent = `${existing.content}\n\n${content}`;
-  return updateNote(notePath, newContent);
+  return updateNote(notePath, newContent, {}, writeOptions);
 }
 
 /**
@@ -137,22 +154,26 @@ export async function appendToNote(
  */
 export async function updateFrontmatter(
   notePath: string,
-  updates: Partial<NoteFrontmatter>
+  updates: Partial<NoteFrontmatter>,
+  writeOptions?: WriteOptions
 ): Promise<Note> {
-  const existing = await readNote(notePath);
+  const existing = await readNote(notePath, writeOptions);
   if (!existing) {
     throw new Error(`Note not found: ${notePath}`);
   }
 
-  return updateNote(notePath, existing.content, updates);
+  return updateNote(notePath, existing.content, updates, writeOptions);
 }
 
 /**
  * Delete a note
  */
-export async function deleteNote(notePath: string): Promise<void> {
-  const config = getConfig();
-  const fullPath = join(config.vaultPath, notePath);
+export async function deleteNote(
+  notePath: string,
+  writeOptions?: WriteOptions
+): Promise<void> {
+  const vaultPath = getVaultPath(writeOptions);
+  const fullPath = join(vaultPath, notePath);
 
   try {
     await unlink(fullPath);

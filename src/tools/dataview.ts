@@ -13,14 +13,13 @@ import {
   type OutputFormat,
 } from '../services/dataview/index.js';
 import { logger } from '../utils/logger.js';
+import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
   query: z.string().min(1, 'Query is required'),
-  format: z
-    .enum(['table', 'list', 'task', 'json'])
-    .optional()
-    .default('json'),
+  format: z.enum(['table', 'list', 'task', 'json']).optional().default('json'),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -51,30 +50,33 @@ Example queries:
         enum: ['table', 'list', 'task', 'json'],
         description: 'Output format (default: json)',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to query (defaults to default vault)',
+      },
     },
     required: ['query'],
   },
 };
 
 // Tool handler
-export async function dataviewHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function dataviewHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
 
-  const { query, format } = parseResult.data;
+  const { query, format, vault: vaultParam } = parseResult.data;
 
   try {
+    // Resolve vault
+    const vault = resolveVaultParam(vaultParam);
+
     logger.info(`Executing DQL query: ${query}`);
 
     // Parse the DQL query
@@ -82,6 +84,7 @@ export async function dataviewHandler(
     logger.debug('Parsed query:', parsedQuery);
 
     // Execute the query
+    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
     const result = executeQueryWithTags(parsedQuery);
     logger.debug(`Query returned ${result.total} results`);
 
@@ -91,6 +94,7 @@ export async function dataviewHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         query,
         format,
         total: result.total,

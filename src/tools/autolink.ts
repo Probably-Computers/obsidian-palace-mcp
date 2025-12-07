@@ -16,6 +16,11 @@ import {
   type AliasConflict,
 } from '../services/autolink/index.js';
 import { logger } from '../utils/logger.js';
+import {
+  resolveVaultParam,
+  enforceWriteAccess,
+  getVaultResultInfo,
+} from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
@@ -24,6 +29,7 @@ const inputSchema = z.object({
   min_title_length: z.number().min(1).max(50).optional().default(DEFAULT_MIN_TITLE_LENGTH),
   exclude_paths: z.array(z.string()).optional().default([]),
   include_aliases: z.boolean().optional().default(true),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Result type for each processed note
@@ -62,32 +68,53 @@ export const autolinkTool: Tool = {
         type: 'boolean',
         description: 'Include note aliases in matching (default: true)',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to process (defaults to default vault)',
+      },
     },
     required: [],
   },
 };
 
 // Tool handler
-export async function autolinkHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function autolinkHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
 
-  const { path, dry_run, min_title_length, exclude_paths, include_aliases } = parseResult.data;
+  const {
+    path,
+    dry_run,
+    min_title_length,
+    exclude_paths,
+    include_aliases,
+    vault: vaultParam,
+  } = parseResult.data;
 
   try {
+    // Resolve and validate vault (enforce write access if not dry run)
+    const vault = resolveVaultParam(vaultParam);
+    if (!dry_run) {
+      enforceWriteAccess(vault);
+    }
+
+    const readOptions = {
+      vaultPath: vault.path,
+      ignoreConfig: vault.config.ignore,
+    };
+
     // Build the linkable index
-    logger.info(`Building linkable index (min_title_length: ${min_title_length}, include_aliases: ${include_aliases})`);
+    // Note: Currently uses shared index, multi-vault autolink will be enhanced in future
+    logger.info(
+      `Building linkable index (min_title_length: ${min_title_length}, include_aliases: ${include_aliases})`
+    );
 
     let index;
     let conflicts: AliasConflict[] = [];
@@ -109,17 +136,17 @@ export async function autolinkHandler(
 
     if (path) {
       // Check if it's a single note or directory
-      const note = await readNote(path);
+      const note = await readNote(path, readOptions);
       if (note) {
         notePaths = [path];
       } else {
         // Try as directory
-        const entries = await listNotes(path);
+        const entries = await listNotes(path, false, readOptions);
         notePaths = entries.map((e) => e.path);
       }
     } else {
       // Process entire vault
-      const entries = await listNotes('');
+      const entries = await listNotes('', true, readOptions);
       notePaths = entries.map((e) => e.path);
     }
 
@@ -137,7 +164,7 @@ export async function autolinkHandler(
     let totalLinksAdded = 0;
 
     for (const notePath of notePaths) {
-      const note = await readNote(notePath);
+      const note = await readNote(notePath, readOptions);
       if (!note) continue;
 
       // Scan for matches
@@ -162,7 +189,7 @@ export async function autolinkHandler(
 
         // Apply changes if not dry run
         if (!dry_run) {
-          const updatedNote = await updateNote(notePath, result.linkedContent);
+          const updatedNote = await updateNote(notePath, result.linkedContent, {}, readOptions);
           indexNote(updatedNote);
           logger.info(`Updated ${notePath} with ${result.linksAdded.length} links`);
         }
@@ -172,6 +199,7 @@ export async function autolinkHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         dry_run,
         notes_processed: notePaths.length,
         notes_modified: processed.length,

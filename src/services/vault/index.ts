@@ -9,6 +9,7 @@ export {
   getDirectoryTree,
   noteExists,
   findNoteByTitle,
+  type ReadOptions,
 } from './reader.js';
 
 export {
@@ -17,6 +18,7 @@ export {
   appendToNote,
   updateFrontmatter,
   deleteNote,
+  type WriteOptions,
 } from './writer.js';
 
 export {

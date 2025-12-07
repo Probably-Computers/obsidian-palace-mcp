@@ -6,12 +6,14 @@ import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult, RelatednessMethod } from '../types/index.js';
 import { findRelatedNotes, getNoteMetadataByPath } from '../services/graph/index.js';
+import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
 
 // Input schema
 const inputSchema = z.object({
   path: z.string().min(1, 'Path is required'),
   method: z.enum(['links', 'tags', 'both']).optional().default('both'),
   limit: z.number().min(1).max(50).optional().default(10),
+  vault: z.string().optional().describe('Vault alias or path. Defaults to the default vault.'),
 });
 
 // Tool definition
@@ -36,31 +38,35 @@ export const relatedTool: Tool = {
         type: 'number',
         description: 'Maximum number of results (default: 10, max: 50)',
       },
+      vault: {
+        type: 'string',
+        description: 'Vault alias or path to search in (defaults to default vault)',
+      },
     },
     required: ['path'],
   },
 };
 
 // Tool handler
-export async function relatedHandler(
-  args: Record<string, unknown>
-): Promise<ToolResult> {
+export async function relatedHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
   const parseResult = inputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues
-        .map((i) => `${i.path.join('.')}: ${i.message}`)
-        .join('; '),
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
 
-  const { path, method, limit } = parseResult.data;
+  const { path, method, limit, vault: vaultParam } = parseResult.data;
 
   try {
+    // Resolve vault
+    const vault = resolveVaultParam(vaultParam);
+
     // Verify note exists
+    // Note: Currently uses shared index, multi-vault indexing will be added in Phase 010
     const noteMeta = getNoteMetadataByPath(path);
     if (!noteMeta) {
       return {
@@ -90,6 +96,7 @@ export async function relatedHandler(
     return {
       success: true,
       data: {
+        ...getVaultResultInfo(vault),
         source: {
           path: noteMeta.path,
           title: noteMeta.title,
