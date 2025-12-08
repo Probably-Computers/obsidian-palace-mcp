@@ -12,10 +12,10 @@ Palace uses a layered configuration system:
 
 ## Quick Start
 
-### Single Vault (Environment Variables)
+### Single Vault (Quick Setup)
 
 ```bash
-export PALACE_VAULT_PATH="/path/to/vault"
+export PALACE_VAULTS="/path/to/vault:main:rw"
 export PALACE_LOG_LEVEL="info"
 ```
 
@@ -40,8 +40,7 @@ export PALACE_CONFIG_PATH="~/.config/palace/config.yaml"
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PALACE_VAULT_PATH` | Yes* | - | Single vault path |
-| `PALACE_VAULTS` | No | - | Multi-vault quick setup |
+| `PALACE_VAULTS` | Yes* | - | Vault config: `path:alias:mode,...` |
 | `PALACE_CONFIG_PATH` | No | `~/.config/palace/config.yaml` | Global config location |
 | `PALACE_DEFAULT_VAULT` | No | First vault | Default vault alias |
 | `PALACE_INDEX_PATH` | No | `{vault}/.palace/index.sqlite` | SQLite index location |
@@ -51,7 +50,7 @@ export PALACE_CONFIG_PATH="~/.config/palace/config.yaml"
 | `HTTP_PORT` | No | `3000` | HTTP server port |
 | `HTTP_CORS_ORIGIN` | No | `*` | CORS allowed origins |
 
-*Required unless `PALACE_VAULTS` or `PALACE_CONFIG_PATH` is set.
+*Required unless `PALACE_CONFIG_PATH` is set pointing to a config file.
 
 ### Log Levels
 
@@ -390,7 +389,7 @@ graph:
 
 **Environment:**
 ```bash
-export PALACE_VAULT_PATH="/Users/me/Obsidian/Knowledge"
+export PALACE_VAULTS="/Users/me/Obsidian/Knowledge:main:rw"
 ```
 
 **.palace.yaml:**
@@ -527,7 +526,7 @@ Use direnv for development:
 
 **.envrc:**
 ```bash
-export PALACE_VAULT_PATH="/path/to/test-vault"
+export PALACE_VAULTS="/path/to/test-vault:dev:rw"
 export PALACE_LOG_LEVEL="debug"
 ```
 

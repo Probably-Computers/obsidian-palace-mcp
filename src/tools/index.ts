@@ -6,12 +6,10 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 
 // Import tool handlers
-import { rememberTool, rememberHandler } from './remember.js';
 import { readTool, readHandler } from './read.js';
 import { recallTool, recallHandler } from './recall.js';
 import { listTool, listHandler } from './list.js';
 import { structureTool, structureHandler } from './structure.js';
-import { updateTool, updateHandler } from './update.js';
 import { queryTool, queryHandler } from './query.js';
 import { linksTool, linksHandler } from './links.js';
 import { orphansTool, orphansHandler } from './orphans.js';
@@ -45,9 +43,6 @@ const handlers: Map<string, (args: Record<string, unknown>) => Promise<ToolResul
  */
 export function registerTools(): void {
   // Core tools
-  tools.set('palace_remember', rememberTool);
-  handlers.set('palace_remember', rememberHandler);
-
   tools.set('palace_read', readTool);
   handlers.set('palace_read', readHandler);
 
@@ -59,10 +54,6 @@ export function registerTools(): void {
 
   tools.set('palace_structure', structureTool);
   handlers.set('palace_structure', structureHandler);
-
-  // Phase 003 tools
-  tools.set('palace_update', updateTool);
-  handlers.set('palace_update', updateHandler);
 
   tools.set('palace_query', queryTool);
   handlers.set('palace_query', queryHandler);

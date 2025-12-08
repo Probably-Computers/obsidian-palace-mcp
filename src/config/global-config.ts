@@ -1,6 +1,6 @@
 /**
  * Global configuration loading and validation
- * Loads from ~/.config/palace/config.yaml or PALACE_CONFIG_PATH
+ * Loads from ~/.config/palace/config.yaml, PALACE_CONFIG_PATH, or PALACE_VAULTS env var
  */
 
 import { z } from 'zod';
@@ -74,32 +74,14 @@ function parseVaultsEnvVar(envValue: string): GlobalVaultEntry[] {
   return vaults;
 }
 
-// Create config from legacy single vault env var
-function createLegacyConfig(vaultPath: string): GlobalConfig {
-  return {
-    version: 1,
-    vaults: [
-      {
-        path: resolve(vaultPath),
-        alias: 'default',
-        mode: 'rw',
-        default: true,
-      },
-    ],
-    cross_vault: {
-      search: true,
-      link_format: 'vault:alias/path',
-    },
-    settings: {
-      log_level: (process.env.PALACE_LOG_LEVEL as GlobalConfig['settings']['log_level']) || 'info',
-      watch_enabled: process.env.PALACE_WATCH_ENABLED?.toLowerCase() !== 'false',
-      auto_index: true,
-    },
-  };
-}
-
 /**
  * Load global configuration from file or environment
+ *
+ * Configuration can be provided via:
+ * 1. PALACE_VAULTS env var (quick setup): "path:alias:mode,path:alias:mode,..."
+ * 2. Config file at PALACE_CONFIG_PATH or ~/.config/palace/config.yaml
+ *
+ * No fallback to single-vault mode - must use multi-vault configuration.
  */
 export function loadGlobalConfig(): GlobalConfig {
   // Check for config file path override
@@ -184,15 +166,19 @@ export function loadGlobalConfig(): GlobalConfig {
     }
   }
 
-  // Fall back to legacy single vault mode
-  if (process.env.PALACE_VAULT_PATH) {
-    logger.debug('Using legacy PALACE_VAULT_PATH configuration');
-    return createLegacyConfig(process.env.PALACE_VAULT_PATH);
-  }
-
   throw new Error(
-    'No configuration found. Set PALACE_VAULT_PATH, PALACE_VAULTS, ' +
-    'or create ~/.config/palace/config.yaml'
+    'No configuration found. Please configure vaults using one of:\n' +
+    '  1. PALACE_VAULTS environment variable: "path:alias:mode,path:alias:mode"\n' +
+    '  2. Config file at ~/.config/palace/config.yaml\n' +
+    '  3. PALACE_CONFIG_PATH environment variable pointing to your config file\n\n' +
+    'Example PALACE_VAULTS: "/path/to/vault:main:rw"\n\n' +
+    'Example config.yaml:\n' +
+    '  version: 1\n' +
+    '  vaults:\n' +
+    '    - path: "/path/to/vault"\n' +
+    '      alias: main\n' +
+    '      mode: rw\n' +
+    '      default: true'
   );
 }
 

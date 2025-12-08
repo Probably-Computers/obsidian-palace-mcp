@@ -51,7 +51,7 @@ npx obsidian-palace-mcp
 
 Add to your MCP client configuration:
 
-**Single Vault:**
+**Single Vault (Quick Setup):**
 ```json
 {
   "mcpServers": {
@@ -59,7 +59,7 @@ Add to your MCP client configuration:
       "command": "npx",
       "args": ["obsidian-palace-mcp"],
       "env": {
-        "PALACE_VAULT_PATH": "/path/to/your/obsidian/vault"
+        "PALACE_VAULTS": "/path/to/your/obsidian/vault:main:rw"
       }
     }
   }
@@ -167,13 +167,6 @@ See [Configuration Guide](docs/CONFIGURATION.md) for full options.
 |------|-------------|
 | `palace_session_start` | Start a research session |
 | `palace_session_log` | Log activity to current session |
-
-### Legacy (Deprecated)
-
-| Tool | Replacement | Description |
-|------|-------------|-------------|
-| `palace_remember` | `palace_store` | Create notes (path-based) |
-| `palace_update` | `palace_improve` | Update notes |
 
 ## Knowledge Organization
 
@@ -298,14 +291,13 @@ AI: [Follows git workflow standard from vault]
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `PALACE_VAULT_PATH` | Yes* | - | Single vault path |
-| `PALACE_VAULTS` | No | - | Multi-vault: `path:alias:mode,...` |
-| `PALACE_CONFIG_PATH` | No | `~/.config/palace/config.yaml` | Global config |
+| `PALACE_VAULTS` | Yes* | - | Vault config: `path:alias:mode,...` |
+| `PALACE_CONFIG_PATH` | No | `~/.config/palace/config.yaml` | Global config file |
 | `PALACE_DEFAULT_VAULT` | No | First vault | Default vault alias |
 | `PALACE_LOG_LEVEL` | No | `info` | debug, info, warn, error |
 | `PALACE_WATCH_ENABLED` | No | `true` | Watch for file changes |
 
-*Required unless `PALACE_VAULTS` or `PALACE_CONFIG_PATH` is set.
+*Required unless `PALACE_CONFIG_PATH` is set pointing to a config file.
 
 ## Documentation
 

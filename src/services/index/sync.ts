@@ -47,6 +47,14 @@ export function indexNote(db: Database.Database, note: Note): void {
   const appliesTo = fm.applies_to as string[] | undefined;
   const domain = fm.domain as string[] | undefined;
 
+  // Handle source field - can be string or object
+  const sourceValue = frontmatter.source;
+  const sourceStr = sourceValue
+    ? typeof sourceValue === 'string'
+      ? sourceValue
+      : JSON.stringify(sourceValue)
+    : null;
+
   db.transaction(() => {
     if (existing) {
       // Update existing note
@@ -64,7 +72,7 @@ export function indexNote(db: Database.Database, note: Note): void {
         frontmatter.type,
         frontmatter.created,
         frontmatter.modified,
-        frontmatter.source ?? null,
+        sourceStr,
         frontmatter.confidence ?? null,
         frontmatter.verified ? 1 : 0,
         content,
@@ -104,7 +112,7 @@ export function indexNote(db: Database.Database, note: Note): void {
         frontmatter.type,
         frontmatter.created,
         frontmatter.modified,
-        frontmatter.source ?? null,
+        sourceStr,
         frontmatter.confidence ?? null,
         frontmatter.verified ? 1 : 0,
         content,

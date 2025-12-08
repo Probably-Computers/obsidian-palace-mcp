@@ -12,8 +12,8 @@ import { randomUUID } from 'crypto';
 const testDir = join(tmpdir(), `palace-session-test-${randomUUID()}`);
 const testVault = join(testDir, 'vault');
 
-// Configure environment before imports
-process.env.PALACE_VAULT_PATH = testVault;
+// Configure environment before imports (use PALACE_VAULTS instead of PALACE_VAULT_PATH)
+process.env.PALACE_VAULTS = `${testVault}:test:rw`;
 process.env.PALACE_LOG_LEVEL = 'error';
 process.env.PALACE_WATCH_ENABLED = 'false';
 

@@ -1,6 +1,6 @@
 /**
  * Configuration loading and validation
- * Supports both legacy single-vault and new multi-vault modes
+ * Uses multi-vault configuration via global config or PALACE_VAULTS env var
  */
 
 import { z } from 'zod';
@@ -8,9 +8,8 @@ import { resolve } from 'path';
 import type { PalaceConfig } from '../types/index.js';
 import { getGlobalConfig, getDefaultVaultEntry, resetGlobalConfig } from './global-config.js';
 
-// Environment variable schema (legacy mode)
+// Environment variable schema for settings overrides
 const envSchema = z.object({
-  PALACE_VAULT_PATH: z.string().optional(),
   PALACE_LOG_LEVEL: z
     .enum(['debug', 'info', 'warn', 'error'])
     .default('info'),
@@ -22,8 +21,8 @@ const envSchema = z.object({
 });
 
 /**
- * Load configuration - supports both legacy and multi-vault modes
- * Returns a PalaceConfig for backward compatibility
+ * Load configuration from global config
+ * Returns a PalaceConfig with the default vault settings
  */
 export function loadConfig(): PalaceConfig {
   const result = envSchema.safeParse(process.env);
@@ -37,38 +36,18 @@ export function loadConfig(): PalaceConfig {
 
   const env = result.data;
 
-  // Try to use global config (multi-vault mode)
-  try {
-    const globalConfig = getGlobalConfig();
-    const defaultVault = getDefaultVaultEntry(globalConfig);
+  // Load global config (multi-vault mode)
+  const globalConfig = getGlobalConfig();
+  const defaultVault = getDefaultVaultEntry(globalConfig);
 
-    return {
-      vaultPath: defaultVault.path,
-      logLevel: globalConfig.settings.log_level,
-      watchEnabled: globalConfig.settings.watch_enabled,
-      indexPath: env.PALACE_INDEX_PATH
-        ? resolve(env.PALACE_INDEX_PATH)
-        : resolve(defaultVault.path, '.palace', 'index.sqlite'),
-    };
-  } catch {
-    // Fall back to legacy mode if global config fails
-    if (!env.PALACE_VAULT_PATH) {
-      throw new Error(
-        'Configuration error:\n  - PALACE_VAULT_PATH is required (or configure multi-vault mode)'
-      );
-    }
-
-    const vaultPath = resolve(env.PALACE_VAULT_PATH);
-
-    return {
-      vaultPath,
-      logLevel: env.PALACE_LOG_LEVEL,
-      watchEnabled: env.PALACE_WATCH_ENABLED,
-      indexPath: env.PALACE_INDEX_PATH
-        ? resolve(env.PALACE_INDEX_PATH)
-        : resolve(vaultPath, '.palace', 'index.sqlite'),
-    };
-  }
+  return {
+    vaultPath: defaultVault.path,
+    logLevel: globalConfig.settings.log_level,
+    watchEnabled: globalConfig.settings.watch_enabled,
+    indexPath: env.PALACE_INDEX_PATH
+      ? resolve(env.PALACE_INDEX_PATH)
+      : resolve(defaultVault.path, '.palace', 'index.sqlite'),
+  };
 }
 
 // Singleton config instance

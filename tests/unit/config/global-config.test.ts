@@ -99,25 +99,12 @@ describe('Global Configuration', () => {
     });
   });
 
-  describe('Legacy PALACE_VAULT_PATH', () => {
-    it('loads config from legacy env var', () => {
-      process.env.PALACE_VAULT_PATH = testVaultPath;
+  describe('Error Handling', () => {
+    it('throws helpful error when no config is found', () => {
+      // Don't set any config
 
-      const config = loadGlobalConfig();
-
-      expect(config.vaults).toHaveLength(1);
-      expect(config.vaults[0].alias).toBe('default');
-      expect(config.vaults[0].mode).toBe('rw');
-      expect(config.vaults[0].default).toBe(true);
-    });
-
-    it('respects PALACE_LOG_LEVEL in legacy mode', () => {
-      process.env.PALACE_VAULT_PATH = testVaultPath;
-      process.env.PALACE_LOG_LEVEL = 'debug';
-
-      const config = loadGlobalConfig();
-
-      expect(config.settings.log_level).toBe('debug');
+      expect(() => loadGlobalConfig()).toThrow('No configuration found');
+      expect(() => loadGlobalConfig()).toThrow('PALACE_VAULTS');
     });
   });
 

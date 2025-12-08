@@ -74,10 +74,11 @@ src/
 │       ├── question-generator.ts # Generate clarifying questions
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
-│   ├── remember.ts            # palace_remember
+│   ├── store.ts               # palace_store (intent-based storage)
+│   ├── check.ts               # palace_check
+│   ├── improve.ts             # palace_improve
 │   ├── recall.ts              # palace_recall
 │   ├── read.ts                # palace_read
-│   ├── update.ts              # palace_update
 │   ├── list.ts                # palace_list
 │   ├── structure.ts           # palace_structure
 │   ├── links.ts               # palace_links
@@ -87,6 +88,7 @@ src/
 │   ├── dataview.ts            # palace_dataview
 │   ├── query.ts               # palace_query
 │   ├── session.ts             # palace_session_*
+│   ├── standards.ts           # palace_standards
 │   ├── vaults.ts              # palace_vaults
 │   ├── clarify.ts             # palace_clarify
 │   └── index.ts               # Tool registration
@@ -131,11 +133,11 @@ npx vitest run tests/unit/services --reporter=dot         # Directory
 
 ## Environment Variables
 
-### Legacy Single-Vault Mode
-
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| PALACE_VAULT_PATH | Yes* | - | Path to Obsidian vault |
+| PALACE_VAULTS | Yes* | - | Vault config: path:alias:mode,... |
+| PALACE_CONFIG_PATH | No | ~/.config/palace/config.yaml | Global config location |
+| PALACE_DEFAULT_VAULT | No | First vault | Default vault alias |
 | PALACE_INDEX_PATH | No | {vault}/.palace/index.sqlite | SQLite database location |
 | PALACE_LOG_LEVEL | No | info | debug, info, warn, error |
 | PALACE_WATCH_ENABLED | No | true | Watch for external file changes |
@@ -143,25 +145,17 @@ npx vitest run tests/unit/services --reporter=dot         # Directory
 | HTTP_PORT | No | 3000 | Port for HTTP transport |
 | HTTP_CORS_ORIGIN | No | * | CORS origin for HTTP transport |
 
-*Required unless using multi-vault configuration
-
-### Multi-Vault Mode
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| PALACE_CONFIG_PATH | No | ~/.config/palace/config.yaml | Global config location |
-| PALACE_VAULTS | No | - | Quick setup: path:alias:mode,... |
-| PALACE_DEFAULT_VAULT | No | First vault | Default vault alias |
+*Required unless PALACE_CONFIG_PATH is set pointing to a config file
 
 ### Development Setup with direnv
 
 Create `.envrc` in project root (git-ignored):
 ```bash
-export PALACE_VAULT_PATH="/path/to/your/obsidian/vault"
+export PALACE_VAULTS="/path/to/your/obsidian/vault:dev:rw"
 export PALACE_LOG_LEVEL="debug"
 ```
 
-Or for multi-vault quick setup:
+Or for multi-vault:
 ```bash
 export PALACE_VAULTS="/path/to/work:work:rw,/path/to/personal:personal:rw"
 export PALACE_DEFAULT_VAULT="work"
@@ -288,12 +282,13 @@ All tool inputs are validated with Zod. Each tool file exports:
 
 | Tool | Status | Description |
 |------|--------|-------------|
-| palace_remember | ✅ | Create new notes with frontmatter |
+| palace_store | ✅ | Intent-based knowledge storage (AI expresses WHAT, Palace decides WHERE) |
+| palace_check | ✅ | Check for existing knowledge before creating (prevents duplicates) |
+| palace_improve | ✅ | Intelligently update existing notes with multiple modes |
 | palace_read | ✅ | Read note content by path |
 | palace_recall | ✅ | Full-text search with FTS5 ranking |
 | palace_list | ✅ | List notes in directory |
 | palace_structure | ✅ | Get vault directory structure |
-| palace_update | ✅ | Update existing notes (replace/append/frontmatter) |
 | palace_query | ✅ | Query by properties (type, tags, confidence, dates) |
 | palace_links | ✅ | Backlink/outlink traversal with multi-hop support |
 | palace_orphans | ✅ | Find disconnected notes (no incoming/outgoing links) |
@@ -303,9 +298,6 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_session_start | ✅ | Start a work session in daily log |
 | palace_session_log | ✅ | Log entries to current session |
 | palace_vaults | ✅ | List and manage configured vaults |
-| palace_store | ✅ | Intent-based knowledge storage (AI expresses WHAT, Palace decides WHERE) |
-| palace_check | ✅ | Check for existing knowledge before creating (prevents duplicates) |
-| palace_improve | ✅ | Intelligently update existing notes with multiple modes |
 | palace_standards | ✅ | Load and query binding standards for AI |
 | palace_standards_validate | ✅ | Validate notes against applicable standards |
 | palace_clarify | ✅ | Detect context and generate clarifying questions for incomplete storage intents |
@@ -323,27 +315,6 @@ Search notes using FTS5 full-text search with BM25 ranking.
   min_confidence?: number; // Minimum confidence (0-1)
   limit?: number;          // Max results (default: 10)
   include_content?: boolean; // Include content (default: true)
-}
-```
-
-### palace_update
-
-Update existing notes with three modes:
-
-```typescript
-{
-  path: string;            // Note path (required)
-  mode?: 'replace' | 'append' | 'frontmatter';  // Update mode
-  content?: string;        // New content (for replace/append)
-  frontmatter?: {          // Frontmatter updates (merged)
-    type?: KnowledgeType;
-    source?: string;
-    confidence?: number;
-    verified?: boolean;
-    tags?: string[];
-    related?: string[];
-    aliases?: string[];
-  };
 }
 ```
 
@@ -426,7 +397,7 @@ Automatically insert wiki-links in notes by finding mentions of existing note ti
 - Case-insensitive matching with word boundary detection
 - Preserves original case using display text: `[[Docker|DOCKER]]`
 - Skips code blocks, inline code, existing links, URLs, headings, and frontmatter
-- Built into `palace_remember` and `palace_update` (controlled via `autolink` parameter)
+- Built into `palace_store` and `palace_improve` (controlled via `autolink` parameter)
 
 ### palace_dataview
 
@@ -831,7 +802,7 @@ See [Git Workflow Standards](docs/GIT_WORKFLOW_STANDARDS.md) for complete guidel
 
 **Examples:**
 ```
-feat(tools): add palace_update tool
+feat(tools): add palace_improve tool
 fix(recall): resolve search scoring bug
 docs(readme): update installation instructions
 ```

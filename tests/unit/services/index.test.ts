@@ -14,8 +14,8 @@ const testDir = join(tmpdir(), `palace-test-${randomUUID()}`);
 const testVault = join(testDir, 'vault');
 const testPalace = join(testVault, '.palace');
 
-// Configure environment before imports
-process.env.PALACE_VAULT_PATH = testVault;
+// Configure environment before imports (use PALACE_VAULTS instead of PALACE_VAULT_PATH)
+process.env.PALACE_VAULTS = `${testVault}:test:rw`;
 process.env.PALACE_LOG_LEVEL = 'error';
 process.env.PALACE_WATCH_ENABLED = 'false';
 
@@ -64,7 +64,8 @@ describe('Index Service', () => {
       expect(tableNames).toContain('notes');
       expect(tableNames).toContain('note_tags');
       expect(tableNames).toContain('links');
-      expect(tableNames).toContain('schema_version');
+      // Schema version table removed in v2.0 (no migrations needed for initial release)
+      expect(tableNames).toContain('technology_mentions');
     });
 
     it('has FTS5 virtual table', async () => {

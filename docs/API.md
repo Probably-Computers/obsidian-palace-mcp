@@ -876,22 +876,6 @@ Add an entry to the current session.
 
 ---
 
-## Legacy Tools (Deprecated)
-
-### palace_remember
-
-**Deprecated:** Use `palace_store` instead.
-
-Create notes with path-based storage.
-
-### palace_update
-
-**Deprecated:** Use `palace_improve` instead.
-
-Update notes with basic modes.
-
----
-
 ## Workflow Examples
 
 ### Check-Before-Store Pattern

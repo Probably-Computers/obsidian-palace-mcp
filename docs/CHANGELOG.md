@@ -58,11 +58,16 @@ This is the initial public release with full feature set.
 
 ### Changed
 
-- **`palace_remember`**: Deprecated in favor of `palace_store`
-- **`palace_update`**: Deprecated in favor of `palace_improve`
 - **Frontmatter Schema**: Added `status`, `domain`, `palace` block
 - **Index Schema**: New tables for stubs, technology mentions, authors
 - **Note Format**: Support for hub notes and atomic note hierarchy
+
+### Removed
+
+- **`palace_remember`**: Removed before initial release (use `palace_store`)
+- **`palace_update`**: Removed before initial release (use `palace_improve`)
+- **`PALACE_VAULT_PATH`**: Legacy env var removed (use `PALACE_VAULTS` instead)
+- **Schema Migrations**: Removed unused migration code for clean initial release
 
 ---
 

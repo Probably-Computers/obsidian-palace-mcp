@@ -8,56 +8,111 @@
 import Database from 'better-sqlite3';
 import { logger } from '../../utils/logger.js';
 
-// Schema version for migrations
-export const SCHEMA_VERSION = 4;
+// Schema version (for future migrations if needed)
+export const SCHEMA_VERSION = 1;
 
-// SQL statements for schema creation
+// SQL statements for schema creation - unified schema with all columns
 export const SCHEMA_SQL = `
--- Notes table
+-- Notes table (unified schema with all fields)
 CREATE TABLE IF NOT EXISTS notes (
     id INTEGER PRIMARY KEY,
     path TEXT UNIQUE NOT NULL,
     title TEXT,
     type TEXT,
-    created TEXT,
-    modified TEXT,
+    status TEXT DEFAULT 'active',
+    domain TEXT,
+    tags TEXT,
+    related TEXT,
+    aliases TEXT,
+    mentioned_in TEXT,
+    parent_path TEXT,
+    technology_path TEXT,
     source TEXT,
     confidence REAL,
     verified INTEGER DEFAULT 0,
+    ai_binding TEXT,
+    applies_to TEXT,
+    created TEXT,
+    modified TEXT,
     content TEXT,
-    content_hash TEXT
+    content_hash TEXT,
+    line_count INTEGER,
+    section_count INTEGER,
+    word_count INTEGER,
+    palace_version INTEGER DEFAULT 1,
+    last_agent TEXT,
+    children_count INTEGER DEFAULT 0
 );
 
 -- Tags junction table
 CREATE TABLE IF NOT EXISTS note_tags (
-    id INTEGER PRIMARY KEY,
-    note_id INTEGER NOT NULL,
-    tag TEXT NOT NULL,
-    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
-    UNIQUE(note_id, tag)
+    note_id INTEGER,
+    tag TEXT,
+    PRIMARY KEY (note_id, tag),
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
 );
 
--- Links (wiki-links) table
+-- Domain junction table
+CREATE TABLE IF NOT EXISTS note_domains (
+    note_id INTEGER,
+    domain TEXT,
+    position INTEGER,
+    PRIMARY KEY (note_id, domain, position),
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+);
+
+-- Links table
 CREATE TABLE IF NOT EXISTS links (
     id INTEGER PRIMARY KEY,
-    source_id INTEGER NOT NULL,
-    target_path TEXT NOT NULL,
-    FOREIGN KEY (source_id) REFERENCES notes(id) ON DELETE CASCADE
+    source_id INTEGER,
+    target_path TEXT,
+    target_id INTEGER,
+    link_text TEXT,
+    resolved INTEGER DEFAULT 0,
+    FOREIGN KEY (source_id) REFERENCES notes(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_id) REFERENCES notes(id) ON DELETE SET NULL
 );
 
--- Schema version tracking
-CREATE TABLE IF NOT EXISTS schema_version (
-    version INTEGER PRIMARY KEY
+-- Technology mentions table
+CREATE TABLE IF NOT EXISTS technology_mentions (
+    id INTEGER PRIMARY KEY,
+    note_id INTEGER,
+    technology TEXT,
+    mention_count INTEGER DEFAULT 1,
+    first_mentioned TEXT,
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
+    UNIQUE(note_id, technology)
+);
+
+-- Authors table
+CREATE TABLE IF NOT EXISTS authors (
+    id INTEGER PRIMARY KEY,
+    note_id INTEGER,
+    agent TEXT,
+    action TEXT,
+    date TEXT,
+    context TEXT,
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
 );
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_notes_type ON notes(type);
+CREATE INDEX IF NOT EXISTS idx_notes_status ON notes(status);
 CREATE INDEX IF NOT EXISTS idx_notes_path ON notes(path);
+CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_path);
+CREATE INDEX IF NOT EXISTS idx_notes_technology ON notes(technology_path);
 CREATE INDEX IF NOT EXISTS idx_notes_modified ON notes(modified);
+CREATE INDEX IF NOT EXISTS idx_notes_confidence ON notes(confidence);
+CREATE INDEX IF NOT EXISTS idx_notes_ai_binding ON notes(ai_binding);
 CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag);
 CREATE INDEX IF NOT EXISTS idx_note_tags_note_id ON note_tags(note_id);
+CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id);
 CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_path);
-CREATE INDEX IF NOT EXISTS idx_links_source_id ON links(source_id);
+CREATE INDEX IF NOT EXISTS idx_links_resolved ON links(resolved);
+CREATE INDEX IF NOT EXISTS idx_authors_note ON authors(note_id);
+CREATE INDEX IF NOT EXISTS idx_authors_agent ON authors(agent);
+CREATE INDEX IF NOT EXISTS idx_tech_mentions_note ON technology_mentions(note_id);
+CREATE INDEX IF NOT EXISTS idx_tech_mentions_tech ON technology_mentions(technology);
 `;
 
 // FTS5 virtual table for full-text search
@@ -65,138 +120,59 @@ export const FTS_SQL = `
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
     title,
     content,
+    tags,
+    domain,
     content='notes',
-    content_rowid='id'
+    content_rowid='id',
+    tokenize='porter unicode61'
 );
 
 -- Triggers to keep FTS in sync with notes table
 CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-    INSERT INTO notes_fts(rowid, title, content)
-    VALUES (new.id, new.title, new.content);
+    INSERT INTO notes_fts(rowid, title, content, tags, domain)
+    VALUES (new.id, new.title, new.content, new.tags, new.domain);
 END;
 
 CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-    INSERT INTO notes_fts(notes_fts, rowid, title, content)
-    VALUES ('delete', old.id, old.title, old.content);
+    INSERT INTO notes_fts(notes_fts, rowid, title, content, tags, domain)
+    VALUES ('delete', old.id, old.title, old.content, old.tags, old.domain);
 END;
 
 CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-    INSERT INTO notes_fts(notes_fts, rowid, title, content)
-    VALUES ('delete', old.id, old.title, old.content);
-    INSERT INTO notes_fts(rowid, title, content)
-    VALUES (new.id, new.title, new.content);
+    INSERT INTO notes_fts(notes_fts, rowid, title, content, tags, domain)
+    VALUES ('delete', old.id, old.title, old.content, old.tags, old.domain);
+    INSERT INTO notes_fts(rowid, title, content, tags, domain)
+    VALUES (new.id, new.title, new.content, new.tags, new.domain);
 END;
 `;
 
 /**
  * Initialize database schema
+ * Creates tables if they don't exist (fresh install)
  */
 export function initializeSchema(db: Database.Database): void {
-  // Check current schema version
-  const hasVersionTable = db
+  // Check if notes table exists (indicates initialized database)
+  const hasNotesTable = db
     .prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'"
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='notes'"
     )
     .get();
 
-  let currentVersion = 0;
-  if (hasVersionTable) {
-    const row = db
-      .prepare('SELECT version FROM schema_version ORDER BY version DESC LIMIT 1')
-      .get() as { version: number } | undefined;
-    currentVersion = row?.version ?? 0;
-  }
-
-  if (currentVersion < SCHEMA_VERSION) {
-    logger.debug(`Migrating database from version ${currentVersion} to ${SCHEMA_VERSION}`);
-    runMigrations(db, currentVersion);
-  }
-}
-
-/**
- * Run database migrations
- */
-function runMigrations(db: Database.Database, fromVersion: number): void {
-  db.exec('BEGIN TRANSACTION');
-
-  try {
-    if (fromVersion < 1) {
-      // Initial schema
+  if (!hasNotesTable) {
+    logger.debug('Creating fresh database schema');
+    db.exec('BEGIN TRANSACTION');
+    try {
       db.exec(SCHEMA_SQL);
       db.exec(FTS_SQL);
-      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(1);
+      db.exec('COMMIT');
+      logger.debug('Database schema created successfully');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      logger.error('Database schema creation failed', error);
+      throw error;
     }
-
-    // Migration 2: Add status and stub tracking
-    if (fromVersion < 2) {
-      // Add status column for stub/active tracking
-      db.exec(`
-        ALTER TABLE notes ADD COLUMN status TEXT DEFAULT 'active';
-        ALTER TABLE notes ADD COLUMN mentioned_in TEXT;
-        ALTER TABLE notes ADD COLUMN tags TEXT;
-        ALTER TABLE notes ADD COLUMN related TEXT;
-        ALTER TABLE notes ADD COLUMN aliases TEXT;
-        ALTER TABLE notes ADD COLUMN palace_version INTEGER DEFAULT 1;
-      `);
-
-      // Create index for status queries
-      db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_notes_status ON notes(status);
-      `);
-
-      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(2);
-    }
-
-    // Migration 3: Add technology mentions tracking
-    if (fromVersion < 3) {
-      db.exec(`
-        -- Technology mentions table
-        CREATE TABLE IF NOT EXISTS technology_mentions (
-          id INTEGER PRIMARY KEY,
-          note_id INTEGER NOT NULL,
-          technology TEXT NOT NULL,
-          mention_count INTEGER DEFAULT 1,
-          first_mentioned TEXT,
-          FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
-          UNIQUE(note_id, technology)
-        );
-
-        -- Index for technology lookups
-        CREATE INDEX IF NOT EXISTS idx_tech_mentions_tech ON technology_mentions(technology);
-        CREATE INDEX IF NOT EXISTS idx_tech_mentions_note ON technology_mentions(note_id);
-      `);
-
-      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(3);
-    }
-
-    // Migration 4: Add standards tracking fields
-    if (fromVersion < 4) {
-      db.exec(`
-        -- Add ai_binding field for standards
-        ALTER TABLE notes ADD COLUMN ai_binding TEXT;
-
-        -- Add applies_to field (JSON array)
-        ALTER TABLE notes ADD COLUMN applies_to TEXT;
-
-        -- Add domain field (JSON array)
-        ALTER TABLE notes ADD COLUMN domain TEXT;
-
-        -- Create index for ai_binding queries (for loading required standards)
-        CREATE INDEX IF NOT EXISTS idx_notes_ai_binding ON notes(ai_binding);
-      `);
-
-      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(4);
-    }
-
-    // Future migrations go here:
-    // if (fromVersion < 5) { ... }
-
-    db.exec('COMMIT');
-    logger.debug('Database migration completed');
-  } catch (error) {
-    db.exec('ROLLBACK');
-    logger.error('Database migration failed', error);
-    throw error;
+  } else {
+    logger.debug('Database schema already exists');
   }
 }
 
