@@ -34,6 +34,7 @@ import {
   standardsValidateTool,
   standardsValidateHandler,
 } from './standards.js';
+import { clarifyTool, clarifyHandler } from './clarify.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -111,6 +112,10 @@ export function registerTools(): void {
 
   tools.set('palace_standards_validate', standardsValidateTool);
   handlers.set('palace_standards_validate', standardsValidateHandler);
+
+  // Phase 014 tools - AI Support
+  tools.set('palace_clarify', clarifyTool);
+  handlers.set('palace_clarify', clarifyHandler);
 }
 
 /**

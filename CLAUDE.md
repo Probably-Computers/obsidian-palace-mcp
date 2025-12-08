@@ -64,9 +64,14 @@ src/
 │   │   ├── executor.ts        # Execute queries against index
 │   │   ├── formatter.ts       # Format results
 │   │   └── index.ts
-│   └── standards/             # AI binding standards
-│       ├── loader.ts          # Find and load standards
-│       ├── validator.ts       # Compliance checking
+│   ├── standards/             # AI binding standards
+│   │   ├── loader.ts          # Find and load standards
+│   │   ├── validator.ts       # Compliance checking
+│   │   └── index.ts
+│   └── ai-support/            # AI support tools
+│       ├── context-detector.ts  # Detect tech/project/client/scope
+│       ├── missing-identifier.ts # Identify missing context
+│       ├── question-generator.ts # Generate clarifying questions
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── remember.ts            # palace_remember
@@ -83,6 +88,7 @@ src/
 │   ├── query.ts               # palace_query
 │   ├── session.ts             # palace_session_*
 │   ├── vaults.ts              # palace_vaults
+│   ├── clarify.ts             # palace_clarify
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -302,6 +308,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_improve | ✅ | Intelligently update existing notes with multiple modes |
 | palace_standards | ✅ | Load and query binding standards for AI |
 | palace_standards_validate | ✅ | Validate notes against applicable standards |
+| palace_clarify | ✅ | Detect context and generate clarifying questions for incomplete storage intents |
 
 ### palace_recall
 
@@ -752,6 +759,50 @@ cross_vault:
 ```
 
 Standards from `standards_source` vault are loaded automatically when no vault is specified in queries.
+
+### palace_clarify
+
+Detect context and generate clarifying questions when storage intent is incomplete:
+
+```typescript
+{
+  context: {
+    title: string;                    // Note title (required)
+    content_preview: string;          // First 500 chars for analysis (required)
+    detected_technologies?: string[]; // Technologies AI already detected
+    detected_context?: {              // Context hints AI detected
+      possible_projects: string[];
+      possible_clients: string[];
+    };
+  };
+  missing?: ('scope' | 'project' | 'client' | 'technologies' | 'domain')[];
+  vault?: string;                     // Vault alias
+}
+```
+
+**Output includes:**
+- `detected`: Full context detection results (technologies, projects, clients, scope, domains)
+- `questions`: Array of clarifying questions with options and hints
+- `suggestions`: Suggested values based on detection confidence
+- `confidence`: Overall and per-field confidence scores
+
+**Workflow with palace_store:**
+1. AI prepares storage intent
+2. If intent incomplete → call `palace_clarify`
+3. AI presents questions to user
+4. User provides answers
+5. AI updates intent and calls `palace_store`
+
+**Question Types:**
+- `choice`: Select from options (e.g., "General knowledge" vs "Project-specific")
+- `confirm`: Yes/no confirmation (e.g., "Link to these technologies?")
+- `text`: Free text input
+
+**Detection Capabilities:**
+- Technologies: Pattern matching + code block languages + vault vocabulary
+- Projects/Clients: Contextual patterns + vault directory scanning
+- Scope: "our/we/us" indicators vs "general/standard/best practice"
+- Domains: networking, security, database, devops, frontend, backend, testing
 
 ## Testing
 
