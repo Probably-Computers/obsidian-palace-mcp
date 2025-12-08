@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { logger } from '../../utils/logger.js';
 
 // Schema version for migrations
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 // SQL statements for schema creation
 export const SCHEMA_SQL = `
@@ -169,8 +169,27 @@ function runMigrations(db: Database.Database, fromVersion: number): void {
       db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(3);
     }
 
+    // Migration 4: Add standards tracking fields
+    if (fromVersion < 4) {
+      db.exec(`
+        -- Add ai_binding field for standards
+        ALTER TABLE notes ADD COLUMN ai_binding TEXT;
+
+        -- Add applies_to field (JSON array)
+        ALTER TABLE notes ADD COLUMN applies_to TEXT;
+
+        -- Add domain field (JSON array)
+        ALTER TABLE notes ADD COLUMN domain TEXT;
+
+        -- Create index for ai_binding queries (for loading required standards)
+        CREATE INDEX IF NOT EXISTS idx_notes_ai_binding ON notes(ai_binding);
+      `);
+
+      db.prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)').run(4);
+    }
+
     // Future migrations go here:
-    // if (fromVersion < 4) { ... }
+    // if (fromVersion < 5) { ... }
 
     db.exec('COMMIT');
     logger.debug('Database migration completed');

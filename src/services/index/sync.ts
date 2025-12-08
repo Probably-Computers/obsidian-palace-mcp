@@ -42,6 +42,11 @@ export function indexNote(db: Database.Database, note: Note): void {
   const palaceObj = fm.palace as Record<string, unknown> | undefined;
   const palaceVersion = (palaceObj?.version as number | undefined) ?? 1;
 
+  // Extract standards fields
+  const aiBinding = fm.ai_binding as string | undefined;
+  const appliesTo = fm.applies_to as string[] | undefined;
+  const domain = fm.domain as string[] | undefined;
+
   db.transaction(() => {
     if (existing) {
       // Update existing note
@@ -51,7 +56,8 @@ export function indexNote(db: Database.Database, note: Note): void {
           source = ?, confidence = ?, verified = ?,
           content = ?, content_hash = ?,
           status = ?, mentioned_in = ?, tags = ?, related = ?, aliases = ?,
-          palace_version = ?
+          palace_version = ?,
+          ai_binding = ?, applies_to = ?, domain = ?
         WHERE id = ?`
       ).run(
         title,
@@ -69,6 +75,9 @@ export function indexNote(db: Database.Database, note: Note): void {
         frontmatter.related ? JSON.stringify(frontmatter.related) : null,
         frontmatter.aliases ? JSON.stringify(frontmatter.aliases) : null,
         palaceVersion,
+        aiBinding ?? null,
+        appliesTo ? JSON.stringify(appliesTo) : null,
+        domain ? JSON.stringify(domain) : null,
         existing.id
       );
 
@@ -86,8 +95,9 @@ export function indexNote(db: Database.Database, note: Note): void {
         `INSERT INTO notes (
           path, title, type, created, modified,
           source, confidence, verified, content, content_hash,
-          status, mentioned_in, tags, related, aliases, palace_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          status, mentioned_in, tags, related, aliases, palace_version,
+          ai_binding, applies_to, domain
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         path,
         title,
@@ -104,7 +114,10 @@ export function indexNote(db: Database.Database, note: Note): void {
         frontmatter.tags ? JSON.stringify(frontmatter.tags) : null,
         frontmatter.related ? JSON.stringify(frontmatter.related) : null,
         frontmatter.aliases ? JSON.stringify(frontmatter.aliases) : null,
-        palaceVersion
+        palaceVersion,
+        aiBinding ?? null,
+        appliesTo ? JSON.stringify(appliesTo) : null,
+        domain ? JSON.stringify(domain) : null
       );
 
       const noteId = result.lastInsertRowid as number;

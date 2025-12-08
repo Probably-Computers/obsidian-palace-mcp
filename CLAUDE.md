@@ -59,10 +59,14 @@ src/
 │   │   ├── linker.ts          # Insert [[links]] into content
 │   │   ├── aliases.ts         # Handle note aliases
 │   │   └── index.ts
-│   └── dataview/              # Dataview query support
-│       ├── parser.ts          # Parse DQL queries
-│       ├── executor.ts        # Execute queries against index
-│       ├── formatter.ts       # Format results
+│   ├── dataview/              # Dataview query support
+│   │   ├── parser.ts          # Parse DQL queries
+│   │   ├── executor.ts        # Execute queries against index
+│   │   ├── formatter.ts       # Format results
+│   │   └── index.ts
+│   └── standards/             # AI binding standards
+│       ├── loader.ts          # Find and load standards
+│       ├── validator.ts       # Compliance checking
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── remember.ts            # palace_remember
@@ -296,6 +300,8 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_store | ✅ | Intent-based knowledge storage (AI expresses WHAT, Palace decides WHERE) |
 | palace_check | ✅ | Check for existing knowledge before creating (prevents duplicates) |
 | palace_improve | ✅ | Intelligently update existing notes with multiple modes |
+| palace_standards | ✅ | Load and query binding standards for AI |
+| palace_standards_validate | ✅ | Validate notes against applicable standards |
 
 ### palace_recall
 
@@ -646,6 +652,106 @@ To store large content without splitting:
 ### Atomic Warning on Improve
 
 When `palace_improve` adds content that causes a note to exceed atomic limits, a warning is returned but the note is still updated. Consider using `palace_store` with hub structure for very large content.
+
+## Standards System
+
+The Palace supports binding standards - notes that AI should follow during sessions.
+
+### Standard Note Format
+
+```yaml
+---
+type: standard
+title: Git Workflow Standard
+domain: [git, version-control]
+ai_binding: required
+applies_to: [all]
+status: active
+created: 2025-12-06T10:00:00Z
+modified: 2025-12-10T14:30:00Z
+---
+
+# Git Workflow Standard
+
+## Overview
+
+This standard defines how git operations should be performed.
+
+## Requirements
+
+- Must use conventional commits format
+- Must include scope when applicable
+- Should not force push to main branch
+
+## Examples
+
+...
+```
+
+### ai_binding Levels
+
+| Level | Meaning | AI Behavior |
+|-------|---------|-------------|
+| required | Must follow | Load at session start, acknowledge before proceeding |
+| recommended | Should follow | Load on request, warn if not followed |
+| optional | May follow | Available for reference only |
+
+### applies_to Values
+
+- `all` - Applies to all contexts
+- `typescript`, `python`, etc. - Language-specific
+- `git`, `documentation`, etc. - Domain-specific
+- `client:{name}` - Client-specific
+- `project:{name}` - Project-specific
+
+### palace_standards
+
+Load binding standards that AI should follow:
+
+```typescript
+{
+  domain?: string[];           // Filter by domain (e.g., ["git", "code-style"])
+  applies_to?: string;         // Filter by what it applies to (e.g., "typescript")
+  binding?: 'required' | 'recommended' | 'optional' | 'all';
+  vault?: string;              // Vault alias (default: standards_source or default)
+  include_content?: boolean;   // Include full content (default: true)
+}
+```
+
+**Output includes:**
+- Array of matching standards with path, title, binding, content, summary
+- `acknowledgment_required`: true if any required standards found
+- `acknowledgment_message`: Message AI should acknowledge
+
+### palace_standards_validate
+
+Validate a note against applicable standards:
+
+```typescript
+{
+  path: string;                // Note path to validate (required)
+  vault?: string;              // Vault alias
+  standards?: string[];        // Specific standard paths to validate against
+}
+```
+
+**Output includes:**
+- `compliant`: Whether note passes all applicable standards
+- `violations`: Array of violations with standard, requirement, actual value
+- `warnings`: Array of warnings
+- `checked_against`: List of standard paths checked
+
+### Cross-Vault Standards
+
+Configure a dedicated standards vault in global config:
+
+```yaml
+cross_vault:
+  search: true
+  standards_source: "standards"  # Vault alias containing standards
+```
+
+Standards from `standards_source` vault are loaded automatically when no vault is specified in queries.
 
 ## Testing
 

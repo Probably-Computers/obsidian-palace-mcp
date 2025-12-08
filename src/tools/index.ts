@@ -28,6 +28,12 @@ import { vaultsTool, vaultsHandler } from './vaults.js';
 import { storeTool, storeHandler } from './store.js';
 import { checkTool, checkHandler } from './check.js';
 import { improveTool, improveHandler } from './improve.js';
+import {
+  standardsTool,
+  standardsHandler,
+  standardsValidateTool,
+  standardsValidateHandler,
+} from './standards.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -98,6 +104,13 @@ export function registerTools(): void {
 
   tools.set('palace_improve', improveTool);
   handlers.set('palace_improve', improveHandler);
+
+  // Phase 013 tools - Standards
+  tools.set('palace_standards', standardsTool);
+  handlers.set('palace_standards', standardsHandler);
+
+  tools.set('palace_standards_validate', standardsValidateTool);
+  handlers.set('palace_standards_validate', standardsValidateHandler);
 }
 
 /**
