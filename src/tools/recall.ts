@@ -13,8 +13,7 @@ import {
   getIndexManager,
   type VaultSearchResult,
 } from '../services/index/index.js';
-import { logger } from '../utils/logger.js';
-import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
+import { resolveVaultParam } from '../utils/vault-param.js';
 import { getVaultRegistry } from '../services/vault/registry.js';
 
 // Input schema

@@ -1,0 +1,101 @@
+# Work Vault Configuration
+# Location: {vault}/.palace.yaml
+
+vault:
+  name: work-knowledge
+  description: "Work-related knowledge, projects, and technical documentation"
+
+# Knowledge layer path mapping
+structure:
+  # Layer 1: Technical Knowledge
+  technology:
+    path: "technologies/{domain}/"
+    hub_file: "_index.md"
+
+  command:
+    path: "commands/{domain}/"
+    hub_file: "_index.md"
+
+  reference:
+    path: "reference/{domain}/"
+
+  # Layer 2: Domain Knowledge
+  standard:
+    path: "standards/{domain}/"
+    ai_binding: required             # AI must follow these
+
+  pattern:
+    path: "patterns/{domain}/"
+
+  research:
+    path: "research/{domain}/"
+
+  # Layer 3: Contextual Knowledge
+  project:
+    path: "projects/{project}/"
+    subpaths:
+      decision: "decisions/"
+      configuration: "configurations/"
+      artifact: "artifacts/"
+      note: "notes/"
+
+  client:
+    path: "clients/{client}/"
+
+  product:
+    path: "products/{product}/"
+    subpaths:
+      decision: "decisions/"
+      artifact: "artifacts/"
+
+  # Other types
+  troubleshooting:
+    path: "troubleshooting/{domain}/"
+
+  note:
+    path: "notes/"
+
+# Session logs
+sessions:
+  path: "daily/"
+  format: "{YYYY-MM-DD}.md"
+
+# Ignore rules
+ignore:
+  patterns:
+    - ".obsidian/"                   # Obsidian config
+    - "templates/"                   # Template files
+    - "private/**"                   # Private notes
+    - "*.private.md"                 # Individual private files
+    - "archive/**"                   # Archived content
+  marker_file: ".palace-ignore"      # Marker file to ignore folders
+  frontmatter_key: "palace_ignore"   # Frontmatter key to ignore notes
+
+# Atomic note settings
+atomic:
+  max_lines: 200                     # Max lines per atomic note
+  max_sections: 6                    # Max H2 sections per note
+  section_max_lines: 50              # Max lines per section
+  hub_max_lines: 150                 # Max lines for hub notes
+  hub_filename: "_index.md"          # Hub note filename
+  auto_split: true                   # Enable auto-splitting
+
+# Stub behavior
+stubs:
+  auto_create: true                  # Create stubs for unknown tech
+  min_confidence: 0.2                # Min confidence for stub creation
+  template: "_templates/stub.md"     # Stub template
+
+# Graph integrity
+graph:
+  require_technology_links: true     # Warn if no tech links
+  warn_orphan_depth: 1               # Warn if note has no connections
+  retroactive_linking: true          # Update old notes with new links
+
+# Templates
+templates:
+  technology_hub: "_templates/technology-hub.md"
+  concept: "_templates/concept.md"
+  command: "_templates/command.md"
+  decision: "_templates/decision.md"
+  standard: "_templates/standard.md"

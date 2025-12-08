@@ -1,0 +1,28 @@
+# Vendor Documentation Vault Configuration
+# Location: {vault}/.palace.yaml
+#
+# This vault is read-only - used for reference documentation
+# that shouldn't be modified by AI.
+
+vault:
+  name: vendor-docs
+  description: "Read-only vendor documentation and references"
+  mode: ro                           # Explicit read-only
+
+# Simple structure - just for reading
+structure:
+  reference:
+    path: "{domain}/"
+
+# Ignore nothing - want full searchability
+ignore:
+  patterns:
+    - ".obsidian/"
+
+# No atomic splitting - these are pre-existing docs
+atomic:
+  auto_split: false
+
+# No graph modification
+graph:
+  retroactive_linking: false

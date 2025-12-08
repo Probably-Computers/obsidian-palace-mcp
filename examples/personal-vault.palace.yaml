@@ -1,0 +1,49 @@
+# Personal Vault Configuration
+# Location: {vault}/.palace.yaml
+
+vault:
+  name: personal-knowledge
+  description: "Personal knowledge base and learning notes"
+
+# Simpler structure for personal use
+structure:
+  technology:
+    path: "tech/{domain}/"
+    hub_file: "_index.md"
+
+  command:
+    path: "commands/{domain}/"
+
+  research:
+    path: "research/{domain}/"
+
+  pattern:
+    path: "patterns/{domain}/"
+
+  note:
+    path: "notes/"
+
+  # Personal-specific
+  project:
+    path: "projects/{project}/"
+
+# Session logs
+sessions:
+  path: "journal/"
+  format: "{YYYY-MM-DD}.md"
+
+# Ignore rules
+ignore:
+  patterns:
+    - ".obsidian/"
+    - "templates/"
+
+# Atomic notes (optional - can disable for simpler structure)
+atomic:
+  auto_split: true
+  max_lines: 200
+
+# Minimal graph enforcement for personal use
+graph:
+  require_technology_links: false
+  retroactive_linking: true

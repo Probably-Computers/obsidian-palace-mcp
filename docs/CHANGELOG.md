@@ -5,12 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2025-12-08
+
+### Major Release: Intent-Based Storage & Multi-Vault Support
+
+This is the initial public release with full feature set.
 
 ### Added
-- Session tracking tools (`palace_session_start`, `palace_session_log`)
-- Daily session log files with YAML frontmatter
-- Support for tracking notes created during sessions
+
+#### Multi-Vault Support (Phase 008-010)
+- **Global Configuration**: `~/.config/palace/config.yaml` for managing multiple vaults
+- **Per-Vault Configuration**: `.palace.yaml` in each vault for structure mapping
+- **Access Control**: Read-write (`rw`) or read-only (`ro`) mode per vault
+- **Cross-Vault Search**: Search across all configured vaults
+- **Environment Variable Quick Setup**: `PALACE_VAULTS` for simple multi-vault config
+- **`palace_vaults` Tool**: List and manage configured vaults
+
+#### Intent-Based Storage (Phase 011)
+- **`palace_store` Tool**: Store knowledge by expressing intent (WHAT), not path (WHERE)
+- **`palace_check` Tool**: Check for existing knowledge before creating (check-before-store pattern)
+- **`palace_improve` Tool**: Intelligent note updates with multiple modes
+- **Knowledge Layer Model**: Three-layer organization (Technical, Domain, Contextual)
+- **Path Resolution Engine**: Automatic path determination from intent
+- **Stub System**: Create placeholder notes for unknown technologies
+- **Retroactive Linking**: Update existing notes when new related content is created
+
+#### Atomic Note System (Phase 012)
+- **Auto-Splitting**: Automatically split large content into hub + child notes
+- **Hub Pattern**: Navigation hubs with `_index.md` files
+- **Configurable Limits**: Max 200 lines, 6 sections per atomic note
+- **Section Extraction**: Large sections become separate notes
+
+#### Standards System (Phase 013)
+- **`palace_standards` Tool**: Load binding standards for AI behavior
+- **`palace_standards_validate` Tool**: Validate notes against standards
+- **Binding Levels**: `required`, `recommended`, `optional`
+- **Cross-Vault Standards**: Load standards from dedicated vault
+- **AI Acknowledgment**: Required standards must be acknowledged
+
+#### AI Support Tools (Phase 014)
+- **`palace_clarify` Tool**: Generate clarifying questions for incomplete context
+- **Context Detection**: Detect technologies, projects, clients, scope, domains
+- **Confidence Scores**: All detections include confidence (0-1)
+- **Missing Context Identification**: Know what information is needed
+- **Question Generation**: Contextual questions with options and hints
+
+#### Documentation (Phase 015)
+- **API Reference**: Complete tool documentation (`docs/API.md`)
+- **Configuration Guide**: All configuration options (`docs/CONFIGURATION.md`)
+- **AI Behavior Guide**: Protocols for AI assistants (`docs/AI-BEHAVIOR.md`)
+- **Examples**: Configuration and standard note examples (`examples/`)
+
+### Changed
+
+- **`palace_remember`**: Deprecated in favor of `palace_store`
+- **`palace_update`**: Deprecated in favor of `palace_improve`
+- **Frontmatter Schema**: Added `status`, `domain`, `palace` block
+- **Index Schema**: New tables for stubs, technology mentions, authors
+- **Note Format**: Support for hub notes and atomic note hierarchy
+
+---
 
 ## [0.7.0] - 2025-12-06
 

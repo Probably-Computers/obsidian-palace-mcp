@@ -1,0 +1,44 @@
+# Palace MCP Global Configuration Example
+# Location: ~/.config/palace/config.yaml
+
+version: 1
+
+# Registered vaults
+vaults:
+  # Primary work vault - read/write access
+  - path: "/Users/you/Documents/Work Palace"
+    alias: work
+    mode: rw
+    default: true
+    description: "Work-related knowledge and projects"
+
+  # Personal vault - read/write access
+  - path: "/Users/you/Documents/Personal Palace"
+    alias: personal
+    mode: rw
+    description: "Personal knowledge base"
+
+  # Vendor documentation - read-only access
+  - path: "/Users/you/Documents/Vendor Docs"
+    alias: vendor
+    mode: ro
+    description: "Read-only vendor documentation"
+
+  # Client-specific vault
+  - path: "/Users/you/Documents/Clients/Acme"
+    alias: acme
+    mode: rw
+    context:
+      client: acme
+      type: client_vault
+
+# Cross-vault behavior
+cross_vault:
+  search: true                       # Allow searching across all vaults
+  standards_source: work             # Load standards from work vault
+
+# Runtime settings
+settings:
+  log_level: info                    # debug, info, warn, error
+  watch_enabled: true                # Watch for external file changes
+  auto_index: true                   # Auto-rebuild index on changes

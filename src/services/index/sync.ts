@@ -282,7 +282,6 @@ export async function syncAllVaults(
   listNotesForVault: (vaultAlias: string, path: string, recursive: boolean) => Promise<{ path: string }[]>,
   readNoteFromVault: (vaultAlias: string, path: string) => Promise<Note | null>
 ): Promise<Map<string, number>> {
-  const manager = getIndexManager();
   const registry = await import('../vault/registry.js').then((m) => m.getVaultRegistry());
 
   const results = new Map<string, number>();

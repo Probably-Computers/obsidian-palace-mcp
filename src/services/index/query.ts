@@ -11,7 +11,6 @@ import {
   addVaultAttributionToNote,
   aggregateSearchResults,
   aggregateQueryResults,
-  filterByVaults,
   type VaultSearchResult,
   type VaultQueryResult,
 } from './aggregator.js';

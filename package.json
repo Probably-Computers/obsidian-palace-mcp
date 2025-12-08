@@ -1,7 +1,7 @@
 {
   "name": "obsidian-palace-mcp",
-  "version": "0.1.0",
-  "description": "MCP server for using Obsidian as an AI memory palace",
+  "version": "2.0.0",
+  "description": "MCP server that turns your Obsidian vault into an AI memory palace with intent-based storage, multi-vault support, and atomic notes",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -36,7 +36,12 @@
     "model-context-protocol",
     "claude",
     "chatgpt",
-    "llm"
+    "llm",
+    "multi-vault",
+    "atomic-notes",
+    "intent-based-storage",
+    "ai-memory",
+    "wiki-links"
   ],
   "author": "Probably Computers <adam@probablycomputers.co.za>",
   "license": "MIT",

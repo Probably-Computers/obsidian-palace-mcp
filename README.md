@@ -9,23 +9,29 @@ An MCP server that turns your Obsidian vault into an AI memory palace.
 
 **Obsidian Palace MCP** enables AI assistants (Claude, ChatGPT, or any MCP-compatible client) to use your Obsidian vault as a persistent memory store. The AI can:
 
-- **Store knowledge** from research sessions with proper categorization
+- **Store knowledge** using intent-based storage (AI says WHAT, Palace decides WHERE)
 - **Retrieve information** using full-text search or structured queries
 - **Auto-link notes** by detecting mentions of existing note titles
+- **Check before storing** to prevent duplicates and expand existing knowledge
 - **Query with Dataview** using familiar DQL syntax
+- **Follow standards** defined in your vault
 - **Track provenance** - know where every piece of knowledge came from
 
-## Features
+## v2.0 Features
 
 | Feature | Description |
 |---------|-------------|
-| 🧠 **Knowledge-first** | Purpose-built for AI memory, not just file access |
-| 🔗 **Auto-linking** | Automatically creates `[[wiki-links]]` between related notes |
-| 📊 **Dataview queries** | Query your vault using DQL syntax |
+| 🧠 **Intent-Based Storage** | AI expresses intent; Palace resolves location |
+| 📚 **Multi-Vault Support** | Multiple vaults with read/write access control |
+| ⚛️ **Atomic Notes** | Auto-splitting large content into hub + children |
+| 📋 **Standards System** | AI follows user-defined binding standards |
+| 🔗 **Auto-Linking** | Automatically creates `[[wiki-links]]` between related notes |
+| 📊 **Dataview Queries** | Query your vault using DQL syntax |
 | 📍 **Provenance** | Track source, confidence, and verification status |
-| 🤖 **AI-agnostic** | Works with any MCP-compatible client |
-| ⚡ **Fast search** | SQLite FTS5 full-text search index |
-| 👁️ **Live sync** | Watches for external changes to your vault |
+| 🤖 **AI-Agnostic** | Works with any MCP-compatible client |
+| ⚡ **Fast Search** | SQLite FTS5 full-text search index |
+| 👁️ **Live Sync** | Watches for external changes to your vault |
+| ❓ **Context Clarification** | AI asks for missing context before storing |
 
 ## Installation
 
@@ -39,12 +45,13 @@ Or use directly with npx:
 npx obsidian-palace-mcp
 ```
 
-## Configuration
+## Quick Start
 
-### Claude Desktop / Claude Code
+### 1. Configure Claude Desktop / Claude Code
 
 Add to your MCP client configuration:
 
+**Single Vault:**
 ```json
 {
   "mcpServers": {
@@ -59,24 +66,68 @@ Add to your MCP client configuration:
 }
 ```
 
-### Environment Variables
+**Multi-Vault (Quick Setup):**
+```json
+{
+  "mcpServers": {
+    "obsidian-palace": {
+      "command": "npx",
+      "args": ["obsidian-palace-mcp"],
+      "env": {
+        "PALACE_VAULTS": "/path/to/work:work:rw,/path/to/personal:personal:rw",
+        "PALACE_DEFAULT_VAULT": "work"
+      }
+    }
+  }
+}
+```
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `PALACE_VAULT_PATH` | Yes | - | Path to your Obsidian vault |
-| `PALACE_LOG_LEVEL` | No | `info` | Logging level (debug, info, warn, error) |
-| `PALACE_WATCH_ENABLED` | No | `true` | Watch for external file changes |
+**Multi-Vault (Config File):**
+```json
+{
+  "mcpServers": {
+    "obsidian-palace": {
+      "command": "npx",
+      "args": ["obsidian-palace-mcp"],
+      "env": {
+        "PALACE_CONFIG_PATH": "~/.config/palace/config.yaml"
+      }
+    }
+  }
+}
+```
+
+### 2. Create a Vault Config (Optional)
+
+Create `.palace.yaml` in your vault root for custom structure mapping:
+
+```yaml
+vault:
+  name: my-knowledge
+  description: "My knowledge base"
+
+structure:
+  technology:
+    path: "technologies/{domain}/"
+  command:
+    path: "commands/{domain}/"
+  project:
+    path: "projects/{project}/"
+```
+
+See [Configuration Guide](docs/CONFIGURATION.md) for full options.
 
 ## Tools
 
-### Knowledge Management
+### Core Tools
 
 | Tool | Description |
 |------|-------------|
-| `palace_remember` | Store new knowledge with auto-linking |
-| `palace_recall` | Search the vault for information |
+| `palace_store` | Store knowledge with intent-based resolution |
+| `palace_check` | Check for existing knowledge before storing |
 | `palace_read` | Read a specific note |
-| `palace_update` | Update a note with auto-linking |
+| `palace_improve` | Update existing notes intelligently |
+| `palace_recall` | Search the vault for information |
 
 ### Structure & Navigation
 
@@ -84,6 +135,7 @@ Add to your MCP client configuration:
 |------|-------------|
 | `palace_list` | List notes in a directory |
 | `palace_structure` | Get vault directory tree |
+| `palace_vaults` | List configured vaults |
 
 ### Graph Intelligence
 
@@ -99,7 +151,15 @@ Add to your MCP client configuration:
 | Tool | Description |
 |------|-------------|
 | `palace_dataview` | Execute Dataview (DQL) queries |
-| `palace_query` | Simple property-based queries |
+| `palace_query` | Property-based queries |
+
+### Standards & AI Support
+
+| Tool | Description |
+|------|-------------|
+| `palace_standards` | Load binding standards for AI |
+| `palace_standards_validate` | Validate notes against standards |
+| `palace_clarify` | Generate clarifying questions for incomplete context |
 
 ### Sessions
 
@@ -108,21 +168,73 @@ Add to your MCP client configuration:
 | `palace_session_start` | Start a research session |
 | `palace_session_log` | Log activity to current session |
 
+### Legacy (Deprecated)
+
+| Tool | Replacement | Description |
+|------|-------------|-------------|
+| `palace_remember` | `palace_store` | Create notes (path-based) |
+| `palace_update` | `palace_improve` | Update notes |
+
+## Knowledge Organization
+
+### Knowledge Layers
+
+Palace organizes knowledge into three layers:
+
+**Layer 1: Technical** (never project-specific)
+- `technologies/` - Technology documentation
+- `commands/` - CLI commands and scripts
+- `reference/` - Quick references
+
+**Layer 2: Domain** (reusable knowledge)
+- `standards/` - Standards and conventions
+- `patterns/` - Reusable patterns
+- `research/` - Research findings
+
+**Layer 3: Contextual** (project/client specific)
+- `projects/` - Project decisions and configs
+- `clients/` - Client-specific knowledge
+
+### Intent-Based Storage
+
+AI expresses WHAT to store; Palace determines WHERE:
+
+```javascript
+palace_store({
+  title: "Docker Bridge Networking",
+  content: "...",
+  intent: {
+    knowledge_type: "command",
+    domain: ["docker", "networking"],
+    scope: "general"
+  }
+})
+// Resolves to: commands/docker/networking/docker-bridge-networking.md
+```
+
+### Atomic Notes
+
+Large content is automatically split into hub + atomic notes:
+- Max 200 lines per atomic note
+- Max 6 H2 sections per note
+- Hub notes (`_index.md`) provide navigation
+
 ## Note Format
 
 Notes use YAML frontmatter for metadata:
 
 ```yaml
 ---
-type: research
+type: technology
+status: active
+domain: [kubernetes, networking]
+source:
+  origin: ai:research
+  confidence: 0.8
+  verified: false
+tags: [kubernetes, networking]
 created: 2025-12-05T14:30:00Z
 modified: 2025-12-05T14:30:00Z
-source: claude
-confidence: 0.85
-verified: false
-tags: [kubernetes, networking]
-related: ["[[Docker Commands]]", "[[K8s Troubleshooting]]"]
-aliases: [k8s-networking]
 ---
 
 # Kubernetes Networking
@@ -132,45 +244,32 @@ Content here...
 
 ### Knowledge Types
 
-| Type | Purpose |
-|------|---------|
-| `research` | Research findings and notes |
-| `command` | CLI commands and snippets |
-| `infrastructure` | Systems and services documentation |
-| `client` | Client-specific knowledge |
-| `project` | Project documentation |
-| `pattern` | Reusable patterns |
-| `troubleshooting` | Problems and solutions |
-
-## Vault Structure
-
-The server works with any vault structure, but recommends:
-
-```
-vault/
-├── research/           # Research findings
-├── commands/           # CLI commands by technology
-├── infrastructure/     # Systems documentation
-├── clients/            # Client-specific knowledge
-├── projects/           # Project documentation
-├── patterns/           # Reusable patterns
-├── troubleshooting/    # Problems and solutions
-└── daily/              # Session logs
-```
+| Type | Layer | Purpose |
+|------|-------|---------|
+| `technology` | 1 | Technology documentation |
+| `command` | 1 | CLI commands and snippets |
+| `reference` | 1 | Quick reference material |
+| `standard` | 2 | Standards and conventions |
+| `pattern` | 2 | Reusable patterns |
+| `research` | 2 | Research findings |
+| `decision` | 3 | Project decisions |
+| `configuration` | 3 | Project-specific configs |
+| `troubleshooting` | 1-2 | Problems and solutions |
+| `note` | varies | General notes |
 
 ## Example Usage
 
-### Storing Knowledge
+### Storing Knowledge (v2.0 way)
 
 ```
-AI: "I'll save this kubectl command for draining nodes safely."
+AI: "I'll document this Docker networking command."
 
-[Uses palace_remember with:
-  - type: "command"
-  - path: "kubectl"
-  - title: "Drain Node Safely"
-  - content: "..."
-  - tags: ["kubernetes", "maintenance"]
+[Uses palace_check to verify no existing note]
+[Uses palace_store with:
+  - knowledge_type: "command"
+  - domain: ["docker", "networking"]
+  - scope: "general"
+  - technologies: ["docker"]
 ]
 ```
 
@@ -184,15 +283,36 @@ AI: [Uses palace_recall with query: "tailscale setup"]
     "Based on your notes, here's what we have..."
 ```
 
-### Dataview Queries
+### Following Standards
 
 ```
-User: "Show me all unverified commands"
+AI starts session:
+[Uses palace_standards({ binding: 'required' })]
+[Acknowledges standards before proceeding]
 
-AI: [Uses palace_dataview with:
-  query: "TABLE confidence, source FROM \"commands\" WHERE verified = false"
-]
+User: "Help me with a git commit"
+AI: [Follows git workflow standard from vault]
 ```
+
+## Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PALACE_VAULT_PATH` | Yes* | - | Single vault path |
+| `PALACE_VAULTS` | No | - | Multi-vault: `path:alias:mode,...` |
+| `PALACE_CONFIG_PATH` | No | `~/.config/palace/config.yaml` | Global config |
+| `PALACE_DEFAULT_VAULT` | No | First vault | Default vault alias |
+| `PALACE_LOG_LEVEL` | No | `info` | debug, info, warn, error |
+| `PALACE_WATCH_ENABLED` | No | `true` | Watch for file changes |
+
+*Required unless `PALACE_VAULTS` or `PALACE_CONFIG_PATH` is set.
+
+## Documentation
+
+- [API Reference](docs/API.md) - Complete tool documentation
+- [Configuration Guide](docs/CONFIGURATION.md) - All configuration options
+- [AI Behavior Guide](docs/AI-BEHAVIOR.md) - Protocols for AI assistants
+- [Changelog](docs/CHANGELOG.md) - Version history
 
 ## Development
 
@@ -223,6 +343,8 @@ Contributions are welcome! Please:
 3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Merge Request
+
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
 
 ## License
 

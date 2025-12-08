@@ -13,7 +13,6 @@ import type {
   GlobalVaultEntry,
   ResolvedVault,
   VaultConfig,
-  VaultAccessMode,
 } from '../../types/index.js';
 
 // Registry singleton
@@ -109,7 +108,7 @@ class VaultRegistryImpl {
     const seen = new Set<string>();
     const vaults: ResolvedVault[] = [];
 
-    for (const [key, vault] of this._vaults) {
+    for (const vault of this._vaults.values()) {
       // Only include by alias, not by path (avoid duplicates)
       if (!seen.has(vault.alias)) {
         seen.add(vault.alias);

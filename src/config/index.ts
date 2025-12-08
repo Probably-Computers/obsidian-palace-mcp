@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import { resolve } from 'path';
-import type { PalaceConfig, GlobalConfig, ResolvedVault } from '../types/index.js';
+import type { PalaceConfig } from '../types/index.js';
 import { getGlobalConfig, getDefaultVaultEntry, resetGlobalConfig } from './global-config.js';
 
 // Environment variable schema (legacy mode)

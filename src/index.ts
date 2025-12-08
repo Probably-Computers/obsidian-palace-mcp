@@ -21,7 +21,6 @@ import {
   startAllWatchers,
   stopAllWatchers,
   performAllVaultScans,
-  getVaultRegistry,
   initializeRegistry,
 } from './services/vault/index.js';
 import { startHttpTransport, stopHttpTransport, isHttpEnabled } from './transports/index.js';

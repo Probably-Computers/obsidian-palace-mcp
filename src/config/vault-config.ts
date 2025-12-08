@@ -8,7 +8,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { parse as parseYaml } from 'yaml';
 import { logger } from '../utils/logger.js';
-import type { VaultConfig, VaultAccessMode, VaultStructure, StructureMapping } from '../types/index.js';
+import type { VaultConfig, VaultAccessMode } from '../types/index.js';
 
 // Zod schema for structure mapping
 const structureMappingSchema = z.object({
