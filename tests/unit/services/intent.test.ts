@@ -42,7 +42,7 @@ const createMockVault = (): ResolvedVault => ({
       standards: 'standards/',
     },
     ignore: { patterns: [], marker_file: '.palace-ignore', frontmatter_key: 'palace_ignore' },
-    atomic: { max_lines: 200, max_sections: 6, hub_filename: '_index.md', auto_split: true },
+    atomic: { max_lines: 200, max_sections: 6, auto_split: true },
     stubs: { auto_create: true, min_confidence: 0.2 },
     graph: { require_technology_links: false, warn_orphan_depth: 1, retroactive_linking: true },
   } as VaultConfig,
@@ -85,7 +85,8 @@ describe('Storage Resolver (Phase 017)', () => {
 
     expect(resolution.relativePath).toContain('sources');
     expect(resolution.relativePath).toContain('book');
-    expect(resolution.relativePath).toMatch(/chapter-3-notes\.md$/);
+    // Phase 018: Title-style filenames preserve case and spaces
+    expect(resolution.relativePath).toMatch(/Chapter 3 Notes\.md$/);
   });
 
   it('resolves project capture path', async () => {
@@ -132,7 +133,8 @@ describe('Storage Resolver (Phase 017)', () => {
     const original = resolveStorage(intent, 'Pods', vault);
     const alternative = generateAlternativePath(original, 2);
 
-    expect(alternative.relativePath).toContain('pods-2');
+    // Phase 018: Title-style filenames - suffix appended to base
+    expect(alternative.relativePath).toContain('Pods-2');
     expect(alternative.relativePath).not.toBe(original.relativePath);
   });
 

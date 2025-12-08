@@ -2,9 +2,13 @@
  * Content splitter for atomic note system
  *
  * Splits large content into hub + children structure while preserving links.
+ *
+ * Phase 018: Uses title-style filenames (Obsidian-native)
+ * - Hub filename = sanitized title (e.g., "Green Peppers.md")
+ * - Child filename = sanitized section title (e.g., "Climate Requirements.md")
  */
 
-import { join, dirname, basename } from 'path';
+import { join, basename } from 'path';
 import type {
   ContentAnalysis,
   SectionInfo,
@@ -18,7 +22,8 @@ import type {
 } from '../../types/atomic.js';
 import { analyzeContent } from './analyzer.js';
 import { shouldSplit } from './decision.js';
-import { slugify } from '../../utils/slugify.js';
+import { titleToFilename } from '../../utils/slugify.js';
+import { stripWikiLinks } from '../../utils/markdown.js';
 
 /**
  * Split content based on the recommended strategy
@@ -47,6 +52,7 @@ export function splitContent(
 
 /**
  * Split content by H2 sections
+ * Phase 018: Uses title-style filenames for hub and children
  */
 export function splitBySections(
   content: string,
@@ -54,7 +60,11 @@ export function splitBySections(
   options: SplitOptions
 ): SplitResult {
   const lines = stripFrontmatter(content).split('\n');
-  const { title, targetDir, hubFilename = '_index.md' } = options;
+  const { title, targetDir } = options;
+
+  // Clean the title for use in filenames
+  const cleanTitle = stripWikiLinks(title);
+  const hubFilename = titleToFilename(cleanTitle);
 
   // Extract introduction (content before first H2)
   const introLines: string[] = [];
@@ -72,7 +82,7 @@ export function splitBySections(
 
   // Build hub content
   const hub = buildHubContent(
-    title,
+    cleanTitle,
     introLines.join('\n').trim(),
     analysis.sections,
     targetDir,
@@ -83,22 +93,23 @@ export function splitBySections(
   // Build children from sections
   const children: ChildContent[] = [];
   const linksUpdated: LinkUpdate[] = [];
+  const hubPath = join(targetDir, hubFilename);
 
   for (const section of analysis.sections) {
     const sectionLines = lines.slice(section.startLine, section.endLine + 1);
     const sectionContent = sectionLines.join('\n');
 
-    // Create child note
-    const childSlug = slugify(section.title);
-    const childPath = join(targetDir, `${childSlug}.md`);
-    const hubPath = join(targetDir, hubFilename);
+    // Create child note with title-style filename
+    const cleanSectionTitle = stripWikiLinks(section.title);
+    const childFilename = titleToFilename(cleanSectionTitle);
+    const childPath = join(targetDir, childFilename);
 
     const child = buildChildContent(
-      section.title,
+      cleanSectionTitle,
       sectionContent,
       childPath,
       hubPath,
-      section.title,
+      cleanSectionTitle,
       options
     );
 
@@ -107,7 +118,7 @@ export function splitBySections(
     // Track link updates
     linksUpdated.push({
       fromPath: hubPath,
-      originalTarget: title,
+      originalTarget: cleanTitle,
       newTarget: childPath,
     });
   }
@@ -120,6 +131,7 @@ export function splitBySections(
 
 /**
  * Split by extracting large sections only
+ * Phase 018: Uses title-style filenames for hub and children
  */
 export function splitByLargeSections(
   content: string,
@@ -127,7 +139,11 @@ export function splitByLargeSections(
   options: SplitOptions
 ): SplitResult {
   const lines = stripFrontmatter(content).split('\n');
-  const { title, targetDir, hubFilename = '_index.md' } = options;
+  const { title, targetDir } = options;
+
+  // Clean the title for use in filenames
+  const cleanTitle = stripWikiLinks(title);
+  const hubFilename = titleToFilename(cleanTitle);
 
   // Find sections to extract (only large ones)
   const largeSectionTitles = new Set(analysis.largeSections);
@@ -158,7 +174,7 @@ export function splitByLargeSections(
 
   // Build hub
   const hub = buildHubContent(
-    title,
+    cleanTitle,
     retainedLines.join('\n').trim(),
     sectionsToExtract,
     targetDir,
@@ -175,15 +191,17 @@ export function splitByLargeSections(
     const sectionLines = lines.slice(section.startLine, section.endLine + 1);
     const sectionContent = sectionLines.join('\n');
 
-    const childSlug = slugify(section.title);
-    const childPath = join(targetDir, `${childSlug}.md`);
+    // Create child note with title-style filename
+    const cleanSectionTitle = stripWikiLinks(section.title);
+    const childFilename = titleToFilename(cleanSectionTitle);
+    const childPath = join(targetDir, childFilename);
 
     const child = buildChildContent(
-      section.title,
+      cleanSectionTitle,
       sectionContent,
       childPath,
       hubPath,
-      section.title,
+      cleanSectionTitle,
       options
     );
 
@@ -198,6 +216,7 @@ export function splitByLargeSections(
 
 /**
  * Split by sub-concepts (H3+ headings)
+ * Phase 018: Uses title-style filenames for hub and children
  */
 export function splitBySubConcepts(
   content: string,
@@ -205,7 +224,11 @@ export function splitBySubConcepts(
   options: SplitOptions
 ): SplitResult {
   const lines = stripFrontmatter(content).split('\n');
-  const { title, targetDir, hubFilename = '_index.md' } = options;
+  const { title, targetDir } = options;
+
+  // Clean the title for use in filenames
+  const cleanTitle = stripWikiLinks(title);
+  const hubFilename = titleToFilename(cleanTitle);
 
   // Group sub-concepts by parent section
   const groupedConcepts = new Map<string, typeof analysis.subConcepts>();
@@ -218,7 +241,7 @@ export function splitBySubConcepts(
   }
 
   // Build hub with section summaries
-  const hubLines: string[] = [`# ${title}`, ''];
+  const hubLines: string[] = [`# ${cleanTitle}`, ''];
 
   // Add intro (before first section)
   const firstSectionStart = analysis.sections[0]?.startLine ?? lines.length;
@@ -238,8 +261,10 @@ export function splitBySubConcepts(
     const subConceptLines = lines.slice(subConcept.startLine, subConcept.endLine + 1);
     const subConceptContent = subConceptLines.join('\n');
 
-    const childSlug = slugify(subConcept.title);
-    const childPath = join(targetDir, `${childSlug}.md`);
+    // Create child note with title-style filename
+    const cleanSubConceptTitle = stripWikiLinks(subConcept.title);
+    const childFilename = titleToFilename(cleanSubConceptTitle);
+    const childPath = join(targetDir, childFilename);
 
     // Promote heading to H2 for child note
     const promotedContent = subConceptContent.replace(
@@ -248,11 +273,11 @@ export function splitBySubConcepts(
     );
 
     const child = buildChildContent(
-      subConcept.title,
+      cleanSubConceptTitle,
       promotedContent,
       childPath,
       hubPath,
-      subConcept.title,
+      cleanSubConceptTitle,
       options
     );
 
@@ -262,7 +287,7 @@ export function splitBySubConcepts(
   const now = new Date().toISOString();
   const hubFrontmatter: HubFrontmatter = {
     type: `${options.originalFrontmatter?.type ?? 'research'}_hub`,
-    title,
+    title: cleanTitle,
     status: 'active',
     children_count: children.length,
     domain: options.domain,
@@ -275,7 +300,7 @@ export function splitBySubConcepts(
   };
 
   const hub: HubContent = {
-    title,
+    title: cleanTitle,
     relativePath: join(targetDir, hubFilename),
     content: hubLines.join('\n'),
     frontmatter: hubFrontmatter,
@@ -337,7 +362,10 @@ function buildHubContent(
     }
   }
 
-  const hubContent = `# ${title}
+  // Strip wiki-links from title to prevent heading corruption
+  const cleanTitle = stripWikiLinks(title);
+
+  const hubContent = `# ${cleanTitle}
 
 ${introContent}
 
@@ -346,7 +374,7 @@ ${introContent}
 `;
 
   return {
-    title,
+    title: cleanTitle,
     relativePath: join(targetDir, hubFilename),
     content: hubContent,
     frontmatter,
@@ -355,6 +383,7 @@ ${introContent}
 
 /**
  * Build child content structure
+ * Phase 018: No parent field in frontmatter - use inline links instead (Zettelkasten style)
  */
 function buildChildContent(
   title: string,
@@ -366,18 +395,23 @@ function buildChildContent(
 ): ChildContent {
   const now = new Date().toISOString();
 
-  // Convert section heading to H1
+  // Strip wiki-links from title to prevent heading corruption
+  const cleanTitle = stripWikiLinks(title);
+
+  // Convert section heading to H1 and strip any wiki-links from it
   let processedContent = sectionContent;
   if (sectionContent.startsWith('## ')) {
     const lines = sectionContent.split('\n');
-    lines[0] = (lines[0] ?? '').replace(/^##\s+/, '# ');
+    // Replace ## with # and strip any wiki-links from the heading
+    const headingText = (lines[0] ?? '').replace(/^##\s+/, '');
+    lines[0] = `# ${stripWikiLinks(headingText)}`;
     processedContent = lines.join('\n');
   }
 
+  // Phase 018: No parent field - use inline links instead (Zettelkasten style)
   const frontmatter: ChildFrontmatter = {
     type: (options.originalFrontmatter?.type as string) ?? 'research',
-    title,
-    parent: `[[${basename(dirname(hubPath))}/${basename(hubPath, '.md')}]]`,
+    title: cleanTitle,
     status: 'active',
     domain: options.domain,
     created: (options.originalFrontmatter?.created as string) ?? now,
@@ -389,7 +423,7 @@ function buildChildContent(
   };
 
   return {
-    title,
+    title: cleanTitle,
     relativePath: childPath,
     content: processedContent,
     frontmatter,
@@ -399,14 +433,16 @@ function buildChildContent(
 
 /**
  * Update hub content with links to children
+ * Phase 018: With title-style filenames, we can use title directly as link
  */
 function updateHubWithChildren(
   hubContent: string,
   children: ChildContent[]
 ): string {
   const childLinks = children.map((child) => {
-    const relativePath = basename(child.relativePath, '.md');
-    return `- [[${relativePath}|${child.title}]]`;
+    // With title-style filenames, the filename (without .md) IS the title
+    // So [[Climate Requirements]] links to "Climate Requirements.md"
+    return `- [[${child.title}]]`;
   });
 
   return `${hubContent}

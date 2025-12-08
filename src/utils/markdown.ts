@@ -3,15 +3,29 @@
  */
 
 /**
+ * Strip wiki-link syntax from text, keeping the display text or target
+ * [[target|display]] → display
+ * [[target]] → target
+ */
+export function stripWikiLinks(text: string): string {
+  return text
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2') // [[target|display]] → display
+    .replace(/\[\[([^\]]+)\]\]/g, '$1'); // [[target]] → target
+}
+
+/**
  * Extract the title from markdown content (first H1)
+ * Strips wiki-link syntax from the extracted title
  */
 export function extractTitle(content: string): string | null {
   const match = content.match(/^#\s+(.+)$/m);
-  return match?.[1]?.trim() ?? null;
+  const rawTitle = match?.[1]?.trim() ?? null;
+  return rawTitle ? stripWikiLinks(rawTitle) : null;
 }
 
 /**
  * Extract all headings from markdown
+ * Strips wiki-link syntax from heading text
  */
 export function extractHeadings(
   content: string
@@ -23,7 +37,7 @@ export function extractHeadings(
   while ((match = regex.exec(content)) !== null) {
     headings.push({
       level: match[1]!.length,
-      text: match[2]!.trim(),
+      text: stripWikiLinks(match[2]!.trim()),
       position: match.index,
     });
   }

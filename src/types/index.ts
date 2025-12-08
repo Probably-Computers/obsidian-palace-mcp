@@ -259,11 +259,11 @@ export interface VaultIgnoreConfig {
 }
 
 // Atomic note configuration
+// Phase 018: Removed hub_filename - hub names are now derived from title
 export interface AtomicConfig {
   max_lines: number;
   max_sections: number;
   section_max_lines?: number | undefined;
-  hub_filename: string;
   auto_split: boolean;
 }
 

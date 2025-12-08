@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { slugify, unslugify, filenameFromTitle } from '../../src/utils/slugify';
+import { slugify, unslugify, titleToFilename } from '../../src/utils/slugify';
 import { extractWikiLinks, createWikiLink, hasWikiLinkTo } from '../../src/utils/wikilinks';
 import { extractTitle, stripMarkdown, wordCount } from '../../src/utils/markdown';
 
@@ -19,8 +19,8 @@ describe('slugify', () => {
     expect(slugify("It's a test!")).toBe('its-a-test');
   });
 
-  it('generates filenames', () => {
-    expect(filenameFromTitle('Docker Build')).toBe('docker-build.md');
+  it('generates filenames (Phase 018 - title-style)', () => {
+    expect(titleToFilename('Docker Build')).toBe('Docker Build.md');
   });
 });
 

@@ -33,6 +33,7 @@ import {
   standardsValidateHandler,
 } from './standards.js';
 import { clarifyTool, clarifyHandler } from './clarify.js';
+import { stubsTool, stubsHandler } from './stubs.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -107,6 +108,10 @@ export function registerTools(): void {
   // Phase 014 tools - AI Support
   tools.set('palace_clarify', clarifyTool);
   handlers.set('palace_clarify', clarifyHandler);
+
+  // Phase 019 tools - Stub management (added during pre-deployment testing)
+  tools.set('palace_stubs', stubsTool);
+  handlers.set('palace_stubs', stubsHandler);
 }
 
 /**

@@ -86,9 +86,8 @@ function rowToMetadata(row: Record<string, unknown>): NoteMetadata {
   if (source) {
     frontmatter.source = source as KnowledgeSource;
   }
-  if (row.confidence != null) {
-    frontmatter.confidence = row.confidence as number;
-  }
+  // Always include confidence - default to 0.5 (unknown/moderate) if not set
+  frontmatter.confidence = row.confidence != null ? (row.confidence as number) : 0.5;
 
   return {
     path: row.path as string,

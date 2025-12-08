@@ -13,6 +13,7 @@ import type { ResolvedVault, NoteMetadata } from '../../types/index.js';
 import type { StorageIntent } from '../../types/intent.js';
 import { slugify } from '../../utils/slugify.js';
 import { parseFrontmatter, stringifyFrontmatter } from '../../utils/frontmatter.js';
+import { stripWikiLinks } from '../../utils/markdown.js';
 import { resolveStorage } from './resolver.js';
 import { logger } from '../../utils/logger.js';
 import { extractWikiLinks } from '../../utils/wikilinks.js';
@@ -53,9 +54,12 @@ export async function createStub(
     tags: ['stub'],
   };
 
-  const stubBody = `# ${title}
+  // Strip any wiki-link syntax from title to prevent corruption
+  const cleanTitle = stripWikiLinks(title);
 
-> **Stub Note**: This note was automatically created because [[${mentionedIn.replace(/\.md$/, '')}]] mentioned "${title}".
+  const stubBody = `# ${cleanTitle}
+
+> **Stub Note**: This note was automatically created because [[${mentionedIn.replace(/\.md$/, '')}]] mentioned "${cleanTitle}".
 > Expand this stub with actual documentation when available.
 
 ## Overview
@@ -247,19 +251,24 @@ export function findStubs(db: Database.Database, options: { limit?: number } = {
 
 /**
  * Check if a stub exists for a given title
+ * Also checks for similar titles using slug matching and LIKE queries
  */
 export function findStubByTitle(db: Database.Database, title: string): NoteMetadata | null {
-  const row = db
+  const titleLower = title.toLowerCase();
+  const titleSlug = slugify(title);
+
+  // First try exact match (case-insensitive)
+  let row = db
     .prepare(
       `
       SELECT path, title, type, created, modified, confidence, verified,
              tags, related, aliases, source, status
       FROM notes
-      WHERE status = 'stub' AND (title = ? OR title = ?)
+      WHERE status = 'stub' AND LOWER(title) = ?
       LIMIT 1
     `
     )
-    .get(title, title.toLowerCase()) as {
+    .get(titleLower) as {
     path: string;
     title: string;
     type: string;
@@ -272,6 +281,22 @@ export function findStubByTitle(db: Database.Database, title: string): NoteMetad
     aliases: string | null;
     source: string | null;
   } | undefined;
+
+  // If not found, try matching by slug in path (handles "Title" vs "Title (CRI)" cases)
+  if (!row && titleSlug.length >= 3) {
+    row = db
+      .prepare(
+        `
+        SELECT path, title, type, created, modified, confidence, verified,
+               tags, related, aliases, source, status
+        FROM notes
+        WHERE status = 'stub' AND path LIKE ?
+        ORDER BY LENGTH(path) ASC
+        LIMIT 1
+      `
+      )
+      .get(`%/${titleSlug}.md`) as typeof row;
+  }
 
   if (!row) return null;
 
@@ -347,7 +372,7 @@ export async function createStubsForUnresolvedLinks(
   for (const link of links) {
     const target = link.target;
 
-    // Skip if link is already resolved
+    // Skip if link is already resolved (any note with this title exists)
     if (isLinkResolved(db, target)) {
       continue;
     }
@@ -367,16 +392,31 @@ export async function createStubsForUnresolvedLinks(
       continue;
     }
 
+    // Check if a stub already exists for this title (prevents cross-domain duplicates)
+    const existingStub = findStubByTitle(db, target);
+    if (existingStub) {
+      // Add this source as a mention to the existing stub instead of creating a duplicate
+      try {
+        await addStubMention(existingStub.path, sourcePath, vault);
+        logger.debug(`Added mention to existing stub: ${existingStub.path} <- ${sourcePath}`);
+      } catch {
+        // Ignore errors when adding mentions
+      }
+      continue;
+    }
+
     try {
+      // Strip any wiki-link syntax from target (belt-and-suspenders with createStub's own stripping)
+      const cleanTarget = stripWikiLinks(target);
       const stubPath = await createStub(
-        target,
+        cleanTarget,
         `Referenced in [[${sourcePath.replace(/\.md$/, '')}]]`,
         sourcePath,
         vault,
         domain
       );
       createdStubs.push(stubPath);
-      logger.info(`Created stub for unresolved link: ${target} -> ${stubPath}`);
+      logger.info(`Created stub for unresolved link: ${cleanTarget} -> ${stubPath}`);
     } catch (error) {
       logger.warn(`Failed to create stub for ${target}:`, error);
     }

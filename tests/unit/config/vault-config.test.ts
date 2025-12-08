@@ -49,7 +49,8 @@ describe('Vault Configuration (Phase 017)', () => {
       const result = schemas.atomicConfig.parse(config);
       expect(result.max_lines).toBe(200);
       expect(result.max_sections).toBe(6);
-      expect(result.hub_filename).toBe('_index.md');
+      // Phase 018: hub_filename removed - hub names are now derived from title
+      expect(result.auto_split).toBe(true);
     });
 
     it('validates full vault config', () => {
@@ -93,7 +94,7 @@ describe('Vault Configuration (Phase 017)', () => {
 
       expect(config.atomic.max_lines).toBe(200);
       expect(config.atomic.max_sections).toBe(6);
-      expect(config.atomic.hub_filename).toBe('_index.md');
+      // Phase 018: hub_filename removed - hub names are now derived from title
       expect(config.atomic.auto_split).toBe(true);
     });
 
@@ -123,7 +124,6 @@ structure:
 
 atomic:
   max_lines: 150
-  hub_filename: index.md
 `;
       writeFileSync(join(testDir, '.palace.yaml'), configContent);
 
@@ -133,7 +133,8 @@ atomic:
       expect(config.vault.description).toBe('My custom vault');
       expect(config.structure.sources).toBe('my-sources/');
       expect(config.atomic.max_lines).toBe(150);
-      expect(config.atomic.hub_filename).toBe('index.md');
+      // Phase 018: hub_filename removed - hub names are now derived from title
+      expect(config.atomic.auto_split).toBe(true);
     });
 
     it('merges with defaults for missing fields', () => {

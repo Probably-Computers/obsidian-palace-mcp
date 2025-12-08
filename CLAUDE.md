@@ -91,6 +91,7 @@ src/
 │   ├── standards.ts           # palace_standards
 │   ├── vaults.ts              # palace_vaults
 │   ├── clarify.ts             # palace_clarify
+│   ├── stubs.ts               # palace_stubs
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -203,19 +204,11 @@ vault:
   description: "Work-related knowledge"
 
 structure:
-  technology:
-    path: "technologies/{domain}/"
-    hub_file: "_index.md"
-  command:
-    path: "commands/{domain}/"
-  standard:
-    path: "standards/{domain}/"
-    ai_binding: required
-  project:
-    path: "projects/{project}/"
-    subpaths:
-      decision: "decisions/"
-      configuration: "configurations/"
+  sources: "sources/"
+  projects: "projects/"
+  clients: "clients/"
+  daily: "daily/"
+  standards: "standards/"
 
 ignore:
   patterns:
@@ -228,7 +221,6 @@ ignore:
 atomic:
   max_lines: 200
   max_sections: 6
-  hub_filename: "_index.md"
   auto_split: true
 
 stubs:
@@ -301,6 +293,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_standards | ✅ | Load and query binding standards for AI |
 | palace_standards_validate | ✅ | Validate notes against applicable standards |
 | palace_clarify | ✅ | Detect context and generate clarifying questions for incomplete storage intents |
+| palace_stubs | ✅ | List and manage stub notes that need expansion |
 
 ### palace_recall
 
@@ -516,7 +509,8 @@ Check for existing knowledge before creating new notes (prevents duplicates):
 {
   query: string;           // Topic or title to check for (required)
   knowledge_type?: string; // Optional filter by knowledge type
-  domain?: string[];       // Optional filter by domain
+  domain?: string[];       // Optional filter by domain tags
+  path_filter?: string;    // Filter results by path prefix (e.g., "infrastructure")
   include_stubs?: boolean; // Include stub notes (default: true)
   vault?: string;          // Vault alias
 }
@@ -526,7 +520,9 @@ Check for existing knowledge before creating new notes (prevents duplicates):
 - `found`: Whether matches exist
 - `matches`: Ranked list of similar notes with relevance scores
 - `recommendation`: 'create_new' | 'expand_stub' | 'improve_existing' | 'reference_existing'
-- `suggestions`: Stub candidates and similar titles
+- `suggestions`: Stub candidates, similar titles, and domain suggestions
+
+**Use `path_filter`** to avoid false positives from unrelated domains (e.g., filter by "infrastructure" to exclude gardening results when searching for "containers").
 
 ### palace_improve
 
@@ -541,9 +537,12 @@ Intelligently update existing notes with multiple modes:
   section?: string;        // Section name for update_section mode
   frontmatter?: object;    // Frontmatter fields to update
   autolink?: boolean;      // Auto-link new content (default: true)
+  auto_split?: boolean;    // Auto-split if exceeds atomic limits (default: true)
   vault?: string;          // Vault alias
 }
 ```
+
+**Auto-split behavior:** When `auto_split` is enabled (default) and updated content exceeds atomic limits, the note is automatically converted to a hub + children structure. The original file is replaced with the hub, and child notes are created for each section.
 
 **Update Modes:**
 - `append`: Add content to end of note
@@ -565,7 +564,22 @@ The Palace enforces atomic notes with automatic splitting when content exceeds c
 | H2 sections | 6 | `atomic.max_sections` |
 | Section lines | 50 | `atomic.section_max_lines` |
 | Hub lines | 150 | N/A |
-| Hub filename | `_index.md` | `atomic.hub_filename` |
+
+### Obsidian-Native Filenames (Phase 018)
+
+All notes use **title-style filenames** that align with Obsidian best practices:
+
+| Note Type | Convention | Example |
+|-----------|------------|---------|
+| Hub note | `{Title}.md` | `Kubernetes.md`, `Green Peppers.md` |
+| Child note | `{Section Title}.md` | `Climate Requirements.md`, `Architecture.md` |
+| Stub note | `{Title}.md` | `containerd.md` |
+
+**Benefits:**
+- Natural wiki-links: `[[Kubernetes]]` instead of `[[kubernetes/_index]]`
+- Readable in Obsidian sidebar
+- No plugin dependencies for folder-note behavior
+- Aligns with MOC (Map of Content) best practices
 
 ### Automatic Splitting
 
@@ -584,6 +598,9 @@ When content submitted to `palace_store` exceeds atomic limits:
 type: research_hub
 title: Kubernetes
 children_count: 5
+domain:
+  - infrastructure
+  - kubernetes
 ---
 
 # Kubernetes
@@ -592,12 +609,9 @@ Brief overview...
 
 ## Knowledge Map
 
-- [[pods|Pods]] - Container units
-- [[services|Services]] - Network abstraction
-
-## Related
-
-- [[docker/_index|Docker]]
+- [[Architecture]] - Control plane and node components
+- [[Core Concepts]] - Pods, Services, Deployments
+- [[Container Runtimes]] - containerd, CRI-O, gVisor
 ```
 
 ### Child Note Structure
@@ -605,14 +619,20 @@ Brief overview...
 ```markdown
 ---
 type: research
-title: Kubernetes Pods
-parent: "[[kubernetes/_index]]"
+title: Architecture
+domain:
+  - infrastructure
+  - kubernetes
 ---
 
-# Kubernetes Pods
+# Architecture
 
 Content here (max 200 lines)...
+
+See also: [[Kubernetes]] for the main overview.
 ```
+
+**Note**: Child notes link to parent hubs **inline in content** (Zettelkasten style) rather than via frontmatter fields.
 
 ### Skipping Atomic Splitting
 
@@ -774,6 +794,29 @@ Detect context and generate clarifying questions when storage intent is incomple
 - Projects/Clients: Contextual patterns + vault directory scanning
 - Scope: "our/we/us" indicators vs "general/standard/best practice"
 - Domains: networking, security, database, devops, frontend, backend, testing
+
+### palace_stubs
+
+List all stub notes (placeholders) that need expansion:
+
+```typescript
+{
+  path_filter?: string;           // Filter by path prefix (e.g., "infrastructure")
+  sort_by?: 'created' | 'mentions' | 'title';  // Sort order (default: created)
+  limit?: number;                 // Max results (default: 50)
+  vault?: string;                 // Vault alias
+}
+```
+
+**Output includes:**
+- `stub_count`: Number of stubs returned
+- `stubs`: Array of stub info (path, title, domain, created, mentioned_in, mention_count)
+- `summary`: Total stubs, oldest stub, most mentioned, domains with stubs
+
+**Use cases:**
+- Find stubs that need content
+- Prioritize stubs by mention count (most referenced = most needed)
+- Focus on specific domain areas
 
 ## Testing
 

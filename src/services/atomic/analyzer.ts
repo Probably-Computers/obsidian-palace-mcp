@@ -7,15 +7,16 @@
 
 import type { AtomicConfig } from '../../types/index.js';
 import type { ContentAnalysis, SectionInfo, SubConcept } from '../../types/atomic.js';
+import { stripWikiLinks } from '../../utils/markdown.js';
 
 /**
  * Default atomic configuration limits
+ * Phase 018: Removed hub_filename - hub names are now derived from title
  */
 const DEFAULT_LIMITS: AtomicConfig = {
   max_lines: 200,
   max_sections: 6,
   section_max_lines: 50,
-  hub_filename: '_index.md',
   auto_split: true,
 };
 
@@ -138,9 +139,9 @@ function extractSections(lines: string[]): SectionInfo[] {
         sections.push(currentSection);
       }
 
-      // Start new section
+      // Start new section (strip wiki-links from title)
       currentSection = {
-        title: line.replace(/^##\s+/, '').trim(),
+        title: stripWikiLinks(line.replace(/^##\s+/, '').trim()),
         startLine: i,
         endLine: lines.length - 1,
         lineCount: 0,
@@ -192,9 +193,9 @@ function detectSubConcepts(lines: string[], sections: SectionInfo[]): SubConcept
         }
       }
 
-      // Start new sub-concept
+      // Start new sub-concept (strip wiki-links from title)
       currentSubConcept = {
-        title: headingMatch[2]?.trim() ?? '',
+        title: stripWikiLinks(headingMatch[2]?.trim() ?? ''),
         level: headingMatch[1]?.length ?? 3,
         startLine: i,
         endLine: lines.length - 1,
@@ -277,13 +278,15 @@ export function isCodeHeavy(analysis: ContentAnalysis): boolean {
 
 /**
  * Get the title from content (first H1 heading)
+ * Strips wiki-link syntax from the extracted title
  */
 export function extractTitle(content: string): string | null {
   const lines = content.split('\n');
 
   for (const line of lines) {
     if (line.startsWith('# ') && !line.startsWith('## ')) {
-      return line.replace(/^#\s+/, '').trim();
+      const rawTitle = line.replace(/^#\s+/, '').trim();
+      return stripWikiLinks(rawTitle);
     }
   }
 

@@ -11,8 +11,8 @@
  * - Recommend action: create_new, expand_stub, improve_existing, reference_existing
  */
 
-import { readdirSync, statSync } from 'fs';
-import { join, dirname } from 'path';
+import { readdirSync } from 'fs';
+import { join } from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import type {
@@ -48,7 +48,9 @@ export const checkTool: Tool = {
 2. Get domain suggestions based on vault structure
 3. Determine best action (create_new, expand_stub, improve_existing, reference_existing)
 
-**Domain suggestions** help you choose the right path for new knowledge based on existing vault organization.`,
+**Domain suggestions** help you choose the right path for new knowledge based on existing vault organization.
+
+**Use path_filter** to focus on a specific domain area (e.g., "infrastructure" or "gardening") and avoid false positives from unrelated topics.`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -61,7 +63,12 @@ export const checkTool: Tool = {
         type: 'array',
         items: { type: 'string' },
         description:
-          'Optional: filter by domain (e.g., ["networking", "wireless"])',
+          'Optional: filter by domain tags (e.g., ["networking", "wireless"])',
+      },
+      path_filter: {
+        type: 'string',
+        description:
+          'Optional: filter results by path prefix (e.g., "infrastructure" to exclude gardening results)',
       },
       include_stubs: {
         type: 'boolean',
@@ -95,6 +102,7 @@ export async function checkHandler(
   const {
     query,
     domain,
+    path_filter,
     include_stubs = true,
     vault: vaultParam,
   } = parseResult.data;
@@ -138,7 +146,22 @@ export async function checkHandler(
     // Combine and deduplicate results
     const allResults = new Map<string, CheckMatch>();
 
+    // Helper to check if path matches filter
+    const matchesPathFilter = (notePath: string): boolean => {
+      if (!path_filter) return true;
+      const filterLower = path_filter.toLowerCase();
+      const pathLower = notePath.toLowerCase();
+      // Check if path starts with the filter or any segment matches
+      return pathLower.startsWith(filterLower) ||
+             pathLower.startsWith(filterLower + '/') ||
+             pathLower.includes('/' + filterLower + '/') ||
+             pathLower.includes('/' + filterLower);
+    };
+
     for (const result of searchResults) {
+      // Apply path filter
+      if (!matchesPathFilter(result.note.path)) continue;
+
       const fm = result.note.frontmatter as unknown as Record<string, unknown>;
       const status =
         fm.status === 'stub' ? ('stub' as const) : ('active' as const);
@@ -162,6 +185,9 @@ export async function checkHandler(
 
     for (const note of titleResults) {
       if (!allResults.has(note.path)) {
+        // Apply path filter
+        if (!matchesPathFilter(note.path)) continue;
+
         const fm = note.frontmatter as unknown as Record<string, unknown>;
         const status =
           fm.status === 'stub' ? ('stub' as const) : ('active' as const);
@@ -389,7 +415,7 @@ function generateDomainSuggestions(
     .toLowerCase()
     .split(/\s+/)
     .filter((w) => w.length > 2);
-  const querySlug = slugify(query);
+  // Phase 018: querySlug removed - not needed with title-style filenames
 
   // 1. Look for domains that match query words
   for (const [domainPath, info] of discoveredDomains) {
@@ -435,18 +461,22 @@ function generateDomainSuggestions(
 
   // 3. Suggest new domain based on query words if no good matches
   if (suggestions.length === 0 || suggestions[0]!.confidence < 0.5) {
-    // Create a suggested domain from query words
-    const suggestedPath = queryWords
-      .filter((w) => w.length > 2)
-      .slice(0, 3)
-      .map(slugify);
+    // Build domain path dynamically from vault structure + query
+    const suggestedPath = buildDomainPathFromVault(queryWords, discoveredDomains);
 
     if (suggestedPath.length > 0) {
+      // Check if this path exists in vault
+      const pathKey = suggestedPath.join('/');
+      const existsInVault = discoveredDomains.has(pathKey);
+
       suggestions.push({
         path: suggestedPath,
-        confidence: 0.5,
-        reason: 'Suggested based on query keywords',
-        exists: false,
+        confidence: existsInVault ? 0.7 : 0.4,
+        reason: existsInVault
+          ? `Matches existing domain structure`
+          : 'Suggested based on query keywords (new domain)',
+        exists: existsInVault,
+        note_count: existsInVault ? discoveredDomains.get(pathKey)?.noteCount : undefined,
       });
     }
   }
@@ -462,6 +492,137 @@ function generateDomainSuggestions(
       return true;
     })
     .slice(0, 5);
+}
+
+/**
+ * Words to exclude from domain paths (common English stop words)
+ * These are functional words that don't carry domain meaning
+ */
+const STOP_WORDS = new Set([
+  // Articles
+  'a', 'an', 'the',
+  // Conjunctions
+  'and', 'or', 'but', 'nor', 'so', 'yet',
+  // Prepositions
+  'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'into',
+  'through', 'during', 'before', 'after', 'above', 'below', 'between', 'under',
+  // Pronouns
+  'i', 'me', 'my', 'mine', 'we', 'us', 'our', 'ours',
+  'you', 'your', 'yours', 'he', 'him', 'his', 'she', 'her', 'hers',
+  'it', 'its', 'they', 'them', 'their', 'theirs',
+  'this', 'that', 'these', 'those', 'who', 'whom', 'whose', 'which', 'what',
+  // Common verbs
+  'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did',
+  'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can',
+  'get', 'got', 'getting', 'make', 'made', 'making',
+  // Adverbs/Modifiers
+  'not', 'no', 'yes', 'only', 'just', 'also', 'very', 'too', 'more', 'most',
+  'some', 'any', 'all', 'each', 'every', 'both', 'few', 'many', 'much',
+  // Question words (when not topic)
+  'how', 'why', 'when', 'where',
+  // Other common words
+  'about', 'like', 'using', 'use', 'used', 'want', 'need', 'help',
+]);
+
+/**
+ * Build a domain path from query words by matching against discovered vault domains
+ * This is a dynamic approach - no hardcoded domain mappings
+ *
+ * @param queryWords - Words from the search query
+ * @param discoveredDomains - Domains discovered from vault structure
+ * @internal Exported for testing
+ */
+export function buildDomainPathFromVault(
+  queryWords: string[],
+  discoveredDomains: Map<string, { noteCount: number; level: number }>
+): string[] {
+  // Filter out stop words and short words
+  const meaningfulWords = queryWords
+    .map(w => w.toLowerCase())
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+
+  if (meaningfulWords.length === 0) {
+    return [];
+  }
+
+  // Build a vocabulary from existing domains
+  // Maps words to their domain paths for quick lookup
+  const domainVocabulary = new Map<string, { path: string; level: number; noteCount: number }>();
+
+  for (const [domainPath, info] of discoveredDomains) {
+    const parts = domainPath.toLowerCase().split('/');
+
+    // Add each part of the domain path to vocabulary
+    for (const part of parts) {
+      const existing = domainVocabulary.get(part);
+      // Prefer higher-level domains (lower level number) with more notes
+      if (!existing || info.level < existing.level ||
+          (info.level === existing.level && info.noteCount > existing.noteCount)) {
+        domainVocabulary.set(part, { path: domainPath, level: info.level, noteCount: info.noteCount });
+      }
+    }
+  }
+
+  // Try to match query words against domain vocabulary
+  let bestMatch: { path: string; matchedWord: string; level: number } | null = null;
+
+  for (const word of meaningfulWords) {
+    const wordSlug = slugify(word);
+
+    // Exact match
+    if (domainVocabulary.has(wordSlug)) {
+      const match = domainVocabulary.get(wordSlug)!;
+      if (!bestMatch || match.level < bestMatch.level) {
+        bestMatch = { path: match.path, matchedWord: word, level: match.level };
+      }
+    }
+
+    // Partial match - word contains domain or domain contains word
+    for (const [domainWord, info] of domainVocabulary) {
+      if (domainWord.includes(wordSlug) || wordSlug.includes(domainWord)) {
+        if (!bestMatch || info.level < bestMatch.level) {
+          bestMatch = { path: info.path, matchedWord: word, level: info.level };
+        }
+      }
+    }
+  }
+
+  // If we found a matching domain, use it and add remaining specific words
+  if (bestMatch) {
+    const basePath = bestMatch.path.split('/').map(slugify);
+    const remainingWords = meaningfulWords
+      .filter(w => slugify(w) !== slugify(bestMatch!.matchedWord))
+      .filter(w => !basePath.includes(slugify(w)));
+
+    // Add one more level of specificity if we have room
+    if (basePath.length < 3 && remainingWords.length > 0) {
+      basePath.push(slugify(remainingWords[0]!));
+    }
+
+    return basePath;
+  }
+
+  // No domain match - suggest path from meaningful words
+  // Take the most significant words (longer words tend to be more specific)
+  const sortedByLength = [...meaningfulWords].sort((a, b) => b.length - a.length);
+  return sortedByLength.slice(0, Math.min(3, sortedByLength.length)).map(slugify);
+}
+
+/**
+ * Legacy function for backwards compatibility with tests
+ * @deprecated Use buildDomainPathFromVault with discovered domains instead
+ * @internal Exported for testing
+ */
+export function buildSemanticDomainPath(queryWords: string[]): string[] {
+  // Without vault context, just filter stop words and return meaningful words
+  const meaningfulWords = queryWords
+    .map(w => w.toLowerCase())
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+
+  // Sort by length (longer = more specific) and take up to 3
+  const sortedByLength = [...meaningfulWords].sort((a, b) => b.length - a.length);
+  return sortedByLength.slice(0, Math.min(3, sortedByLength.length)).map(slugify);
 }
 
 /**

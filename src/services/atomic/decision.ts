@@ -15,12 +15,12 @@ import { analyzeContent, isCodeHeavy } from './analyzer.js';
 
 /**
  * Default limits for atomic notes
+ * Phase 018: Removed hub_filename - hub names are now derived from title
  */
 const DEFAULT_LIMITS: AtomicConfig = {
   max_lines: 200,
   max_sections: 6,
   section_max_lines: 50,
-  hub_filename: '_index.md',
   auto_split: true,
 };
 

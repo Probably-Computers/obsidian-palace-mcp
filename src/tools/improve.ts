@@ -6,21 +6,22 @@
  * Supports atomic note splitting when content exceeds limits.
  */
 
-import { join } from 'path';
-import { readFile, writeFile } from 'fs/promises';
+import { join, dirname, basename } from 'path';
+import { readFile, writeFile, unlink, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
-import type { PalaceImproveOutput, ImprovementMode } from '../types/intent.js';
+import type { PalaceImproveOutput, ImprovementMode, AtomicSplitResult } from '../types/intent.js';
 import { palaceImproveInputSchema } from '../types/intent.js';
 import { parseFrontmatter, stringifyFrontmatter } from '../utils/frontmatter.js';
+import { stripWikiLinks } from '../utils/markdown.js';
 import { buildCompleteIndex, scanForMatches, autolinkContent } from '../services/autolink/index.js';
 import { getIndexManager } from '../services/index/index.js';
-import { indexNote } from '../services/index/sync.js';
+import { indexNote, removeFromIndex } from '../services/index/sync.js';
 import { readNote } from '../services/vault/reader.js';
 import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../utils/vault-param.js';
 import { logger } from '../utils/logger.js';
-import { shouldSplit } from '../services/atomic/index.js';
+import { shouldSplit, splitContent, createHub, createChildNote } from '../services/atomic/index.js';
 
 // Tool definition
 export const improveTool: Tool = {
@@ -56,6 +57,10 @@ export const improveTool: Tool = {
         type: 'boolean',
         description: 'Auto-link new content (default: true)',
       },
+      auto_split: {
+        type: 'boolean',
+        description: 'Automatically split into hub + children if content exceeds atomic limits (default: true)',
+      },
       author: {
         type: 'string',
         description: 'Author of this update (e.g., "ai:claude", "human"). Added to authors array in frontmatter.',
@@ -88,6 +93,7 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
     section,
     frontmatter: frontmatterUpdates,
     autolink = true,
+    auto_split = true,
     author,
     vault: vaultParam,
   } = parseResult.data;
@@ -226,17 +232,46 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
 
     // Check if updated content exceeds atomic limits
     const atomicConfig = vault.config.atomic;
-    if (atomicConfig.auto_split && mode !== 'frontmatter') {
+    const shouldAutoSplit = atomicConfig.auto_split && auto_split && mode !== 'frontmatter';
+
+    if (shouldAutoSplit) {
       const splitDecision = shouldSplit(newBody, atomicConfig);
 
       if (splitDecision.shouldSplit) {
-        // Content now exceeds limits - warn but proceed
-        // A full conversion to hub would require separate tool or flag
-        logger.warn(
-          `Updated content exceeds atomic limits: ${splitDecision.reason}. ` +
-          `Consider using palace_store with a new hub structure.`
+        // Content exceeds limits - perform auto-split
+        logger.info(
+          `Content exceeds atomic limits: ${splitDecision.reason}. Auto-splitting...`
         );
-        changes.atomic_warning = `Content exceeds atomic limits (${splitDecision.metrics.lineCount} lines, ${splitDecision.metrics.sectionCount} sections)`;
+
+        // Extract title from existing note or frontmatter
+        const noteTitle = (newFrontmatter.title as string) ||
+          extractTitleFromContent(newBody) ||
+          basename(path, '.md');
+
+        // Get domain from frontmatter
+        const domain = (newFrontmatter.domain as string[]) || [];
+
+        // Perform the split and return
+        const splitResult = await handleImproveSplit(
+          noteTitle,
+          newBody,
+          fullPath,
+          path,
+          vault,
+          newFrontmatter,
+          domain,
+          currentVersion + 1,
+          mode,
+          changes
+        );
+
+        return splitResult;
+      }
+    } else if (mode !== 'frontmatter') {
+      // Check for warning only (when auto_split is disabled)
+      const splitDecision = shouldSplit(newBody, atomicConfig);
+      if (splitDecision.shouldSplit) {
+        changes.atomic_warning = `Content exceeds atomic limits (${splitDecision.metrics.lineCount} lines, ${splitDecision.metrics.sectionCount} sections). Set auto_split: true to auto-split.`;
       }
     }
 
@@ -312,8 +347,10 @@ function applyUpdateSection(
   sectionName: string,
   newContent: string
 ): { content: string; linesAdded: number; linesRemoved: number } {
+  // Strip wiki-links from section name to prevent heading corruption
+  const cleanSectionName = stripWikiLinks(sectionName);
   const lines = existing.split('\n');
-  const sectionRegex = new RegExp(`^##\\s+${escapeRegex(sectionName)}\\s*$`, 'i');
+  const sectionRegex = new RegExp(`^##\\s+${escapeRegex(cleanSectionName)}\\s*$`, 'i');
 
   let sectionStart = -1;
   let sectionEnd = lines.length;
@@ -331,7 +368,7 @@ function applyUpdateSection(
   if (sectionStart === -1) {
     // Section not found - append as new section
     return {
-      content: `${existing.trim()}\n\n## ${sectionName}\n\n${newContent}`,
+      content: `${existing.trim()}\n\n## ${cleanSectionName}\n\n${newContent}`,
       linesAdded: newContent.split('\n').length + 3,
       linesRemoved: 0,
     };
@@ -392,7 +429,8 @@ function extractSections(content: string): Record<string, string> {
       if (currentSection) {
         sections[currentSection] = currentContent.join('\n').trim();
       }
-      currentSection = line.replace(/^##\s+/, '');
+      // Strip wiki-links from section titles
+      currentSection = stripWikiLinks(line.replace(/^##\s+/, ''));
       currentContent = [];
     } else if (currentSection) {
       currentContent.push(line);
@@ -425,8 +463,12 @@ function escapeRegex(str: string): string {
 /**
  * Build success message
  */
-function buildMessage(mode: ImprovementMode, changes: PalaceImproveOutput['changes']): string {
+function buildMessage(mode: ImprovementMode, changes: PalaceImproveOutput['changes'], splitResult?: AtomicSplitResult): string {
   const parts = [`Updated note (${mode} mode)`];
+
+  if (splitResult) {
+    parts.push(`auto-split into hub + ${splitResult.children_count} children`);
+  }
 
   if (changes.lines_added) {
     parts.push(`+${changes.lines_added} lines`);
@@ -448,4 +490,177 @@ function buildMessage(mode: ImprovementMode, changes: PalaceImproveOutput['chang
   }
 
   return parts.join(' | ');
+}
+
+/**
+ * Extract title from content (first H1 heading)
+ */
+function extractTitleFromContent(content: string): string | null {
+  const lines = content.split('\n');
+  for (const line of lines) {
+    if (line.startsWith('# ') && !line.startsWith('## ')) {
+      return stripWikiLinks(line.replace(/^#\s+/, '').trim());
+    }
+  }
+  return null;
+}
+
+/**
+ * Handle atomic splitting when improved content exceeds limits
+ */
+async function handleImproveSplit(
+  title: string,
+  content: string,
+  originalFullPath: string,
+  originalRelativePath: string,
+  vault: ReturnType<typeof resolveVaultParam>,
+  frontmatter: Record<string, unknown>,
+  domain: string[],
+  newVersion: number,
+  mode: ImprovementMode,
+  changes: PalaceImproveOutput['changes']
+): Promise<ToolResult<PalaceImproveOutput>> {
+  const manager = getIndexManager();
+  const db = await manager.getIndex(vault.alias);
+
+  // Phase 018: With title-style filenames, check if original note is a hub via frontmatter type
+  const originalDir = dirname(originalRelativePath);
+  const originalFilename = basename(originalRelativePath, '.md');
+  const isOriginalHub = frontmatter?.type?.toString().endsWith('_hub') ?? false;
+
+  // Determine target directory for split content
+  let targetDir: string;
+  if (originalDir === '.' || originalDir === '') {
+    // File is at vault root - create a folder based on the filename (the title)
+    targetDir = originalFilename;
+  } else if (isOriginalHub) {
+    // Original file IS a hub - split in place (same directory)
+    targetDir = originalDir;
+  } else {
+    // Original file is NOT a hub (e.g., a stub or regular note)
+    // Create a subdirectory based on the note's title to keep things organized
+    targetDir = join(originalDir, originalFilename);
+    logger.info(`Creating subdirectory for split: ${targetDir}`);
+  }
+
+  // Split the content
+  // Phase 018: hubFilename removed - derived from title automatically
+  const splitOptions: Parameters<typeof splitContent>[1] = {
+    targetDir,
+    title,
+    originalFrontmatter: frontmatter,
+  };
+  if (domain.length > 0) {
+    splitOptions.domain = domain;
+  }
+  const splitResult = splitContent(content, splitOptions);
+
+  const createdPaths: string[] = [];
+
+  // Create the hub note
+  // Phase 018: hubFilename removed - derived from title automatically
+  const hubOptions: Parameters<typeof createHub>[4] = {
+    originalFrontmatter: frontmatter,
+  };
+  if (domain.length > 0) {
+    hubOptions.domain = domain;
+  }
+  const hubResult = await createHub(
+    vault.path,
+    targetDir,
+    title,
+    splitResult.children.map((c) => ({
+      path: c.relativePath,
+      title: c.title,
+      summary: c.fromSection,
+    })),
+    hubOptions
+  );
+
+  if (hubResult.success) {
+    createdPaths.push(hubResult.path);
+
+    // Index the hub
+    const hubNote = await readNote(hubResult.path, {
+      vaultPath: vault.path,
+      ignoreConfig: vault.config.ignore,
+    });
+    if (hubNote) {
+      indexNote(db, hubNote);
+    }
+  }
+
+  // Create child notes
+  for (const child of splitResult.children) {
+    // Ensure parent directory exists
+    const childFullPath = join(vault.path, child.relativePath);
+    await mkdir(dirname(childFullPath), { recursive: true });
+
+    const childOptions: Parameters<typeof createChildNote>[5] = {
+      originalFrontmatter: frontmatter,
+    };
+    if (domain.length > 0) {
+      childOptions.domain = domain;
+    }
+    const childResult = await createChildNote(
+      vault.path,
+      child.relativePath,
+      child.title,
+      child.content,
+      splitResult.hub.relativePath,
+      childOptions
+    );
+
+    if (childResult.success) {
+      createdPaths.push(childResult.path);
+
+      // Index the child
+      const childNote = await readNote(childResult.path, {
+        vaultPath: vault.path,
+        ignoreConfig: vault.config.ignore,
+      });
+      if (childNote) {
+        indexNote(db, childNote);
+      }
+    }
+  }
+
+  // Delete the original file if it's not the hub file
+  // Phase 018: Compare with actual hub path from split result (title-based filename)
+  if (originalRelativePath !== splitResult.hub.relativePath) {
+    try {
+      // Remove from index first
+      removeFromIndex(db, originalRelativePath);
+
+      // Delete the file
+      if (existsSync(originalFullPath)) {
+        await unlink(originalFullPath);
+        logger.info(`Deleted original file after split: ${originalRelativePath}`);
+      }
+    } catch (deleteError) {
+      logger.warn(`Failed to delete original file: ${originalRelativePath}`, deleteError);
+    }
+  }
+
+  const vaultInfo = getVaultResultInfo(vault);
+  const atomicSplitResult: AtomicSplitResult = {
+    hub_path: splitResult.hub.relativePath,
+    children_paths: splitResult.children.map((c) => c.relativePath),
+    children_count: splitResult.children.length,
+  };
+
+  return {
+    success: true,
+    data: {
+      success: true,
+      vault: vaultInfo.vault,
+      vaultPath: vaultInfo.vault_path,
+      path: splitResult.hub.relativePath, // Return hub path as the new path
+      mode,
+      changes,
+      version: newVersion,
+      message: buildMessage(mode, changes, atomicSplitResult),
+      split_result: atomicSplitResult,
+    },
+  };
 }

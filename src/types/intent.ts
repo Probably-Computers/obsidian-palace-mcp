@@ -298,6 +298,7 @@ export interface PalaceImproveInput {
   section?: string; // Section name for update_section mode
   frontmatter?: Record<string, unknown>;
   autolink?: boolean;
+  auto_split?: boolean; // Auto-split if exceeds atomic limits (default: true)
   author?: string; // Author of this update
   vault?: string;
 }
@@ -321,6 +322,8 @@ export interface PalaceImproveOutput {
   };
   version: number; // New palace.version
   message: string;
+  // If content was auto-split into hub + children
+  split_result?: AtomicSplitResult | undefined;
 }
 
 // ============================================
@@ -471,6 +474,7 @@ export const palaceImproveInputSchema = z.object({
   section: z.string().optional(),
   frontmatter: z.record(z.unknown()).optional(),
   autolink: z.boolean().optional().default(true),
+  auto_split: z.boolean().optional().default(true),
   author: z.string().optional(),
   vault: z.string().optional(),
 });
@@ -478,6 +482,7 @@ export const palaceImproveInputSchema = z.object({
 export const palaceCheckInputSchema = z.object({
   query: z.string().min(1, 'Query is required'),
   domain: z.array(z.string()).optional(),
+  path_filter: z.string().optional(),
   include_stubs: z.boolean().optional().default(true),
   vault: z.string().optional(),
 });

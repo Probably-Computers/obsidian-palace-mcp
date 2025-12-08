@@ -46,7 +46,6 @@ interface VaultOutputInfo {
     atomic: {
       max_lines: number;
       max_sections: number;
-      hub_filename: string;
       auto_split: boolean;
     };
     graph: {
@@ -104,12 +103,12 @@ export async function vaultsHandler(
       }
 
       // Include config if requested
+      // Phase 018: Removed hub_filename from output
       if (input.include_config) {
         info.config = {
           atomic: {
             max_lines: vault.config.atomic.max_lines,
             max_sections: vault.config.atomic.max_sections,
-            hub_filename: vault.config.atomic.hub_filename,
             auto_split: vault.config.atomic.auto_split,
           },
           graph: {

@@ -25,7 +25,7 @@ describe('palace_vaults tool', () => {
       marker_file: '.palace-ignore',
       frontmatter_key: 'palace_ignore',
     },
-    atomic: { max_lines: 200, max_sections: 6, hub_filename: '_index.md', auto_split: false },
+    atomic: { max_lines: 200, max_sections: 6, auto_split: false },
     stubs: { auto_create: false, min_confidence: 0.2 },
     graph: { require_technology_links: false, warn_orphan_depth: 1, retroactive_linking: false },
   };

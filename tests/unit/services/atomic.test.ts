@@ -300,16 +300,20 @@ describe('Hub Manager', () => {
     expect(getHubPath).toBeDefined();
   });
 
-  it('should identify hub paths', async () => {
+  it('should identify hub paths via frontmatter type (Phase 018)', async () => {
     const { isHubPath } = await import('../../../src/services/atomic/hub-manager.js');
-    expect(isHubPath('folder/_index.md')).toBe(true);
+    // Phase 018: isHubPath now returns false by default - hub detection
+    // should be done via frontmatter type check (type ending in '_hub')
+    expect(isHubPath('folder/Kubernetes.md')).toBe(false);
     expect(isHubPath('folder/note.md')).toBe(false);
+    // With explicit hubFilename parameter for backward compatibility
     expect(isHubPath('folder/custom-hub.md', 'custom-hub.md')).toBe(true);
   });
 
-  it('should build hub paths', async () => {
+  it('should build hub paths from title (Phase 018)', async () => {
     const { getHubPath } = await import('../../../src/services/atomic/hub-manager.js');
-    expect(getHubPath('technologies/kubernetes')).toBe('technologies/kubernetes/_index.md');
-    expect(getHubPath('folder', 'hub.md')).toBe('folder/hub.md');
+    // Phase 018: getHubPath now requires a title parameter
+    expect(getHubPath('technologies/kubernetes', 'Kubernetes')).toBe('technologies/kubernetes/Kubernetes.md');
+    expect(getHubPath('folder', 'My Hub')).toBe('folder/My Hub.md');
   });
 });

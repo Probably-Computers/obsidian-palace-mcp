@@ -14,6 +14,8 @@ const COMMON_WORD_BLOCKLIST = new Set([
   'was', 'one', 'our', 'out', 'are', 'has', 'his', 'how', 'its', 'may',
   'new', 'now', 'old', 'see', 'way', 'who', 'did', 'get', 'let', 'put',
   'say', 'she', 'too', 'use', 'set', 'run', 'add', 'end', 'own', 'day',
+  // Hub filenames should never be linked as titles
+  '_index', 'index', 'readme', 'overview',
 ]);
 
 /**

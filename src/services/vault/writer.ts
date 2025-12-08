@@ -10,7 +10,7 @@ import {
   createDefaultFrontmatter,
   mergeFrontmatter,
 } from '../../utils/frontmatter.js';
-import { filenameFromTitle } from '../../utils/slugify.js';
+import { titleToFilename } from '../../utils/slugify.js';
 import { logger } from '../../utils/logger.js';
 import { readNote, noteExists, type ReadOptions } from './reader.js';
 import type { Note, NoteFrontmatter } from '../../types/index.js';
@@ -56,7 +56,8 @@ export async function createNote(
   const vaultPath = getVaultPath(writeOptions);
 
   // Build the path: {type}/{subPath}/{filename}.md
-  const filename = filenameFromTitle(title);
+  // Phase 018: Use title-style filenames (Obsidian-native)
+  const filename = titleToFilename(title);
   const relativePath = subPath
     ? join(type, subPath, filename)
     : join(type, filename);

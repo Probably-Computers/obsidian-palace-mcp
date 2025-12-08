@@ -139,11 +139,11 @@ export interface HubFrontmatter {
 
 /**
  * Child frontmatter structure
+ * Phase 018: parent field removed - use inline links instead (Zettelkasten style)
  */
 export interface ChildFrontmatter {
   type: string;
   title: string;
-  parent: string;
   status: string;
   domain?: string[] | undefined;
   created: string;
@@ -185,6 +185,7 @@ export interface HubChild {
 
 /**
  * Options for splitting content
+ * Phase 018: hubFilename removed - derived from title automatically
  */
 export interface SplitOptions {
   /** Target directory for hub and children */
@@ -195,8 +196,6 @@ export interface SplitOptions {
   originalFrontmatter?: Record<string, unknown>;
   /** Strategy override */
   strategy?: SplitStrategy;
-  /** Hub filename override */
-  hubFilename?: string;
   /** Domain tags */
   domain?: string[];
   /** Knowledge layer */
@@ -205,12 +204,11 @@ export interface SplitOptions {
 
 /**
  * Options for hub manager operations
+ * Phase 018: hubFilename removed - derived from title automatically
  */
 export interface HubManagerOptions {
   /** Vault path */
   vaultPath: string;
-  /** Hub filename (default: _index.md) */
-  hubFilename?: string;
 }
 
 /**

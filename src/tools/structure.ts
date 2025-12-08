@@ -73,8 +73,9 @@ function extractDomainPatterns(entries: DirectoryEntry[], parentPath = ''): Doma
     // Count notes in this directory
     const noteCount = entry.children?.filter((c) => c.type === 'file' && c.name.endsWith('.md')).length || 0;
 
-    // Check for hub file
-    const hasHub = entry.children?.some((c) => c.type === 'file' && c.name === '_index.md') || false;
+    // Phase 018: Hub detection now based on frontmatter type, not filename
+    // For structure view, we can't easily determine hub status without reading files
+    const hasHub = false; // Deprecated - check frontmatter type instead
 
     // Get subdomain names
     const subdomains =

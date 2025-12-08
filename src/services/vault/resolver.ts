@@ -51,19 +51,17 @@ export function resolveStorage(
       break;
 
     case 'knowledge':
-    default:
+    default: {
       const result = resolveKnowledgePath(intent, vault);
       basePath = result.path;
       isNewTopLevelDomain = result.isNewTopLevel;
       break;
+    }
   }
 
-  // Add filename
-  const filename = slugify(title) + '.md';
+  // Phase 018: Use title-style filenames (Obsidian-native)
+  const filename = title.trim().replace(/[/\\:*?"<>|]/g, '-').replace(/\s+/g, ' ') + '.md';
   const relativePath = join(basePath, filename);
-
-  // Determine hub path (always _index.md in the directory)
-  const hubPath = join(basePath, '_index.md');
 
   return {
     vault: vault.alias,
@@ -72,7 +70,7 @@ export function resolveStorage(
     fullPath: join(vault.path, relativePath),
     filename,
     parentDir: join(vault.path, basePath),
-    hubPath,
+    // Phase 018: hubPath removed - hub filenames are now title-based
     isNewTopLevelDomain,
   };
 }

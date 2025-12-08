@@ -144,6 +144,13 @@ export function insertLinks(
       continue;
     }
 
+    // Skip creating links to hub filenames or other invalid targets
+    const targetLower = match.target.toLowerCase();
+    if (targetLower === '_index' || targetLower === 'index' || targetLower === 'readme') {
+      skipped.push({ match, reason: 'invalid target (hub filename)' });
+      continue;
+    }
+
     // Create wiki-link preserving original case
     const wikiLink = createWikiLink(match.target, match.matchedText !== match.target ? match.matchedText : undefined);
 

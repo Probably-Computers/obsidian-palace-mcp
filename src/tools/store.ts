@@ -23,7 +23,6 @@ import {
   generateAlternativePath,
 } from '../services/vault/resolver.js';
 import {
-  createStub,
   findStubByTitle,
   expandStub,
   createStubsForUnresolvedLinks,
@@ -447,10 +446,14 @@ export async function storeHandler(
     const linksFromExisting: string[] = [];
 
     if (retroactive_link && !dry_run) {
+      // Build aliases from domain terms and any explicit aliases
+      const aliases = buildRetroactiveAliases(title, intent.domain);
+
       const matches = findUnlinkedMentions(
         db,
         title,
-        finalResolution.relativePath
+        finalResolution.relativePath,
+        aliases
       );
       if (matches.length > 0) {
         const result = await addRetroactiveLinks(
@@ -511,6 +514,39 @@ export async function storeHandler(
 }
 
 /**
+ * Build aliases for retroactive linking from title and domain
+ * This helps find mentions that don't match the exact title
+ */
+function buildRetroactiveAliases(title: string, domain: string[]): string[] {
+  const aliases: string[] = [];
+
+  // Add the last domain term as an alias (e.g., "peppers" for gardening/vegetables/peppers)
+  if (domain.length > 0) {
+    const lastDomain = domain[domain.length - 1];
+    if (lastDomain && lastDomain.toLowerCase() !== title.toLowerCase()) {
+      aliases.push(lastDomain);
+    }
+  }
+
+  // Add significant words from the title (words > 4 chars, not common words)
+  const stopWords = new Set(['about', 'after', 'before', 'being', 'between', 'could', 'every', 'first', 'from', 'have', 'into', 'just', 'like', 'made', 'make', 'more', 'most', 'much', 'must', 'only', 'other', 'over', 'said', 'same', 'should', 'some', 'such', 'than', 'that', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'through', 'under', 'very', 'well', 'were', 'what', 'when', 'where', 'which', 'while', 'with', 'would', 'your']);
+
+  const titleWords = title
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(w => w.length > 4 && !stopWords.has(w));
+
+  // Add individual significant words as aliases
+  for (const word of titleWords) {
+    if (!aliases.includes(word)) {
+      aliases.push(word);
+    }
+  }
+
+  return aliases;
+}
+
+/**
  * Build success message
  */
 function buildSuccessMessage(
@@ -560,15 +596,16 @@ async function handleAtomicSplit(
   db: Awaited<ReturnType<ReturnType<typeof getIndexManager>['getIndex']>>,
   dryRun: boolean,
   createStubs: boolean,
-  _retroactiveLink: boolean,
+  retroactiveLink: boolean,
   linksAdded: number
 ): Promise<ToolResult<PalaceStoreOutput>> {
-  const atomicConfig = vault.config.atomic;
+  const linksFromExisting: string[] = [];
 
   // Determine target directory for hub and children
   const targetDir = dirname(resolution.relativePath);
 
   // Split the content
+  // Phase 018: hubFilename removed - derived from title automatically
   const splitResult = splitContent(content, {
     targetDir,
     title,
@@ -578,7 +615,6 @@ async function handleAtomicSplit(
       source: source?.origin ?? 'ai:research',
       confidence: source?.confidence ?? 0.5,
     },
-    hubFilename: atomicConfig.hub_filename,
     domain: intent.domain,
   });
 
@@ -602,7 +638,6 @@ async function handleAtomicSplit(
         return child;
       }),
       {
-        hubFilename: atomicConfig.hub_filename,
         domain: intent.domain,
         originalFrontmatter: {
           capture_type: intent.capture_type,
@@ -680,6 +715,30 @@ async function handleAtomicSplit(
         logger.warn('Failed to create stubs', stubError);
       }
     }
+
+    // Handle retroactive linking for the hub note
+    if (retroactiveLink) {
+      try {
+        const aliases = buildRetroactiveAliases(title, intent.domain);
+        const matches = findUnlinkedMentions(
+          db,
+          title,
+          splitResult.hub.relativePath,
+          aliases
+        );
+        if (matches.length > 0) {
+          const result = await addRetroactiveLinks(
+            title,
+            splitResult.hub.relativePath,
+            matches,
+            vault
+          );
+          linksFromExisting.push(...result.notesUpdated);
+        }
+      } catch (retroError) {
+        logger.warn('Retroactive linking failed', retroError);
+      }
+    }
   }
 
   const vaultResultInfo = getVaultResultInfo(vault);
@@ -710,10 +769,16 @@ async function handleAtomicSplit(
       },
       stubs_created: stubsCreated.length > 0 ? stubsCreated : undefined,
       links_added:
-        linksAdded > 0 ? { to_existing: [], from_existing: [] } : undefined,
-      message: dryRun
-        ? `Would create hub with ${childCount} children at ${splitResult.hub.relativePath}`
-        : `Created hub with ${childCount} children: ${splitResult.hub.relativePath}`,
+        linksAdded > 0 || linksFromExisting.length > 0
+          ? { to_existing: [], from_existing: linksFromExisting }
+          : undefined,
+      message: buildSuccessMessage(
+        splitResult.hub.relativePath,
+        linksAdded,
+        stubsCreated,
+        linksFromExisting,
+        dryRun
+      ),
     },
   };
 }

@@ -8,7 +8,8 @@ export {
   slugify,
   unslugify,
   titleFromFilename,
-  filenameFromTitle,
+  titleToFilename,
+  sanitizeForFilename,
 } from './slugify.js';
 
 export {

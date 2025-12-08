@@ -31,11 +31,11 @@ const ignoreConfigSchema = z.object({
 });
 
 // Zod schema for atomic config
+// Phase 018: Removed hub_filename - hub names are now derived from title
 const atomicConfigSchema = z.object({
   max_lines: z.number().default(200),
   max_sections: z.number().default(6),
   section_max_lines: z.number().optional(),
-  hub_filename: z.string().default('_index.md'),
   auto_split: z.boolean().default(true),
 });
 
@@ -98,7 +98,6 @@ export function createDefaultVaultConfig(
     atomic: {
       max_lines: 200,
       max_sections: 6,
-      hub_filename: '_index.md',
       auto_split: true,
     },
     stubs: {
@@ -172,8 +171,6 @@ export function loadVaultConfig(
           parsed.atomic.max_sections ?? defaults.atomic.max_sections,
         section_max_lines:
           parsed.atomic.section_max_lines ?? defaults.atomic.section_max_lines,
-        hub_filename:
-          parsed.atomic.hub_filename ?? defaults.atomic.hub_filename,
         auto_split: parsed.atomic.auto_split ?? defaults.atomic.auto_split,
       },
       stubs: {

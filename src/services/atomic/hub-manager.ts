@@ -2,6 +2,10 @@
  * Hub manager for atomic note system
  *
  * Handles CRUD operations for hub notes and their children.
+ *
+ * Phase 018: Uses title-style filenames (Obsidian-native)
+ * - Hub filename = sanitized title (e.g., "Green Peppers.md")
+ * - No more DEFAULT_HUB_FILENAME constant
  */
 
 import { join, dirname, basename } from 'path';
@@ -15,15 +19,13 @@ import type {
   ChildFrontmatter,
 } from '../../types/atomic.js';
 import { parseFrontmatter, stringifyFrontmatter } from '../../utils/frontmatter.js';
+import { stripWikiLinks } from '../../utils/markdown.js';
+import { titleToFilename } from '../../utils/slugify.js';
 import { logger } from '../../utils/logger.js';
 
 /**
- * Default hub filename
- */
-const DEFAULT_HUB_FILENAME = '_index.md';
-
-/**
  * Create a new hub note
+ * Phase 018: Hub filename is derived from title, not a constant
  */
 export async function createHub(
   vaultPath: string,
@@ -31,12 +33,12 @@ export async function createHub(
   title: string,
   children: HubChild[],
   options: {
-    hubFilename?: string;
     domain?: string[];
     originalFrontmatter?: Record<string, unknown>;
   } = {}
 ): Promise<HubOperationResult> {
-  const hubFilename = options.hubFilename ?? DEFAULT_HUB_FILENAME;
+  // Phase 018: Hub filename is the title, sanitized for filesystem
+  const hubFilename = titleToFilename(title);
   const hubPath = join(vaultPath, hubDir, hubFilename);
   const relativePath = join(hubDir, hubFilename);
 
@@ -278,26 +280,35 @@ export async function removeChild(
 
 /**
  * Check if a path is a hub note
+ * Phase 018: Hub notes are identified by having type ending in '_hub' in frontmatter
+ * This function is deprecated - use frontmatter type check instead
  */
-export function isHubPath(path: string, hubFilename: string = DEFAULT_HUB_FILENAME): boolean {
-  return basename(path) === hubFilename;
+export function isHubPath(path: string, hubFilename?: string): boolean {
+  // With title-style filenames, we can't determine hub status from filename alone
+  // Return false - callers should check frontmatter type instead
+  if (hubFilename) {
+    return basename(path) === hubFilename;
+  }
+  return false;
 }
 
 /**
- * Get the hub path for a directory
+ * Get the hub path for a directory with a given title
+ * Phase 018: Hub filename is derived from title
  */
-export function getHubPath(dir: string, hubFilename: string = DEFAULT_HUB_FILENAME): string {
-  return join(dir, hubFilename);
+export function getHubPath(dir: string, title: string): string {
+  return join(dir, titleToFilename(title));
 }
 
 /**
  * Build hub note content
+ * Phase 018: With title-style filenames, links use title directly
  */
-function buildHubContent(title: string, children: HubChild[], hubDir: string): string {
+function buildHubContent(title: string, children: HubChild[], _hubDir: string): string {
   const childLinks = children.map((child) => {
-    const relativePath = getRelativeLinkPath(child.path, hubDir);
+    // Phase 018: With title-style filenames, link directly to title
     const summary = child.summary ? ` - ${child.summary}` : '';
-    return `- [[${relativePath}|${child.title}]]${summary}`;
+    return `- [[${child.title}]]${summary}`;
   });
 
   return `# ${title}
@@ -317,12 +328,13 @@ ${childLinks.join('\n')}
 
 /**
  * Update hub body with new children list
+ * Phase 018: With title-style filenames, links use title directly
  */
 function updateHubBody(
   existingBody: string,
-  title: string,
+  _title: string,
   children: HubChild[],
-  hubDir: string
+  _hubDir: string
 ): string {
   const lines = existingBody.split('\n');
   const newLines: string[] = [];
@@ -334,11 +346,10 @@ function updateHubBody(
       newLines.push(line);
       newLines.push('');
 
-      // Add children
+      // Add children - Phase 018: link directly to title
       for (const child of children) {
-        const relativePath = getRelativeLinkPath(child.path, hubDir);
         const summary = child.summary ? ` - ${child.summary}` : '';
-        newLines.push(`- [[${relativePath}|${child.title}]]${summary}`);
+        newLines.push(`- [[${child.title}]]${summary}`);
       }
 
       skipUntilNextSection = true;
@@ -362,12 +373,14 @@ function updateHubBody(
 
 /**
  * Extract title from body (H1 heading)
+ * Strips wiki-link syntax from the extracted title
  */
 function extractTitleFromBody(body: string): string {
   const lines = body.split('\n');
   for (const line of lines) {
     if (line.startsWith('# ') && !line.startsWith('## ')) {
-      return line.replace(/^#\s+/, '').trim();
+      const rawTitle = line.replace(/^#\s+/, '').trim();
+      return stripWikiLinks(rawTitle);
     }
   }
   return 'Untitled Hub';
@@ -415,21 +428,12 @@ function extractChildrenFromContent(body: string, hubDir: string): HubChild[] {
   return children;
 }
 
-/**
- * Get relative link path for a child
- */
-function getRelativeLinkPath(childPath: string, hubDir: string): string {
-  // If child is in same directory, just use filename
-  if (dirname(childPath) === hubDir) {
-    return basename(childPath, '.md');
-  }
-
-  // Otherwise return full relative path without extension
-  return childPath.replace(/\.md$/, '');
-}
+// Phase 018: getRelativeLinkPath removed - no longer needed with title-style filenames
+// Links now use title directly: [[Child Title]] instead of relative paths
 
 /**
  * Create a child note for a hub
+ * Phase 018: No parent field in frontmatter - use inline links instead
  */
 export async function createChildNote(
   vaultPath: string,
@@ -452,10 +456,10 @@ export async function createChildNote(
     }
 
     const now = new Date().toISOString();
+    // Phase 018: No parent field - use inline links in content instead (Zettelkasten style)
     const frontmatter: ChildFrontmatter = {
       type: (options.originalFrontmatter?.type as string) ?? 'research',
       title,
-      parent: `[[${hubPath.replace(/\.md$/, '')}]]`,
       status: 'active',
       ...(options.domain ? { domain: options.domain } : {}),
       created: now,
