@@ -569,6 +569,84 @@ Intelligently update existing notes with multiple modes:
 - `replace`: Full content replacement
 - `frontmatter`: Update only metadata
 
+## Atomic Note System
+
+The Palace enforces atomic notes with automatic splitting when content exceeds configured limits.
+
+### Atomic Limits
+
+| Metric | Default | Configurable |
+|--------|---------|--------------|
+| Total lines | 200 | `atomic.max_lines` |
+| H2 sections | 6 | `atomic.max_sections` |
+| Section lines | 50 | `atomic.section_max_lines` |
+| Hub lines | 150 | N/A |
+| Hub filename | `_index.md` | `atomic.hub_filename` |
+
+### Automatic Splitting
+
+When content submitted to `palace_store` exceeds atomic limits:
+
+1. Content is analyzed for line count, sections, and sub-concepts
+2. A split strategy is determined (by_sections, by_large_sections, by_sub_concepts)
+3. A hub note is created with navigation links
+4. Child notes are created for each section
+5. All notes are indexed and cross-linked
+
+### Hub Note Structure
+
+```markdown
+---
+type: research_hub
+title: Kubernetes
+children_count: 5
+---
+
+# Kubernetes
+
+Brief overview...
+
+## Knowledge Map
+
+- [[pods|Pods]] - Container units
+- [[services|Services]] - Network abstraction
+
+## Related
+
+- [[docker/_index|Docker]]
+```
+
+### Child Note Structure
+
+```markdown
+---
+type: research
+title: Kubernetes Pods
+parent: "[[kubernetes/_index]]"
+---
+
+# Kubernetes Pods
+
+Content here (max 200 lines)...
+```
+
+### Skipping Atomic Splitting
+
+To store large content without splitting:
+
+```typescript
+{
+  // ... other options
+  options: {
+    force_atomic: true  // Skips atomic splitting
+  }
+}
+```
+
+### Atomic Warning on Improve
+
+When `palace_improve` adds content that causes a note to exceed atomic limits, a warning is returned but the note is still updated. Consider using `palace_store` with hub structure for very large content.
+
 ## Testing
 
 - Unit tests in `tests/unit/` mirror src/ structure

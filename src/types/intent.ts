@@ -64,6 +64,7 @@ export interface StorageOptions {
   expand_if_stub?: boolean; // Expand existing stub (default: true)
   dry_run?: boolean; // Preview without saving
   autolink?: boolean; // Auto-link content (default: true)
+  force_atomic?: boolean; // Skip atomic splitting (default: false)
 }
 
 // Full input for palace_store
@@ -85,6 +86,13 @@ export interface VaultResolution {
   parentDir: string; // Parent directory path
   hubPath?: string | undefined; // Associated hub file if any
   layer: KnowledgeLayer; // Determined knowledge layer
+}
+
+// Split result when content was atomically split
+export interface AtomicSplitResult {
+  hub_path: string;
+  children_paths: string[];
+  children_count: number;
 }
 
 // Output from palace_store
@@ -111,6 +119,9 @@ export interface PalaceStoreOutput {
 
   // If existing stub was expanded instead of creating new
   expanded_stub?: string | undefined;
+
+  // If content was split into hub + children
+  split_result?: AtomicSplitResult | undefined;
 
   // Summary message
   message: string;
@@ -182,11 +193,12 @@ export interface PalaceImproveOutput {
   path: string;
   mode: ImprovementMode;
   changes: {
-    lines_added?: number;
-    lines_removed?: number;
-    sections_modified?: string[];
-    frontmatter_updated?: string[];
-    links_added?: number;
+    lines_added?: number | undefined;
+    lines_removed?: number | undefined;
+    sections_modified?: string[] | undefined;
+    frontmatter_updated?: string[] | undefined;
+    links_added?: number | undefined;
+    atomic_warning?: string | undefined;
   };
   version: number; // New palace.version
   message: string;
@@ -248,6 +260,7 @@ export const storageOptionsSchema = z.object({
   expand_if_stub: z.boolean().optional().default(true),
   dry_run: z.boolean().optional().default(false),
   autolink: z.boolean().optional().default(true),
+  force_atomic: z.boolean().optional().default(false),
 });
 
 export const palaceStoreInputSchema = z.object({

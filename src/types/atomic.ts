@@ -1,0 +1,224 @@
+/**
+ * Types for atomic note system
+ */
+
+import type { AtomicConfig } from './index.js';
+
+/**
+ * Section information extracted from content
+ */
+export interface SectionInfo {
+  title: string;
+  startLine: number;
+  endLine: number;
+  lineCount: number;
+  level: number;
+}
+
+/**
+ * Sub-concept detected within a section
+ */
+export interface SubConcept {
+  title: string;
+  level: number;
+  startLine: number;
+  endLine: number;
+  lineCount: number;
+  parentSection?: string | undefined;
+}
+
+/**
+ * Code block information
+ */
+export interface CodeBlockInfo {
+  language: string;
+  lineCount: number;
+  startLine: number;
+}
+
+/**
+ * Complete content analysis result
+ */
+export interface ContentAnalysis {
+  lineCount: number;
+  sectionCount: number;
+  wordCount: number;
+  contentLines: number;
+  frontmatterLines: number;
+  sections: SectionInfo[];
+  largeSections: string[];
+  subConcepts: SubConcept[];
+  codeBlocks: CodeBlockInfo[];
+  limits: AtomicConfig;
+}
+
+/**
+ * Split decision result
+ */
+export interface SplitDecision {
+  shouldSplit: boolean;
+  reason: string;
+  metrics: {
+    lineCount: number;
+    sectionCount: number;
+    wordCount: number;
+    largeSections: number;
+    subConcepts: number;
+  };
+  violations: SplitViolation[];
+  suggestedStrategy: SplitStrategy;
+}
+
+/**
+ * Type of limit violation
+ */
+export interface SplitViolation {
+  type: 'lines' | 'sections' | 'section_size' | 'sub_concepts';
+  message: string;
+  value: number;
+  limit: number;
+}
+
+/**
+ * Strategy for splitting content
+ */
+export type SplitStrategy =
+  | 'none'
+  | 'by_sections'
+  | 'by_large_sections'
+  | 'by_sub_concepts'
+  | 'hierarchical';
+
+/**
+ * Result of splitting content
+ */
+export interface SplitResult {
+  hub: HubContent;
+  children: ChildContent[];
+  linksUpdated: LinkUpdate[];
+}
+
+/**
+ * Hub note content after split
+ */
+export interface HubContent {
+  title: string;
+  relativePath: string;
+  content: string;
+  frontmatter: HubFrontmatter;
+}
+
+/**
+ * Child note content after split
+ */
+export interface ChildContent {
+  title: string;
+  relativePath: string;
+  content: string;
+  frontmatter: ChildFrontmatter;
+  fromSection?: string;
+}
+
+/**
+ * Hub frontmatter structure
+ */
+export interface HubFrontmatter {
+  type: string;
+  title: string;
+  status: string;
+  children_count: number;
+  domain?: string[] | undefined;
+  created: string;
+  modified: string;
+  palace: {
+    version: number;
+    layer?: string | undefined;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Child frontmatter structure
+ */
+export interface ChildFrontmatter {
+  type: string;
+  title: string;
+  parent: string;
+  status: string;
+  domain?: string[] | undefined;
+  created: string;
+  modified: string;
+  palace: {
+    version: number;
+    layer?: string | undefined;
+  };
+  [key: string]: unknown;
+}
+
+/**
+ * Link update during split
+ */
+export interface LinkUpdate {
+  fromPath: string;
+  originalTarget: string;
+  newTarget: string;
+}
+
+/**
+ * Hub info for existing hubs
+ */
+export interface HubInfo {
+  path: string;
+  title: string;
+  childrenCount: number;
+  children: HubChild[];
+}
+
+/**
+ * Child reference in hub
+ */
+export interface HubChild {
+  path: string;
+  title: string;
+  summary?: string | undefined;
+}
+
+/**
+ * Options for splitting content
+ */
+export interface SplitOptions {
+  /** Target directory for hub and children */
+  targetDir: string;
+  /** Title for the hub note */
+  title: string;
+  /** Original frontmatter to preserve */
+  originalFrontmatter?: Record<string, unknown>;
+  /** Strategy override */
+  strategy?: SplitStrategy;
+  /** Hub filename override */
+  hubFilename?: string;
+  /** Domain tags */
+  domain?: string[];
+  /** Knowledge layer */
+  layer?: string;
+}
+
+/**
+ * Options for hub manager operations
+ */
+export interface HubManagerOptions {
+  /** Vault path */
+  vaultPath: string;
+  /** Hub filename (default: _index.md) */
+  hubFilename?: string;
+}
+
+/**
+ * Result of hub operations
+ */
+export interface HubOperationResult {
+  success: boolean;
+  path: string;
+  message: string;
+  hub?: HubInfo;
+}

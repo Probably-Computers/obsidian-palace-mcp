@@ -3,9 +3,11 @@
  *
  * AI expresses WHAT to store, MCP determines WHERE based on vault config.
  * This replaces the path-based approach of palace_remember.
+ * Supports automatic atomic note splitting when content exceeds limits.
  */
 
 import { mkdir, writeFile } from 'fs/promises';
+import { dirname } from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import type { PalaceStoreOutput } from '../types/intent.js';
@@ -20,6 +22,7 @@ import { readNote } from '../services/vault/reader.js';
 import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../utils/vault-param.js';
 import { stringifyFrontmatter } from '../utils/frontmatter.js';
 import { logger } from '../utils/logger.js';
+import { shouldSplit, splitContent, createHub, createChildNote } from '../services/atomic/index.js';
 
 // Tool definition
 export const storeTool: Tool = {
@@ -129,6 +132,10 @@ export const storeTool: Tool = {
             type: 'boolean',
             description: 'Automatically insert wiki-links for mentions of existing notes (default: true)',
           },
+          force_atomic: {
+            type: 'boolean',
+            description: 'Skip atomic splitting even if content exceeds limits (default: false)',
+          },
         },
       },
       source: {
@@ -170,6 +177,7 @@ export async function storeHandler(args: Record<string, unknown>): Promise<ToolR
   const expand_if_stub = options?.expand_if_stub ?? true;
   const dry_run = options?.dry_run ?? false;
   const autolink = options?.autolink ?? true;
+  const force_atomic = options?.force_atomic ?? false;
 
   try {
     // Resolve and validate vault
@@ -262,7 +270,36 @@ export async function storeHandler(args: Record<string, unknown>): Promise<ToolR
       }
     }
 
-    // Build frontmatter
+    // Check if content should be split (atomic note system)
+    const atomicConfig = vault.config.atomic;
+    const shouldAutoSplit = atomicConfig.auto_split && !force_atomic;
+
+    if (shouldAutoSplit) {
+      const splitDecision = shouldSplit(processedContent, atomicConfig);
+
+      if (splitDecision.shouldSplit) {
+        // Content exceeds atomic limits - split into hub + children
+        logger.info(`Content exceeds atomic limits: ${splitDecision.reason}`);
+
+        const splitResult = await handleAtomicSplit(
+          title,
+          processedContent,
+          finalResolution,
+          vault,
+          intent,
+          source,
+          db,
+          dry_run,
+          create_stubs,
+          retroactive_link,
+          linksAdded
+        );
+
+        return splitResult;
+      }
+    }
+
+    // Build frontmatter for single atomic note
     const now = new Date().toISOString();
     const frontmatter: Record<string, unknown> = {
       type: mapKnowledgeType(intent.knowledge_type),
@@ -478,4 +515,181 @@ function buildSuccessMessage(
   }
 
   return parts.join(' | ');
+}
+
+/**
+ * Handle atomic splitting of large content
+ */
+async function handleAtomicSplit(
+  title: string,
+  content: string,
+  resolution: { relativePath: string; parentDir: string; fullPath: string; layer: string },
+  vault: ReturnType<typeof resolveVaultParam>,
+  intent: { knowledge_type: string; domain: string[]; tags?: string[] | undefined; references?: string[] | undefined; project?: string | undefined; client?: string | undefined; product?: string | undefined; technologies?: string[] | undefined },
+  source: { origin?: string | undefined; confidence?: number | undefined } | undefined,
+  db: Awaited<ReturnType<ReturnType<typeof getIndexManager>['getIndex']>>,
+  dryRun: boolean,
+  createStubs: boolean,
+  retroactiveLink: boolean,
+  linksAdded: number
+): Promise<ToolResult<PalaceStoreOutput>> {
+  const atomicConfig = vault.config.atomic;
+
+  // Determine target directory for hub and children
+  // Use the parent directory of the intended path, creating a subdirectory named after the note
+  const targetDir = dirname(resolution.relativePath);
+
+  // Split the content
+  const splitResult = splitContent(content, {
+    targetDir,
+    title,
+    originalFrontmatter: {
+      type: mapKnowledgeType(intent.knowledge_type),
+      source: source?.origin ?? 'ai:research',
+      confidence: source?.confidence ?? 0.5,
+    },
+    hubFilename: atomicConfig.hub_filename,
+    domain: intent.domain,
+    layer: resolution.layer,
+  });
+
+  const createdPaths: string[] = [];
+  const stubsCreated: string[] = [];
+
+  if (!dryRun) {
+    // Create hub note
+    const hubResult = await createHub(
+      vault.path,
+      targetDir,
+      title,
+      splitResult.children.map((c) => {
+        const child: { path: string; title: string; summary?: string } = {
+          path: c.relativePath,
+          title: c.title,
+        };
+        if (c.fromSection) {
+          child.summary = c.fromSection;
+        }
+        return child;
+      }),
+      {
+        hubFilename: atomicConfig.hub_filename,
+        domain: intent.domain,
+        originalFrontmatter: {
+          type: mapKnowledgeType(intent.knowledge_type),
+        },
+      }
+    );
+
+    if (hubResult.success) {
+      createdPaths.push(hubResult.path);
+
+      // Index the hub
+      const hubNote = await readNote(hubResult.path, {
+        vaultPath: vault.path,
+        ignoreConfig: vault.config.ignore,
+      });
+      if (hubNote) {
+        indexNote(db, hubNote);
+      }
+    }
+
+    // Create child notes
+    for (const child of splitResult.children) {
+      const childResult = await createChildNote(
+        vault.path,
+        child.relativePath,
+        child.title,
+        child.content,
+        splitResult.hub.relativePath,
+        {
+          domain: intent.domain,
+          originalFrontmatter: {
+            type: mapKnowledgeType(intent.knowledge_type),
+          },
+        }
+      );
+
+      if (childResult.success) {
+        createdPaths.push(childResult.path);
+
+        // Index the child
+        const childNote = await readNote(childResult.path, {
+          vaultPath: vault.path,
+          ignoreConfig: vault.config.ignore,
+        });
+        if (childNote) {
+          indexNote(db, childNote);
+        }
+      }
+    }
+
+    // Create stubs for mentioned technologies
+    if (createStubs && intent.technologies && intent.technologies.length > 0) {
+      const existingPaths = getIndexedPaths(db);
+      for (const tech of intent.technologies) {
+        const techNote = findStubByTitle(db, tech);
+        const techExists = existingPaths.some(
+          (p) =>
+            p.toLowerCase().includes(tech.toLowerCase()) ||
+            p.toLowerCase().endsWith(`${tech.toLowerCase()}.md`)
+        );
+
+        if (!techNote && !techExists) {
+          try {
+            const stubPath = await createStub(
+              tech,
+              `Referenced in ${title}`,
+              splitResult.hub.relativePath,
+              vault,
+              intent.domain
+            );
+            stubsCreated.push(stubPath);
+
+            const stubNote = await readNote(stubPath, {
+              vaultPath: vault.path,
+              ignoreConfig: vault.config.ignore,
+            });
+            if (stubNote) {
+              indexNote(db, stubNote);
+            }
+          } catch (stubError) {
+            logger.warn(`Failed to create stub for ${tech}`, stubError);
+          }
+        }
+      }
+    }
+
+    // Track technology mentions
+    if (intent.technologies && intent.technologies.length > 0) {
+      trackTechnologyMentions(db, splitResult.hub.relativePath, intent.technologies);
+    }
+  }
+
+  const vaultResultInfo = getVaultResultInfo(vault);
+  const childCount = splitResult.children.length;
+
+  return {
+    success: true,
+    data: {
+      success: true,
+      vault: vaultResultInfo.vault,
+      vaultPath: vaultResultInfo.vault_path,
+      created: {
+        path: splitResult.hub.relativePath,
+        title,
+        type: 'hub',
+      },
+      split_result: {
+        hub_path: splitResult.hub.relativePath,
+        children_paths: splitResult.children.map((c) => c.relativePath),
+        children_count: childCount,
+      },
+      stubs_created: stubsCreated.length > 0 ? stubsCreated : undefined,
+      links_added: linksAdded > 0 ? { to_existing: [], from_existing: [] } : undefined,
+      message: dryRun
+        ? `Would create hub with ${childCount} children at ${splitResult.hub.relativePath}`
+        : `Created hub with ${childCount} children: ${splitResult.hub.relativePath}`,
+    },
+  };
 }

@@ -3,6 +3,7 @@
  *
  * Provides multiple update modes beyond simple replace/append.
  * Tracks version history and maintains graph integrity.
+ * Supports atomic note splitting when content exceeds limits.
  */
 
 import { join } from 'path';
@@ -19,6 +20,7 @@ import { indexNote } from '../services/index/sync.js';
 import { readNote } from '../services/vault/reader.js';
 import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../utils/vault-param.js';
 import { logger } from '../utils/logger.js';
+import { shouldSplit } from '../services/atomic/index.js';
 
 // Tool definition
 export const improveTool: Tool = {
@@ -222,6 +224,22 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
       version: currentVersion + 1,
     };
 
+    // Check if updated content exceeds atomic limits
+    const atomicConfig = vault.config.atomic;
+    if (atomicConfig.auto_split && mode !== 'frontmatter') {
+      const splitDecision = shouldSplit(newBody, atomicConfig);
+
+      if (splitDecision.shouldSplit) {
+        // Content now exceeds limits - warn but proceed
+        // A full conversion to hub would require separate tool or flag
+        logger.warn(
+          `Updated content exceeds atomic limits: ${splitDecision.reason}. ` +
+          `Consider using palace_store with a new hub structure.`
+        );
+        changes.atomic_warning = `Content exceeds atomic limits (${splitDecision.metrics.lineCount} lines, ${splitDecision.metrics.sectionCount} sections)`;
+      }
+    }
+
     // Build final content
     const finalContent = stringifyFrontmatter(newFrontmatter, newBody.trim());
 
@@ -424,6 +442,9 @@ function buildMessage(mode: ImprovementMode, changes: PalaceImproveOutput['chang
   }
   if (changes.frontmatter_updated?.length) {
     parts.push(`frontmatter: ${changes.frontmatter_updated.join(', ')}`);
+  }
+  if (changes.atomic_warning) {
+    parts.push(`WARNING: ${changes.atomic_warning}`);
   }
 
   return parts.join(' | ');
