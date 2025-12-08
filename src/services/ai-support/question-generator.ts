@@ -1,8 +1,12 @@
 /**
- * Question generator for AI support tools
+ * Question generator for AI support tools (Phase 017)
  *
  * Generates contextual clarifying questions based on missing
  * context and detected hints.
+ *
+ * Phase 017 changes:
+ * - Removed scope/technologies questions
+ * - Added capture_type and source_info questions
  */
 
 import type {
@@ -12,6 +16,7 @@ import type {
   ClarifySuggestions,
   QuestionType,
 } from '../../types/clarify.js';
+import type { CaptureType } from '../../types/intent.js';
 
 // Question templates by missing context type
 const QUESTION_TEMPLATES: Record<
@@ -22,11 +27,15 @@ const QUESTION_TEMPLATES: Record<
     baseOptions?: string[];
   }
 > = {
-  scope: {
+  capture_type: {
     question:
-      'Is this {topic} general knowledge that could apply anywhere, or is it specific to a particular project?',
+      'What type of capture is this {topic}?',
     type: 'choice',
-    baseOptions: ['General knowledge', 'Project-specific'],
+    baseOptions: ['Knowledge - Reusable information', 'Source - From a book/article/video', 'Project - Project-specific context'],
+  },
+  domain: {
+    question: 'How should I categorize this {topic}?',
+    type: 'choice',
   },
   project: {
     question: 'Which project is this {topic} for?',
@@ -38,14 +47,9 @@ const QUESTION_TEMPLATES: Record<
     type: 'choice',
     baseOptions: ['Other', 'Not client-specific'],
   },
-  technologies: {
-    question:
-      'I detected mentions of {techs}. Should I link this note to these technologies?',
-    type: 'confirm',
-  },
-  domain: {
-    question: 'How should I categorize this {topic}?',
-    type: 'choice',
+  source_info: {
+    question: 'What is the source of this {topic}?',
+    type: 'text',
   },
 };
 
@@ -98,15 +102,44 @@ function generateQuestionForField(
 
   // Customize based on field and detected context
   switch (field) {
-    case 'scope':
-      if (detected.scope) {
-        detectedHints = detected.scope.indicators.slice(0, 3);
-        if (detected.scope.confidence >= 0.6) {
-          defaultValue =
-            detected.scope.likely === 'general'
-              ? 'General knowledge'
-              : 'Project-specific';
+    case 'capture_type':
+      if (detected.capture_type) {
+        detectedHints = detected.capture_type.indicators.slice(0, 3);
+        if (detected.capture_type.confidence >= 0.6) {
+          const typeMap: Record<CaptureType, string> = {
+            knowledge: 'Knowledge - Reusable information',
+            source: 'Source - From a book/article/video',
+            project: 'Project - Project-specific context',
+          };
+          defaultValue = typeMap[detected.capture_type.likely];
         }
+      }
+      break;
+
+    case 'domain':
+      if (detected.domains.length > 0) {
+        // Add detected domains as options
+        const domainNames = detected.domains.map((d) => d.name);
+        options = [...domainNames, 'Other'];
+        detectedHints = domainNames.map(
+          (d) => `Detected domain: ${d}`
+        );
+
+        if (detected.domains[0]!.confidence >= 0.6) {
+          defaultValue = detected.domains[0]!.name;
+        }
+      } else {
+        // Provide common domain options
+        options = [
+          'networking',
+          'security',
+          'database',
+          'devops',
+          'frontend',
+          'backend',
+          'testing',
+          'Other',
+        ];
       }
       break;
 
@@ -137,44 +170,9 @@ function generateQuestionForField(
       }
       break;
 
-    case 'technologies':
-      if (detected.technologies.length > 0) {
-        const techNames = detected.technologies.map((t) => t.name);
-        question = template.question.replace('{techs}', techNames.join(', '));
-        detectedHints = techNames;
-        defaultValue = 'yes';
-      } else {
-        // Change to text question if no technologies detected
-        question = 'What technologies should I link this note to?';
-        options = undefined;
-      }
-      break;
-
-    case 'domain':
-      if (detected.domains.length > 0) {
-        // Add detected domains as options
-        const domainNames = detected.domains.map((d) => d.name);
-        options = [...domainNames, 'Other'];
-        detectedHints = domainNames.map(
-          (d) => `Detected domain: ${d}`
-        );
-
-        if (detected.domains[0]!.confidence >= 0.6) {
-          defaultValue = detected.domains[0]!.name;
-        }
-      } else {
-        // Provide common domain options
-        options = [
-          'networking',
-          'security',
-          'database',
-          'devops',
-          'frontend',
-          'backend',
-          'testing',
-          'Other',
-        ];
-      }
+    case 'source_info':
+      // Source info is typically text input
+      question = 'Please provide source details (title, author, URL if applicable):';
       break;
   }
 
@@ -221,14 +219,14 @@ export function generateQuestions(
 }
 
 /**
- * Generate suggestions based on detected context
+ * Generate suggestions based on detected context (Phase 017)
  */
 export function generateSuggestions(detected: DetectedContext): ClarifySuggestions {
   const suggestions: ClarifySuggestions = {};
 
-  // Suggest scope if confident enough
-  if (detected.scope && detected.scope.confidence >= 0.5) {
-    suggestions.scope = detected.scope.likely;
+  // Suggest capture_type if confident enough
+  if (detected.capture_type && detected.capture_type.confidence >= 0.5) {
+    suggestions.capture_type = detected.capture_type.likely;
   }
 
   // Suggest project if confident enough
@@ -239,14 +237,6 @@ export function generateSuggestions(detected: DetectedContext): ClarifySuggestio
   // Suggest client if confident enough
   if (detected.clients.length > 0 && detected.clients[0]!.confidence >= 0.5) {
     suggestions.client = detected.clients[0]!.name;
-  }
-
-  // Suggest technologies (all with confidence >= 0.5)
-  const confidentTechs = detected.technologies
-    .filter((t) => t.confidence >= 0.5)
-    .map((t) => t.name);
-  if (confidentTechs.length > 0) {
-    suggestions.technologies = confidentTechs;
   }
 
   // Suggest domains (all with confidence >= 0.5)
@@ -261,7 +251,7 @@ export function generateSuggestions(detected: DetectedContext): ClarifySuggestio
 }
 
 /**
- * Calculate overall confidence in the detection
+ * Calculate overall confidence in the detection (Phase 017)
  */
 export function calculateConfidence(
   detected: DetectedContext,
@@ -270,8 +260,12 @@ export function calculateConfidence(
 ): { overall: number; per_field: Record<string, number> } {
   const perField: Record<string, number> = {};
 
-  // Scope confidence
-  perField['scope'] = detected.scope?.confidence ?? 0;
+  // Capture type confidence
+  perField['capture_type'] = detected.capture_type?.confidence ?? 0;
+
+  // Domain confidence (highest detected)
+  perField['domain'] =
+    detected.domains.length > 0 ? detected.domains[0]!.confidence : 0;
 
   // Project confidence (highest detected)
   perField['project'] =
@@ -281,27 +275,13 @@ export function calculateConfidence(
   perField['client'] =
     detected.clients.length > 0 ? detected.clients[0]!.confidence : 0;
 
-  // Technologies confidence (average of top 3)
-  if (detected.technologies.length > 0) {
-    const top3 = detected.technologies.slice(0, 3);
-    perField['technologies'] =
-      top3.reduce((sum, t) => sum + t.confidence, 0) / top3.length;
-  } else {
-    perField['technologies'] = 0;
-  }
-
-  // Domain confidence (highest detected)
-  perField['domain'] =
-    detected.domains.length > 0 ? detected.domains[0]!.confidence : 0;
-
   // Calculate overall confidence
   // Weight by importance and penalize missing fields
   const weights = {
-    scope: 0.25,
-    domain: 0.25,
+    capture_type: 0.3,
+    domain: 0.35,
     project: 0.2,
-    technologies: 0.2,
-    client: 0.1,
+    client: 0.15,
   };
 
   let overall = 0;
@@ -334,7 +314,7 @@ export function calculateConfidence(
  */
 export function generateSummaryMessage(
   questions: ClarifyQuestion[],
-  suggestions: ClarifySuggestions,
+  _suggestions: ClarifySuggestions,
   overall: number
 ): string {
   if (questions.length === 0) {

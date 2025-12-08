@@ -1,13 +1,18 @@
 /**
- * palace_clarify - Context detection and question generation tool
+ * palace_clarify - Context detection and question generation tool (Phase 017)
  *
  * Helps AI determine missing context and generate clarifying questions
  * before storing knowledge. Integrates with palace_store workflow.
+ *
+ * Phase 017 changes:
+ * - Removed technologies and scope detection
+ * - Added capture_type detection
+ * - Simplified to 3 capture types: source, knowledge, project
  */
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
-import type { PalaceClarifyOutput } from '../types/clarify.js';
+import type { PalaceClarifyOutput, PartialStorageIntent } from '../types/clarify.js';
 import { palaceClarifyInputSchema } from '../types/clarify.js';
 import { getIndexManager } from '../services/index/index.js';
 import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
@@ -27,9 +32,14 @@ export const clarifyTool: Tool = {
   description: `Detect context and generate clarifying questions before storing knowledge.
 
 Use this when palace_store intent is incomplete or ambiguous. Returns:
-- Detected context (technologies, projects, clients, scope, domains)
+- Detected context (capture_type, domains, projects, clients)
 - Questions to ask the user for missing information
 - Suggestions based on detection with confidence scores
+
+Capture Types (Phase 017):
+- 'source': Raw capture from a book, video, article, etc.
+- 'knowledge': Processed, reusable knowledge about a topic
+- 'project': Project or client specific context
 
 Workflow:
 1. AI prepares storage intent
@@ -52,10 +62,10 @@ Workflow:
             type: 'string',
             description: 'First 500 characters of content for analysis',
           },
-          detected_technologies: {
+          detected_domains: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Technologies already detected by AI',
+            description: 'Domains already detected by AI',
           },
           detected_context: {
             type: 'object',
@@ -78,7 +88,7 @@ Workflow:
         type: 'array',
         items: {
           type: 'string',
-          enum: ['scope', 'project', 'client', 'technologies', 'domain'],
+          enum: ['capture_type', 'domain', 'project', 'client', 'source_info'],
         },
         description: 'Context types AI knows are missing',
       },
@@ -121,15 +131,15 @@ export async function clarifyHandler(
     // Run context detection
     const detected = detectContext(fullContent, db);
 
-    // Merge AI-provided hints with detection
-    if (context.detected_technologies) {
-      for (const tech of context.detected_technologies) {
-        const existingTech = detected.technologies.find(
-          (t) => t.name.toLowerCase() === tech.toLowerCase()
+    // Merge AI-provided domains with detection
+    if (context.detected_domains) {
+      for (const domain of context.detected_domains) {
+        const existingDomain = detected.domains.find(
+          (d) => d.name.toLowerCase() === domain.toLowerCase()
         );
-        if (!existingTech) {
-          detected.technologies.push({
-            name: tech,
+        if (!existingDomain) {
+          detected.domains.push({
+            name: domain,
             confidence: 0.6,
             exists_in_vault: false,
           });
@@ -137,6 +147,7 @@ export async function clarifyHandler(
       }
     }
 
+    // Merge AI-provided project/client hints
     if (context.detected_context?.possible_projects) {
       for (const proj of context.detected_context.possible_projects) {
         const existingProj = detected.projects.find(
@@ -165,16 +176,17 @@ export async function clarifyHandler(
       }
     }
 
-    // Build partial intent from what we know
-    const partialIntent: import('../types/clarify.js').PartialStorageIntent = {
+    // Build partial intent from what we know (Phase 017)
+    const partialIntent: PartialStorageIntent = {
       domain: detected.domains.map((d) => d.name),
-      technologies: detected.technologies.map((t) => t.name),
     };
 
-    // Only set optional fields if they have values
-    if (detected.scope.confidence >= 0.6) {
-      partialIntent.scope = detected.scope.likely;
+    // Set capture_type if confident enough
+    if (detected.capture_type.confidence >= 0.6) {
+      partialIntent.capture_type = detected.capture_type.likely;
     }
+
+    // Set project/client if confident enough
     if (detected.projects.length > 0 && detected.projects[0]!.confidence >= 0.6) {
       partialIntent.project = detected.projects[0]!.name;
     }

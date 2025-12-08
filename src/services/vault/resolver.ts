@@ -1,57 +1,69 @@
 /**
- * Path Resolution Engine
+ * Path Resolution Engine (Phase 017 - Topic-Based Architecture)
  *
- * Resolves storage intents to actual file paths based on vault configuration.
- * AI expresses WHAT to store, this service determines WHERE.
+ * Resolves storage intents to actual file paths.
+ * Key principle: domain/topic directly becomes the folder path.
+ * No more type-to-folder mapping - the topic IS the path.
  */
 
 import { join, dirname } from 'path';
-import type {
-  StorageIntent,
-  VaultResolution,
-  IntentKnowledgeType,
-} from '../../types/intent.js';
-import type { ResolvedVault, VaultStructure, StructureMapping } from '../../types/index.js';
-import { determineLayer, getKnowledgeTypeFolder } from './layer-detector.js';
+import { existsSync } from 'fs';
+import type { StorageIntent, VaultResolution } from '../../types/intent.js';
+import type { ResolvedVault, VaultStructure } from '../../types/index.js';
 import { slugify } from '../../utils/slugify.js';
 
-// Default structure mapping when vault config doesn't specify one
+// Default folder locations for special captures
 const DEFAULT_STRUCTURE: VaultStructure = {
-  technology: { path: 'technologies/{domain}/', hub_file: '_index.md' },
-  command: { path: 'commands/{domain}/', hub_file: '_index.md' },
-  reference: { path: 'reference/{domain}/' },
-  standard: { path: 'standards/{domain}/', ai_binding: 'required' },
-  pattern: { path: 'patterns/{domain}/' },
-  research: { path: 'research/{domain}/' },
-  project: {
-    path: 'projects/{project}/',
-    subpaths: { decision: 'decisions/', configuration: 'configurations/', note: 'notes/' },
-  },
-  client: { path: 'clients/{client}/' },
-  decision: { path: 'projects/{project}/decisions/' },
-  configuration: { path: 'projects/{project}/configurations/' },
-  troubleshooting: { path: 'troubleshooting/{domain}/' },
-  note: { path: 'notes/{domain}/' },
+  sources: 'sources/',
+  projects: 'projects/',
+  clients: 'clients/',
+  daily: 'daily/',
+  standards: 'standards/',
 };
 
 /**
- * Resolve a storage intent to a vault location
+ * Resolve a storage intent to a vault location.
+ *
+ * Path resolution rules:
+ * 1. Source captures → sources/{type}/{title}/
+ * 2. Project captures → projects/{project}/
+ * 3. Client captures → clients/{client}/
+ * 4. Knowledge captures → {domain.join('/')}/  (domain IS the path)
  */
-export function resolveStorage(intent: StorageIntent, title: string, vault: ResolvedVault): VaultResolution {
-  const layer = determineLayer(intent);
-  const structure = getStructureMapping(intent.knowledge_type, vault.config.structure);
+export function resolveStorage(
+  intent: StorageIntent,
+  title: string,
+  vault: ResolvedVault
+): VaultResolution {
+  const structure = getStructure(vault.config.structure);
 
-  // Build the relative path using the structure template
-  let relativePath = buildPath(structure, intent);
+  // Determine base path based on capture type
+  let basePath: string;
+  let isNewTopLevelDomain = false;
+
+  switch (intent.capture_type) {
+    case 'source':
+      basePath = resolveSourcePath(intent, structure);
+      break;
+
+    case 'project':
+      basePath = resolveProjectPath(intent, structure);
+      break;
+
+    case 'knowledge':
+    default:
+      const result = resolveKnowledgePath(intent, vault);
+      basePath = result.path;
+      isNewTopLevelDomain = result.isNewTopLevel;
+      break;
+  }
 
   // Add filename
   const filename = slugify(title) + '.md';
-  relativePath = join(relativePath, filename);
+  const relativePath = join(basePath, filename);
 
-  // Determine hub path if applicable
-  const hubPath = structure.hub_file
-    ? join(dirname(relativePath), structure.hub_file)
-    : undefined;
+  // Determine hub path (always _index.md in the directory)
+  const hubPath = join(basePath, '_index.md');
 
   return {
     vault: vault.alias,
@@ -59,96 +71,114 @@ export function resolveStorage(intent: StorageIntent, title: string, vault: Reso
     relativePath,
     fullPath: join(vault.path, relativePath),
     filename,
-    parentDir: dirname(join(vault.path, relativePath)),
+    parentDir: join(vault.path, basePath),
     hubPath,
-    layer,
+    isNewTopLevelDomain,
   };
 }
 
 /**
- * Get the structure mapping for a knowledge type
+ * Get merged structure configuration
  */
-function getStructureMapping(
-  knowledgeType: IntentKnowledgeType,
-  vaultStructure: VaultStructure
-): StructureMapping {
-  // Try vault-specific structure first
-  const vaultMapping = vaultStructure[knowledgeType];
-  if (vaultMapping) {
-    return vaultMapping;
-  }
-
-  // Fall back to defaults
-  const defaultMapping = DEFAULT_STRUCTURE[knowledgeType];
-  if (defaultMapping) {
-    return defaultMapping;
-  }
-
-  // Ultimate fallback
-  return { path: `${getKnowledgeTypeFolder(knowledgeType)}/` };
+function getStructure(vaultStructure?: VaultStructure): Required<VaultStructure> {
+  return {
+    sources: vaultStructure?.sources || DEFAULT_STRUCTURE.sources || 'sources/',
+    projects: vaultStructure?.projects || DEFAULT_STRUCTURE.projects || 'projects/',
+    clients: vaultStructure?.clients || DEFAULT_STRUCTURE.clients || 'clients/',
+    daily: vaultStructure?.daily || DEFAULT_STRUCTURE.daily || 'daily/',
+    standards: vaultStructure?.standards || DEFAULT_STRUCTURE.standards || 'standards/',
+  };
 }
 
 /**
- * Build the path from a structure template and intent
+ * Resolve path for source captures.
+ * Format: sources/{type}/{title}/
  */
-function buildPath(structure: StructureMapping, intent: StorageIntent): string {
-  let path = structure.path;
-
-  // Replace {domain} with domain hierarchy
-  if (path.includes('{domain}')) {
-    const domainPath = intent.domain.length > 0 ? intent.domain.join('/') : '';
-    path = path.replace('{domain}', domainPath);
+function resolveSourcePath(
+  intent: StorageIntent,
+  structure: Required<VaultStructure>
+): string {
+  if (!intent.source) {
+    throw new Error('Source information required for source captures');
   }
 
-  // Replace {project}, {client}, {product}
-  path = path.replace('{project}', intent.project || '');
-  path = path.replace('{client}', intent.client || '');
-  path = path.replace('{product}', intent.product || '');
+  const sourcesBase = structure.sources.replace(/\/$/, '');
+  const sourceType = intent.source.type;
+  const sourceTitle = slugify(intent.source.title);
 
-  // Handle subpaths for contextual knowledge
-  if (structure.subpaths && intent.knowledge_type) {
-    const subtypeKey = getSubtypeKey(intent.knowledge_type);
-    const subpath = structure.subpaths[subtypeKey];
-    if (subpath) {
-      path = join(path, subpath);
-    }
-  }
-
-  // Clean up double slashes and trailing slashes
-  path = path.replace(/\/+/g, '/').replace(/\/$/, '');
-
-  return path;
+  return `${sourcesBase}/${sourceType}/${sourceTitle}`;
 }
 
 /**
- * Map knowledge types to subpath keys
+ * Resolve path for project/client captures.
+ * Format: projects/{project}/ or clients/{client}/
  */
-function getSubtypeKey(knowledgeType: IntentKnowledgeType): string {
-  switch (knowledgeType) {
-    case 'decision':
-      return 'decision';
-    case 'configuration':
-      return 'configuration';
-    case 'note':
-      return 'note';
-    default:
-      return knowledgeType;
+function resolveProjectPath(
+  intent: StorageIntent,
+  structure: Required<VaultStructure>
+): string {
+  // Client context takes precedence if both specified
+  if (intent.client) {
+    const clientsBase = structure.clients.replace(/\/$/, '');
+    return `${clientsBase}/${slugify(intent.client)}`;
   }
+
+  if (intent.project) {
+    const projectsBase = structure.projects.replace(/\/$/, '');
+    return `${projectsBase}/${slugify(intent.project)}`;
+  }
+
+  throw new Error('Project or client name required for project captures');
 }
 
 /**
- * Check if a resolved path conflicts with existing notes
- * Returns the conflicting path if found, undefined otherwise
+ * Resolve path for knowledge captures.
+ * Key principle: domain IS the path.
+ * Format: {domain[0]}/{domain[1]}/{domain[2]}/...
  */
-export function checkPathConflict(resolution: VaultResolution, existingPaths: string[]): string | undefined {
+function resolveKnowledgePath(
+  intent: StorageIntent,
+  vault: ResolvedVault
+): { path: string; isNewTopLevel: boolean } {
+  if (!intent.domain || intent.domain.length === 0) {
+    throw new Error('Domain is required for knowledge captures');
+  }
+
+  // Domain directly becomes the path
+  const domainPath = intent.domain.map(slugify).join('/');
+
+  // Check if this is a new top-level domain
+  const topLevelDomain = intent.domain[0];
+  const topLevelPath = join(vault.path, slugify(topLevelDomain || ''));
+  const isNewTopLevel = topLevelDomain
+    ? !existsSync(topLevelPath)
+    : false;
+
+  return {
+    path: domainPath,
+    isNewTopLevel,
+  };
+}
+
+/**
+ * Check if a resolved path conflicts with existing notes.
+ * Returns the conflicting path if found, undefined otherwise.
+ */
+export function checkPathConflict(
+  resolution: VaultResolution,
+  existingPaths: string[]
+): string | undefined {
   const normalizedResolved = resolution.relativePath.toLowerCase();
   return existingPaths.find((p) => p.toLowerCase() === normalizedResolved);
 }
 
 /**
- * Generate an alternative path if the original conflicts
+ * Generate an alternative path if the original conflicts.
  */
-export function generateAlternativePath(resolution: VaultResolution, suffix: number): VaultResolution {
+export function generateAlternativePath(
+  resolution: VaultResolution,
+  suffix: number
+): VaultResolution {
   const baseFilename = resolution.filename.replace(/\.md$/, '');
   const newFilename = `${baseFilename}-${suffix}.md`;
   const newRelativePath = join(dirname(resolution.relativePath), newFilename);
@@ -162,7 +192,7 @@ export function generateAlternativePath(resolution: VaultResolution, suffix: num
 }
 
 /**
- * Validate that a path is within the vault
+ * Validate that a path is within the vault.
  */
 export function isPathWithinVault(path: string, vaultPath: string): boolean {
   const normalizedPath = join(path).toLowerCase();
@@ -171,44 +201,102 @@ export function isPathWithinVault(path: string, vaultPath: string): boolean {
 }
 
 /**
- * Get all possible paths where a note might be stored based on intent
- * Useful for checking if similar content exists
+ * Get all possible paths where a note might be stored based on intent.
+ * Useful for checking if similar content exists.
  */
-export function getPossiblePaths(intent: StorageIntent, title: string, vault: ResolvedVault): string[] {
+export function getPossiblePaths(
+  intent: StorageIntent,
+  title: string,
+  vault: ResolvedVault
+): string[] {
   const paths: string[] = [];
   const filename = slugify(title) + '.md';
-  const structure = vault.config.structure;
 
   // Primary resolution
   const primary = resolveStorage(intent, title, vault);
   paths.push(primary.relativePath);
 
-  // If has domain, also check without domain nesting
-  if (intent.domain.length > 0) {
-    const folderName = getKnowledgeTypeFolder(intent.knowledge_type);
-    paths.push(join(folderName, filename));
-
-    // Check with just first domain level
+  // For knowledge captures, also check variants
+  if (intent.capture_type === 'knowledge' && intent.domain.length > 0) {
+    // Check without full domain nesting
     if (intent.domain.length > 1) {
-      paths.push(join(folderName, intent.domain[0] || '', filename));
-    }
-  }
+      // Just first level
+      paths.push(join(slugify(intent.domain[0] || ''), filename));
 
-  // If contextual, also check general location
-  if (intent.project || intent.client || intent.product) {
-    const generalMapping = structure[intent.knowledge_type];
-    if (generalMapping) {
-      // Without project context
-      const generalPath = generalMapping.path
-        .replace('{project}', '')
-        .replace('{client}', '')
-        .replace('{product}', '')
-        .replace('{domain}', intent.domain.join('/'))
-        .replace(/\/+/g, '/')
-        .replace(/\/$/, '');
-      paths.push(join(generalPath, filename));
+      // Just first two levels
+      if (intent.domain.length > 2) {
+        paths.push(
+          join(
+            slugify(intent.domain[0] || ''),
+            slugify(intent.domain[1] || ''),
+            filename
+          )
+        );
+      }
     }
   }
 
   return [...new Set(paths)]; // Deduplicate
+}
+
+/**
+ * Get the domain path from a note's relative path.
+ * Extracts the topic hierarchy from the file path.
+ *
+ * Example: 'networking/wireless/lora/lora-basics.md' -> ['networking', 'wireless', 'lora']
+ */
+export function extractDomainFromPath(relativePath: string): string[] {
+  // Remove filename
+  const dirPath = dirname(relativePath);
+
+  // Split into parts and filter empty strings
+  const parts = dirPath.split('/').filter((p) => p && p !== '.');
+
+  // Check if this is a special folder (sources, projects, clients, daily)
+  const firstPart = parts[0]?.toLowerCase();
+  if (
+    firstPart === 'sources' ||
+    firstPart === 'projects' ||
+    firstPart === 'clients' ||
+    firstPart === 'daily'
+  ) {
+    // For special folders, return everything after the base folder
+    return parts.slice(1);
+  }
+
+  // For knowledge paths, the entire path is the domain
+  return parts;
+}
+
+/**
+ * Check if a path is in a special folder (not a knowledge domain).
+ */
+export function isSpecialFolder(relativePath: string): boolean {
+  const firstPart = relativePath.split('/')[0]?.toLowerCase();
+  return (
+    firstPart === 'sources' ||
+    firstPart === 'projects' ||
+    firstPart === 'clients' ||
+    firstPart === 'daily' ||
+    firstPart === 'standards'
+  );
+}
+
+/**
+ * Get the capture type from a path.
+ */
+export function getCaptureTypeFromPath(
+  relativePath: string
+): 'source' | 'project' | 'knowledge' {
+  const firstPart = relativePath.split('/')[0]?.toLowerCase();
+
+  if (firstPart === 'sources') {
+    return 'source';
+  }
+
+  if (firstPart === 'projects' || firstPart === 'clients') {
+    return 'project';
+  }
+
+  return 'knowledge';
 }

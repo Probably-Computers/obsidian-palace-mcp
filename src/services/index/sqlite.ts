@@ -52,13 +52,25 @@ CREATE TABLE IF NOT EXISTS note_tags (
     FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
 );
 
--- Domain junction table
+-- Domain junction table (note to domain relationship)
 CREATE TABLE IF NOT EXISTS note_domains (
     note_id INTEGER,
     domain TEXT,
     position INTEGER,
     PRIMARY KEY (note_id, domain, position),
     FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+);
+
+-- Domains table (Phase 017 - tracks domain hierarchy)
+CREATE TABLE IF NOT EXISTS domains (
+    id INTEGER PRIMARY KEY,
+    path TEXT UNIQUE NOT NULL,
+    level INTEGER NOT NULL,
+    parent_path TEXT,
+    note_count INTEGER DEFAULT 0,
+    created TEXT NOT NULL,
+    last_used TEXT NOT NULL,
+    FOREIGN KEY (parent_path) REFERENCES domains(path) ON DELETE SET NULL
 );
 
 -- Links table
@@ -113,6 +125,10 @@ CREATE INDEX IF NOT EXISTS idx_authors_note ON authors(note_id);
 CREATE INDEX IF NOT EXISTS idx_authors_agent ON authors(agent);
 CREATE INDEX IF NOT EXISTS idx_tech_mentions_note ON technology_mentions(note_id);
 CREATE INDEX IF NOT EXISTS idx_tech_mentions_tech ON technology_mentions(technology);
+CREATE INDEX IF NOT EXISTS idx_domains_path ON domains(path);
+CREATE INDEX IF NOT EXISTS idx_domains_level ON domains(level);
+CREATE INDEX IF NOT EXISTS idx_domains_parent ON domains(parent_path);
+CREATE INDEX IF NOT EXISTS idx_note_domains_domain ON note_domains(domain);
 `;
 
 // FTS5 virtual table for full-text search

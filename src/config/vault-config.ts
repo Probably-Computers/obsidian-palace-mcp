@@ -1,6 +1,10 @@
 /**
- * Per-vault configuration loading and validation
- * Loads from {vault}/.palace.yaml
+ * Per-vault configuration loading and validation (Phase 017)
+ *
+ * Phase 017 simplifies the structure configuration:
+ * - No more knowledge type to path mappings
+ * - Only special folder locations are configurable
+ * - Domain/topic directly becomes the folder path
  */
 
 import { z } from 'zod';
@@ -10,16 +14,14 @@ import { parse as parseYaml } from 'yaml';
 import { logger } from '../utils/logger.js';
 import type { VaultConfig, VaultAccessMode } from '../types/index.js';
 
-// Zod schema for structure mapping
-const structureMappingSchema = z.object({
-  path: z.string(),
-  hub_file: z.string().optional(),
-  ai_binding: z.enum(['required', 'recommended', 'optional']).optional(),
-  subpaths: z.record(z.string()).optional(),
+// Zod schema for simplified structure (Phase 017)
+const vaultStructureSchema = z.object({
+  sources: z.string().optional().default('sources/'),
+  projects: z.string().optional().default('projects/'),
+  clients: z.string().optional().default('clients/'),
+  daily: z.string().optional().default('daily/'),
+  standards: z.string().optional().default('standards/'),
 });
-
-// Zod schema for vault structure
-const vaultStructureSchema = z.record(structureMappingSchema).default({});
 
 // Zod schema for ignore config
 const ignoreConfigSchema = z.object({
@@ -45,7 +47,7 @@ const stubConfigSchema = z.object({
 
 // Zod schema for graph config
 const graphConfigSchema = z.object({
-  require_technology_links: z.boolean().default(true),
+  require_technology_links: z.boolean().default(false), // Phase 017: Default to false
   warn_orphan_depth: z.number().default(1),
   retroactive_linking: z.boolean().default(true),
 });
@@ -57,10 +59,10 @@ const vaultInfoSchema = z.object({
   mode: z.enum(['rw', 'ro']).optional(),
 });
 
-// Zod schema for complete vault config
+// Zod schema for complete vault config (Phase 017)
 const vaultConfigSchema = z.object({
   vault: vaultInfoSchema,
-  structure: vaultStructureSchema,
+  structure: vaultStructureSchema.default({}),
   ignore: ignoreConfigSchema.default({}),
   atomic: atomicConfigSchema.default({}),
   stubs: stubConfigSchema.default({}),
@@ -68,9 +70,12 @@ const vaultConfigSchema = z.object({
 });
 
 /**
- * Create default vault config for a path
+ * Create default vault config for a path (Phase 017)
  */
-export function createDefaultVaultConfig(vaultPath: string, mode: VaultAccessMode = 'rw'): VaultConfig {
+export function createDefaultVaultConfig(
+  vaultPath: string,
+  mode: VaultAccessMode = 'rw'
+): VaultConfig {
   const name = basename(vaultPath);
 
   return {
@@ -79,22 +84,11 @@ export function createDefaultVaultConfig(vaultPath: string, mode: VaultAccessMod
       mode,
     },
     structure: {
-      technology: { path: 'technologies/{domain}/', hub_file: '_index.md' },
-      command: { path: 'commands/{domain}/' },
-      standard: { path: 'standards/{domain}/', ai_binding: 'required' },
-      pattern: { path: 'patterns/{domain}/' },
-      reference: { path: 'references/{domain}/' },
-      research: { path: 'research/' },
-      project: {
-        path: 'projects/{project}/',
-        subpaths: {
-          decision: 'decisions/',
-          configuration: 'configurations/',
-        },
-      },
-      client: { path: 'clients/{client}/' },
-      troubleshooting: { path: 'troubleshooting/{domain}/' },
-      note: { path: 'notes/' },
+      sources: 'sources/',
+      projects: 'projects/',
+      clients: 'clients/',
+      daily: 'daily/',
+      standards: 'standards/',
     },
     ignore: {
       patterns: ['.obsidian/', 'templates/', 'private/**'],
@@ -112,7 +106,7 @@ export function createDefaultVaultConfig(vaultPath: string, mode: VaultAccessMod
       min_confidence: 0.2,
     },
     graph: {
-      require_technology_links: true,
+      require_technology_links: false,
       warn_orphan_depth: 1,
       retroactive_linking: true,
     },
@@ -122,7 +116,10 @@ export function createDefaultVaultConfig(vaultPath: string, mode: VaultAccessMod
 /**
  * Load vault configuration from .palace.yaml
  */
-export function loadVaultConfig(vaultPath: string, defaultMode: VaultAccessMode = 'rw'): VaultConfig {
+export function loadVaultConfig(
+  vaultPath: string,
+  defaultMode: VaultAccessMode = 'rw'
+): VaultConfig {
   const configPath = join(vaultPath, '.palace.yaml');
 
   if (!existsSync(configPath)) {
@@ -150,7 +147,6 @@ export function loadVaultConfig(vaultPath: string, defaultMode: VaultAccessMode 
     const parsed = result.data;
     const defaults = createDefaultVaultConfig(vaultPath, defaultMode);
 
-    // Explicitly construct VaultConfig to satisfy strict types
     const mergedConfig: VaultConfig = {
       vault: {
         name: parsed.vault.name ?? defaults.vault.name,
@@ -158,39 +154,41 @@ export function loadVaultConfig(vaultPath: string, defaultMode: VaultAccessMode 
         mode: parsed.vault.mode ?? defaults.vault.mode,
       },
       structure: {
-        ...defaults.structure,
-        ...Object.fromEntries(
-          Object.entries(parsed.structure).map(([key, value]) => [
-            key,
-            value ? {
-              path: value.path,
-              hub_file: value.hub_file,
-              ai_binding: value.ai_binding,
-              subpaths: value.subpaths,
-            } : undefined,
-          ])
-        ),
+        sources: parsed.structure.sources ?? defaults.structure.sources,
+        projects: parsed.structure.projects ?? defaults.structure.projects,
+        clients: parsed.structure.clients ?? defaults.structure.clients,
+        daily: parsed.structure.daily ?? defaults.structure.daily,
+        standards: parsed.structure.standards ?? defaults.structure.standards,
       },
       ignore: {
         patterns: parsed.ignore.patterns ?? defaults.ignore.patterns,
         marker_file: parsed.ignore.marker_file ?? defaults.ignore.marker_file,
-        frontmatter_key: parsed.ignore.frontmatter_key ?? defaults.ignore.frontmatter_key,
+        frontmatter_key:
+          parsed.ignore.frontmatter_key ?? defaults.ignore.frontmatter_key,
       },
       atomic: {
         max_lines: parsed.atomic.max_lines ?? defaults.atomic.max_lines,
-        max_sections: parsed.atomic.max_sections ?? defaults.atomic.max_sections,
-        section_max_lines: parsed.atomic.section_max_lines ?? defaults.atomic.section_max_lines,
-        hub_filename: parsed.atomic.hub_filename ?? defaults.atomic.hub_filename,
+        max_sections:
+          parsed.atomic.max_sections ?? defaults.atomic.max_sections,
+        section_max_lines:
+          parsed.atomic.section_max_lines ?? defaults.atomic.section_max_lines,
+        hub_filename:
+          parsed.atomic.hub_filename ?? defaults.atomic.hub_filename,
         auto_split: parsed.atomic.auto_split ?? defaults.atomic.auto_split,
       },
       stubs: {
         auto_create: parsed.stubs.auto_create ?? defaults.stubs.auto_create,
-        min_confidence: parsed.stubs.min_confidence ?? defaults.stubs.min_confidence,
+        min_confidence:
+          parsed.stubs.min_confidence ?? defaults.stubs.min_confidence,
       },
       graph: {
-        require_technology_links: parsed.graph.require_technology_links ?? defaults.graph.require_technology_links,
-        warn_orphan_depth: parsed.graph.warn_orphan_depth ?? defaults.graph.warn_orphan_depth,
-        retroactive_linking: parsed.graph.retroactive_linking ?? defaults.graph.retroactive_linking,
+        require_technology_links:
+          parsed.graph.require_technology_links ??
+          defaults.graph.require_technology_links,
+        warn_orphan_depth:
+          parsed.graph.warn_orphan_depth ?? defaults.graph.warn_orphan_depth,
+        retroactive_linking:
+          parsed.graph.retroactive_linking ?? defaults.graph.retroactive_linking,
       },
     };
 
@@ -202,58 +200,28 @@ export function loadVaultConfig(vaultPath: string, defaultMode: VaultAccessMode 
 }
 
 /**
- * Get structure path for a knowledge type
+ * Check if a path is in the standards folder
  */
-export function getStructurePath(
-  config: VaultConfig,
-  knowledgeType: string,
-  variables: Record<string, string> = {}
-): string | null {
-  const mapping = config.structure[knowledgeType];
-  if (!mapping) {
-    return null;
-  }
-
-  let path = mapping.path;
-
-  // Replace variables like {domain}, {project}, {client}
-  for (const [key, value] of Object.entries(variables)) {
-    path = path.replace(`{${key}}`, value);
-  }
-
-  return path;
+export function isStandardsPath(config: VaultConfig, path: string): boolean {
+  const standardsFolder = config.structure.standards || 'standards/';
+  return path.startsWith(standardsFolder.replace(/\/$/, ''));
 }
 
 /**
- * Get subpath for a knowledge type
- */
-export function getSubpath(
-  config: VaultConfig,
-  knowledgeType: string,
-  subpathKey: string
-): string | null {
-  const mapping = config.structure[knowledgeType];
-  if (!mapping?.subpaths) {
-    return null;
-  }
-
-  return mapping.subpaths[subpathKey] || null;
-}
-
-/**
- * Check if a knowledge type has ai_binding requirement
+ * Get ai_binding for a standard note (always 'required' for standards)
  */
 export function getAiBinding(
   config: VaultConfig,
-  knowledgeType: string
+  path: string
 ): 'required' | 'recommended' | 'optional' | undefined {
-  const mapping = config.structure[knowledgeType];
-  return mapping?.ai_binding;
+  if (isStandardsPath(config, path)) {
+    return 'required';
+  }
+  return undefined;
 }
 
 // Export schemas for testing
 export const schemas = {
-  structureMapping: structureMappingSchema,
   vaultStructure: vaultStructureSchema,
   ignoreConfig: ignoreConfigSchema,
   atomicConfig: atomicConfigSchema,

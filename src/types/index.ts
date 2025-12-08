@@ -1,32 +1,72 @@
 /**
  * Obsidian Palace MCP - Type Definitions
+ *
+ * Phase 017: Topic-Based Architecture
+ * - Removed hardcoded knowledge types
+ * - Domain/topic directly becomes folder path
+ * - Only 3 capture types: source, knowledge, project
  */
 
-// Knowledge types supported by the palace
-export type KnowledgeType =
-  | 'research'
-  | 'command'
-  | 'infrastructure'
-  | 'client'
-  | 'project'
-  | 'pattern'
-  | 'troubleshooting';
+import { CaptureType, SourceType } from './intent.js';
 
-// Source of knowledge
+// Re-export intent types for convenience
+export { CaptureType, SourceType } from './intent.js';
+
+// Source of knowledge (unchanged)
 export type KnowledgeSource = 'claude' | 'user' | `web:${string}`;
 
-// Note frontmatter schema
+/**
+ * Note frontmatter schema (Phase 017)
+ *
+ * Phase 017 changes:
+ * - Added 'capture_type' (source, knowledge, project)
+ * - Added 'domain' (topic hierarchy as array)
+ * - Added source_* fields for source captures
+ * - 'type' kept for backward compatibility (deprecated)
+ */
 export interface NoteFrontmatter {
-  type: KnowledgeType;
+  // Phase 017: New capture classification
+  capture_type?: CaptureType;
+  domain?: string[]; // Topic hierarchy, e.g., ['networking', 'wireless', 'lora']
+
+
+  // Source capture metadata (Phase 017)
+  source_type?: SourceType;
+  source_title?: string;
+  source_author?: string;
+  source_url?: string;
+
+  // Project/client context
+  project?: string;
+  client?: string;
+
+  // Timestamps
   created: string; // ISO date
   modified: string; // ISO date
+
+  // Provenance
   source?: KnowledgeSource;
   confidence?: number; // 0.0 - 1.0
   verified?: boolean;
+
+  // Organization
   tags?: string[];
   related?: string[]; // Wiki-link targets
   aliases?: string[];
+
+  // Note metadata
+  note_type?: string; // Optional categorization hint (not for path resolution)
+  status?: 'active' | 'stub' | 'archived';
+
+  // Tracking
   authors?: string[]; // Contributors to this note (e.g., ['ai:claude', 'human'])
+
+  // Hub note fields
+  children_count?: number;
+  parent?: string;
+
+  // Allow additional frontmatter fields
+  [key: string]: unknown;
 }
 
 // Full note representation
@@ -196,29 +236,19 @@ export interface GlobalConfig {
   settings: GlobalSettings;
 }
 
-// Structure mapping for a knowledge type
-export interface StructureMapping {
-  path: string;
-  hub_file?: string | undefined;
-  ai_binding?: 'required' | 'recommended' | 'optional' | undefined;
-  subpaths?: Record<string, string> | undefined;
-}
-
-// Per-vault structure configuration
+/**
+ * Structure configuration (Phase 017 - Simplified)
+ *
+ * Only defines special folder locations, NOT knowledge type mappings.
+ * Knowledge goes to its domain path directly.
+ */
 export interface VaultStructure {
-  technology?: StructureMapping | undefined;
-  command?: StructureMapping | undefined;
-  standard?: StructureMapping | undefined;
-  pattern?: StructureMapping | undefined;
-  reference?: StructureMapping | undefined;
-  research?: StructureMapping | undefined;
-  project?: StructureMapping | undefined;
-  client?: StructureMapping | undefined;
-  decision?: StructureMapping | undefined;
-  configuration?: StructureMapping | undefined;
-  troubleshooting?: StructureMapping | undefined;
-  note?: StructureMapping | undefined;
-  [key: string]: StructureMapping | undefined;
+  // Special folders (not knowledge type mappings)
+  sources?: string; // Where source captures go (default: 'sources/')
+  projects?: string; // Where project context goes (default: 'projects/')
+  clients?: string; // Where client context goes (default: 'clients/')
+  daily?: string; // Where session logs go (default: 'daily/')
+  standards?: string; // Where AI binding standards live (default: 'standards/')
 }
 
 // Vault ignore configuration

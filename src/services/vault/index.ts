@@ -59,15 +59,10 @@ export {
   generateAlternativePath,
   isPathWithinVault,
   getPossiblePaths,
+  extractDomainFromPath,
+  isSpecialFolder,
+  getCaptureTypeFromPath,
 } from './resolver.js';
-
-export {
-  determineLayer,
-  getLayerBaseFolders,
-  getKnowledgeTypeFolder,
-  isReusableKnowledge,
-  suggestLayer,
-} from './layer-detector.js';
 
 export {
   createStub,

@@ -1,4 +1,4 @@
-# AI Behavior Guide for Palace MCP
+# AI Behavior Guide for Palace MCP (Phase 017)
 
 This guide defines the protocols and best practices for AI assistants using Obsidian Palace MCP as a knowledge store.
 
@@ -8,58 +8,130 @@ This guide defines the protocols and best practices for AI assistants using Obsi
 
 The vault is not just file storage—it's a living knowledge graph that grows more intelligent over time. Every interaction with AI should potentially contribute to this collective intelligence.
 
+### Topic-Based Architecture (Phase 017)
+
+Palace uses a simple, intuitive topic-based model:
+
+- **The topic/domain IS the folder path** - No complex type-to-folder mappings
+- **Only 3 capture types** - source, knowledge, project
+- **AI observes and adapts** - Understand existing vault structure before storing
+
 ### Always Learning Model
 
 When Palace MCP is active, AI should continuously capture knowledge:
 
-- Every research action → Store findings
-- Every command explained → Document it
-- Every decision made → Log it
-- Every problem solved → Create troubleshooting note
+- Every research action → Store as knowledge
+- Every source consulted → Capture as source
+- Every project decision → Log as project context
+- Every problem solved → Document for future reference
 
 ### Key Principles
 
-1. **Check before store** - Always check for existing knowledge before creating new
-2. **Express intent, not location** - AI says WHAT, Palace decides WHERE
-3. **Graph integrity** - Never create orphaned notes
-4. **Follow standards** - Load and adhere to vault standards
-5. **Atomic content** - Keep notes focused and linkable
+1. **Observe before acting** - Understand vault structure first
+2. **Check before store** - Always check for existing knowledge
+3. **Express intent, not location** - AI says WHAT, Palace decides WHERE
+4. **Use existing domains** - Don't create new top-level domains unnecessarily
+5. **Graph integrity** - Create meaningful connections
+6. **Follow standards** - Load and adhere to vault standards
+
+---
+
+## Capture Type Model (Phase 017)
+
+### Three Simple Capture Types
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  SOURCE CAPTURE                                              │
+│  ─────────────────                                          │
+│  What: Raw capture from a specific source                   │
+│  Path: sources/{type}/{title}/                              │
+│  Examples: Book notes, video summaries, article excerpts    │
+├─────────────────────────────────────────────────────────────┤
+│  KNOWLEDGE CAPTURE                                           │
+│  ─────────────────                                          │
+│  What: Processed, reusable knowledge about a topic          │
+│  Path: {domain.join('/')}/  (topic IS the path)             │
+│  Examples: How Docker works, Kubernetes networking          │
+├─────────────────────────────────────────────────────────────┤
+│  PROJECT CAPTURE                                             │
+│  ─────────────────                                          │
+│  What: Project or client specific context                   │
+│  Path: projects/{project}/ or clients/{client}/             │
+│  Examples: Architecture decisions, custom configurations    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Determining Capture Type
+
+| Content Indicators | Capture Type |
+|-------------------|--------------|
+| "From the book...", "According to...", "The author says..." | source |
+| "Our project...", "We decided...", "For this client..." | project |
+| General how-to, technical reference, reusable patterns | knowledge |
+
+### Domain-Based Path Resolution
+
+For knowledge captures, the domain array directly becomes the folder path:
+
+```javascript
+// Domain: ["kubernetes", "networking", "cni"]
+// Result: kubernetes/networking/cni/{title}.md
+
+// Domain: ["docker", "images"]
+// Result: docker/images/{title}.md
+```
 
 ---
 
 ## Session Protocols
 
+### Protocol 1: Observe Before Acting
+
+Before storing any knowledge:
+
+```javascript
+// 1. Understand vault structure
+const structure = await palace_structure({ depth: 3 });
+
+// structure.domain_patterns shows:
+// - top_level_domains: existing domains with note counts
+// - special_folders: which special folders exist
+// - suggestions: hints for domain placement
+
+// 2. Check for existing knowledge
+const check = await palace_check({ query: "topic being stored" });
+
+// 3. Only then decide where to store
+```
+
+### Protocol 2: Ask Before Creating New Top-Level Domains
+
+```
+IF creating content for a domain that doesn't exist:
+1. Check if it truly doesn't fit existing domains
+2. Look at domain_patterns.suggestions in palace_structure
+3. If creating new top-level domain, inform user:
+   "I'd like to create a new top-level domain 'gardening' for this knowledge.
+   Is that okay, or should I place this under an existing domain?"
+```
+
 ### Session Start Protocol
 
 When starting a conversation with Palace MCP active:
-
-```
-1. Load binding standards
-   → palace_standards({ binding: 'required' })
-   → Acknowledge standards before proceeding
-
-2. Check vault structure
-   → palace_structure({ depth: 2 })
-   → Understand where things are
-
-3. Optionally start a session
-   → palace_session_start({ topic: "..." })
-   → Track work in daily log
-```
-
-**Example Implementation:**
 
 ```javascript
 // 1. Load required standards
 const standards = await palace_standards({ binding: 'required' });
 
 if (standards.acknowledgment_required) {
-  // AI acknowledges: "I've loaded X standards that I'll follow during this session"
+  // AI acknowledges: "I've loaded X standards that I'll follow"
   console.log(standards.acknowledgment_message);
 }
 
-// 2. Understand structure
-const structure = await palace_structure({ depth: 2 });
+// 2. Understand structure and existing domains
+const structure = await palace_structure({ depth: 3 });
+// Note: structure.domain_patterns.top_level_domains lists existing domains
 
 // 3. Start session if appropriate
 await palace_session_start({ topic: "User's task description" });
@@ -85,45 +157,51 @@ Before ending a conversation:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ STEP 1: Check for existing knowledge                        │
+│ STEP 1: Understand structure                                 │
+└─────────────────────────────────────────────────────────────┘
+    │
+    ▼
+palace_structure({ depth: 3 })
+    │  → See existing domains
+    │  → Understand organization
+    ▼
+┌─────────────────────────────────────────────────────────────┐
+│ STEP 2: Check for existing knowledge                         │
 └─────────────────────────────────────────────────────────────┘
     │
     ▼
 palace_check({
   query: "topic being stored",
-  knowledge_type: "command",
-  include_stubs: true
+  domain: ["likely", "domain"]  // Optional filter
 })
     │
     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ STEP 2: Evaluate recommendation                             │
+│ STEP 3: Follow recommendation                                │
 └─────────────────────────────────────────────────────────────┘
     │
-    ├─► recommendation: 'reference_existing'
+    ├─► 'reference_existing'
     │   → Just link to existing note, don't create new
     │
-    ├─► recommendation: 'improve_existing'
+    ├─► 'improve_existing'
     │   → Use palace_improve() to add new information
     │
-    ├─► recommendation: 'expand_stub'
-    │   → Use palace_store() with expand_if_stub: true
+    ├─► 'expand_stub'
+    │   → Use palace_improve() with mode: 'replace' on stub
     │
-    └─► recommendation: 'create_new'
+    └─► 'create_new'
         │
         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ STEP 3: Ensure context is complete                          │
+│ STEP 4: Use suggested domain                                 │
 └─────────────────────────────────────────────────────────────┘
         │
         ▼
-    Is scope clear? (general vs project-specific)
-    Are technologies identified?
-    Is domain classification clear?
+    check.suggestions.suggested_domains[0]?.path
         │
-        ├─► YES → Proceed to store
+        ├─► Domain exists → Use it
         │
-        └─► NO → palace_clarify() → Ask user → Then store
+        └─► New domain → Confirm with user if top-level
 ```
 
 ### Context Clarification Triggers
@@ -132,10 +210,10 @@ Use `palace_clarify` when context is incomplete:
 
 | Missing Context | Detection | Question to Ask |
 |-----------------|-----------|-----------------|
-| Scope | Technical content + "our", "we", client names | "Is this general knowledge or specific to a project?" |
-| Project | Scope is project-specific but no project identified | "Which project is this for?" |
-| Technologies | Technical content with no tech references | "What technologies should I link this to?" |
-| Domain | Can't determine categorization | "How should I categorize this?" |
+| Capture Type | Unclear if source, knowledge, or project | "Is this from a specific source, general knowledge, or project-specific?" |
+| Domain | Can't determine topic hierarchy | "What topic area does this belong to?" |
+| Project | capture_type is 'project' but no project identified | "Which project is this for?" |
+| Source Info | capture_type is 'source' but missing details | "What's the source? (book, article, video, etc.)" |
 | Client | Mentions company but unclear which | "Which client is this for?" |
 
 **Example:**
@@ -147,86 +225,64 @@ const clarify = await palace_clarify({
     title: "Database Optimization Tips",
     content_preview: "Here are some tips for optimizing our database queries..."
   },
-  missing: ['scope', 'project', 'technologies']
+  missing: ['capture_type', 'domain', 'project']
 });
 
-// Present questions to user
-for (const question of clarify.questions) {
-  // AI asks: "Is this general knowledge that could apply anywhere,
-  //          or is it specific to a particular project?"
-}
+// Use detected values
+// clarify.detected.capture_type.likely = 'project' (detected "our")
+// clarify.detected.domains = ['database', 'optimization']
+// clarify.questions = questions to ask user
 ```
 
 ---
 
-## Knowledge Layer Model
+## Source vs Knowledge Distinction
 
-### Three-Layer Architecture
-
-AI must understand which layer knowledge belongs to:
+### Protocol 3: Source vs Knowledge
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  LAYER 1: Technical Knowledge                                │
-│  ─────────────────────────────                               │
-│  Location: technologies/, commands/, reference/              │
-│  Scope: ALWAYS general, NEVER project-specific              │
-│  Content: How things work, commands, APIs, configurations   │
-├─────────────────────────────────────────────────────────────┤
-│  LAYER 2: Domain Knowledge                                   │
-│  ─────────────────────────────                               │
-│  Location: standards/, patterns/, research/                  │
-│  Scope: General, reusable across projects                   │
-│  Content: Best practices, patterns, research findings       │
-├─────────────────────────────────────────────────────────────┤
-│  LAYER 3: Contextual Knowledge                               │
-│  ─────────────────────────────                               │
-│  Location: projects/, clients/, products/                    │
-│  Scope: Specific to one project/client/product              │
-│  Content: Decisions, configurations, context-specific notes │
-└─────────────────────────────────────────────────────────────┘
+SOURCE CAPTURE:
+- Tied to specific source (book, video, article)
+- Contains quotes, references, attributions
+- Path: sources/{type}/{title}/
+
+KNOWLEDGE CAPTURE:
+- Processed, in your own words
+- Reusable, general applicability
+- Path: {domain.join('/')}/
 ```
 
-### Layer Determination Rules
+**Example - Source Capture:**
 
 ```javascript
-function determineLayer(intent) {
-  // Rule 1: Technical how-to → Layer 1
-  if (['command', 'technology', 'reference'].includes(intent.knowledge_type)) {
-    return 'technical';
+palace_store({
+  title: "Chapter 5 - Networking",
+  content: "Key insights from chapter 5...",
+  intent: {
+    capture_type: "source",
+    domain: ["kubernetes"],  // Topic relevance
+    source: {
+      type: "book",
+      title: "Kubernetes in Action",
+      author: "Marko Luksa"
+    }
   }
-
-  // Rule 2: Standards and patterns → Layer 2
-  if (['standard', 'pattern', 'research'].includes(intent.knowledge_type)) {
-    return 'domain';
-  }
-
-  // Rule 3: Decisions and configurations → Layer 3
-  if (['decision', 'configuration'].includes(intent.knowledge_type)) {
-    return 'contextual';
-  }
-
-  // Rule 4: Explicit project scope → Layer 3
-  if (intent.scope === 'project-specific') {
-    return 'contextual';
-  }
-
-  // Default based on type
-  return intent.knowledge_type === 'command' ? 'technical' : 'domain';
-}
+})
+// Creates: sources/book/kubernetes-in-action/chapter-5-networking.md
 ```
 
-### Critical Rule: Never Trap Technical Knowledge
+**Example - Knowledge Capture:**
 
-**WRONG:**
-```markdown
-projects/xlink/kubernetes-pods.md  ← Technical knowledge trapped in project
-```
-
-**RIGHT:**
-```markdown
-technologies/kubernetes/concepts/pods.md  ← General technical knowledge
-projects/xlink/infrastructure.md          ← References [[kubernetes/concepts/pods]]
+```javascript
+palace_store({
+  title: "Kubernetes Pod Networking",
+  content: "Pods communicate via the CNI...",  // In your own words
+  intent: {
+    capture_type: "knowledge",
+    domain: ["kubernetes", "networking"]
+  }
+})
+// Creates: kubernetes/networking/kubernetes-pod-networking.md
 ```
 
 ---
@@ -239,22 +295,17 @@ AI should never specify file paths. Instead, express storage intent:
 
 ```javascript
 // WRONG - Path-based
-palace_remember({
-  title: "Docker Bridge Networking",
-  path: "commands/docker/networking",  // AI shouldn't decide this
-  content: "..."
-})
+{
+  path: "technologies/docker/networking"  // AI shouldn't decide this
+}
 
-// RIGHT - Intent-based
-palace_store({
-  title: "Docker Bridge Networking",
-  content: "...",
+// RIGHT - Intent-based (Phase 017)
+{
   intent: {
-    knowledge_type: "command",
-    domain: ["docker", "networking"],
-    scope: "general"
+    capture_type: "knowledge",
+    domain: ["docker", "networking"]  // Domain becomes path
   }
-})
+}
 ```
 
 ### Complete Intent Schema
@@ -262,25 +313,27 @@ palace_store({
 ```javascript
 {
   intent: {
-    // What kind of knowledge (required)
-    knowledge_type: 'technology' | 'command' | 'reference' | 'standard' |
-                    'pattern' | 'research' | 'decision' | 'configuration' |
-                    'troubleshooting' | 'note',
+    // What kind of capture (required)
+    capture_type: 'source' | 'knowledge' | 'project',
 
-    // Domain classification (required)
-    domain: ["primary", "secondary"],
+    // Topic hierarchy - THIS IS THE FOLDER PATH (required)
+    domain: ["primary", "subtopic", "sub-subtopic"],
 
-    // Scope (required)
-    scope: 'general' | 'project-specific',
+    // For source captures (required when capture_type is 'source')
+    source: {
+      type: 'book' | 'video' | 'article' | 'podcast' | 'conversation' | 'documentation' | 'other',
+      title: "Source Title",
+      author: "Author Name",  // optional
+      url: "https://...",     // optional
+      date: "2024-01-15"      // optional
+    },
 
-    // Context (when applicable)
+    // For project captures (required when capture_type is 'project')
     project: "project-name",
-    client: "client-name",
-    product: "product-name",
+    client: "client-name",  // Alternative to project
 
     // Graph connections
-    technologies: ["tech1", "tech2"],  // Stubs created if missing
-    references: ["existing/note"],      // Explicit links
+    references: ["existing/note"],  // Explicit links to create
 
     // Additional
     tags: ["tag1", "tag2"]
@@ -296,90 +349,22 @@ palace_store({
 
 Every note should have connections. AI must:
 
-1. **Specify technologies** - Creates links or stubs
-2. **Add references** - Link to related notes
-3. **Use retroactive linking** - Update existing notes
+1. **Use references** - Link to related notes
+2. **Enable retroactive linking** - Update existing notes
+3. **Create meaningful stubs** - For unresolved references
 
-### Stub-and-Expand Pattern
+### Protocol 4: One Concept Per Note
 
-When mentioning technologies that don't have notes:
-
-```javascript
-// AI stores a note mentioning "istio"
-palace_store({
-  title: "Service Mesh Setup",
-  content: "We're using Istio for our service mesh...",
-  intent: {
-    knowledge_type: "technology",
-    domain: ["kubernetes", "networking"],
-    scope: "general",
-    technologies: ["istio", "kubernetes"]  // Stub created for "istio" if missing
-  }
-})
-
-// Later, when documenting Istio
-palace_store({
-  title: "Istio",
-  content: "Comprehensive Istio documentation...",
-  options: { expand_if_stub: true }  // Expands the stub
-})
+```
+Each note covers ONE concept.
+Multi-concept content → hub + atomic notes (Palace handles automatically)
 ```
 
-### Retroactive Linking
+### Protocol 5: Organic Connections
 
-When creating new notes, Palace automatically:
-- Scans existing notes for mentions of the new note's title
-- Updates those notes with links to the new note
-
----
-
-## Standards Compliance
-
-### Loading Standards
-
-AI must load required standards at session start:
-
-```javascript
-const standards = await palace_standards({ binding: 'required' });
-
-if (standards.acknowledgment_required) {
-  // AI must acknowledge before proceeding
-}
 ```
-
-### Following Standards
-
-Standards with `ai_binding: required` must be followed. Example:
-
-```markdown
----
-type: standard
-title: Git Workflow Standard
-ai_binding: required
-applies_to: [all]
----
-
-## Requirements
-
-- Use conventional commits format
-- Include scope when applicable
-- Never force push to main
-```
-
-When this standard is loaded, AI must follow these rules.
-
-### Validating Compliance
-
-After creating notes, optionally validate:
-
-```javascript
-const validation = await palace_standards_validate({
-  path: "new-note.md"
-});
-
-if (!validation.compliant) {
-  // Fix violations
-}
+Look for related concepts, create meaningful links.
+Don't over-link. Let patterns emerge naturally.
 ```
 
 ---
@@ -407,18 +392,14 @@ When content exceeds limits, Palace automatically splits into hub + children.
 
 ## Services (100 lines)
 ...
-
-## Deployments (100 lines)
-...
 ```
 
 **After:**
 ```
 kubernetes/
-├── _index.md          # Hub note
+├── _index.md          # Hub note with overview
 ├── pods.md            # Child note
-├── services.md        # Child note
-└── deployments.md     # Child note
+└── services.md        # Child note
 ```
 
 ### AI Guidance
@@ -426,6 +407,40 @@ kubernetes/
 - Don't worry about splitting - Palace handles it
 - Focus on complete, well-structured content
 - Use H2 sections for logical divisions
+
+---
+
+## Standards Compliance
+
+### Loading Standards
+
+AI must load required standards at session start:
+
+```javascript
+const standards = await palace_standards({ binding: 'required' });
+
+if (standards.acknowledgment_required) {
+  // AI must acknowledge before proceeding
+}
+```
+
+### Following Standards
+
+Standards with `ai_binding: required` must be followed.
+
+### Validating Compliance
+
+After creating notes, optionally validate:
+
+```javascript
+const validation = await palace_standards_validate({
+  path: "new-note.md"
+});
+
+if (!validation.compliant) {
+  // Fix violations
+}
+```
 
 ---
 
@@ -438,19 +453,13 @@ Log significant actions to the session:
 ```javascript
 // After storing knowledge
 await palace_session_log({
-  entry: "Documented Docker networking commands",
-  notes_created: ["commands/docker/networking/bridge-networks.md"]
+  entry: "Documented Docker networking concepts",
+  notes_created: ["docker/networking/bridge-networks.md"]
 });
 
 // After researching
 await palace_session_log({
   entry: "Researched Kubernetes CNI options - Calico vs Cilium"
-});
-
-// After improving notes
-await palace_session_log({
-  entry: "Updated Kubernetes pods documentation with liveness probes",
-  notes_improved: ["technologies/kubernetes/concepts/pods.md"]
 });
 ```
 
@@ -460,20 +469,22 @@ await palace_session_log({
 
 ### Do
 
-- ✅ Check for existing knowledge before creating
-- ✅ Express intent, not paths
-- ✅ Specify technologies for graph connections
+- ✅ Observe vault structure before storing (palace_structure)
+- ✅ Check for existing knowledge before creating (palace_check)
+- ✅ Use suggested domains from palace_check
+- ✅ Express intent with capture_type and domain, not paths
+- ✅ Distinguish source captures from knowledge captures
+- ✅ Confirm before creating new top-level domains
 - ✅ Load and follow standards
 - ✅ Log significant actions to session
-- ✅ Ask for clarification when context is incomplete
-- ✅ Keep technical knowledge in Layer 1 (general)
 
 ### Don't
 
 - ❌ Create notes without checking first
 - ❌ Specify file paths directly
 - ❌ Create orphaned notes (no links)
-- ❌ Trap technical knowledge in project folders
+- ❌ Mix source content with knowledge content
+- ❌ Create new top-level domains without user confirmation
 - ❌ Ignore binding standards
 - ❌ Assume context when unclear
 
@@ -486,49 +497,83 @@ await palace_session_log({
 ```javascript
 // User asks: "How do I set up a Kubernetes ingress?"
 
-// 1. Check existing knowledge
+// 1. Understand vault structure
+const structure = await palace_structure({ depth: 3 });
+// See existing domains: kubernetes, docker, networking, etc.
+
+// 2. Check existing knowledge
 const check = await palace_check({
   query: "kubernetes ingress setup",
-  knowledge_type: "technology"
+  domain: ["kubernetes"]
 });
 
 if (check.recommendation === 'reference_existing') {
   // Return existing knowledge
   const note = await palace_read({ path: check.matches[0].path });
-  // "Here's what we have documented..."
-  return;
+  return; // "Here's what we have documented..."
 }
 
-// 2. Research and gather information
+// 3. Research and gather information
 // ... AI researches ...
 
-// 3. Store new knowledge
+// 4. Store new knowledge (use suggested domain)
+const suggestedDomain = check.suggestions.suggested_domains[0]?.path
+  || ["kubernetes", "networking"];
+
 await palace_store({
   title: "Kubernetes Ingress",
   content: "Comprehensive ingress documentation...",
   intent: {
-    knowledge_type: "technology",
-    domain: ["kubernetes", "networking"],
-    scope: "general",
-    technologies: ["kubernetes", "nginx-ingress"]
+    capture_type: "knowledge",
+    domain: suggestedDomain,
+    tags: ["networking", "ingress"]
   }
 });
 
-// 4. Log to session
+// 5. Log to session
 await palace_session_log({
   entry: "Documented Kubernetes Ingress setup",
-  notes_created: ["technologies/kubernetes/networking/ingress.md"]
+  notes_created: ["kubernetes/networking/kubernetes-ingress.md"]
 });
 ```
 
-### Decision Documentation Workflow
+### Source Capture Workflow
+
+```javascript
+// User is reading a book and wants to capture notes
+
+await palace_store({
+  title: "Chapter 3 - Container Orchestration",
+  content: `
+## Key Points
+
+- Kubernetes manages container lifecycle
+- Pods are the smallest deployable unit
+- Services provide stable networking
+
+## Quotes
+
+> "The scheduler is the brain of Kubernetes" - p.45
+`,
+  intent: {
+    capture_type: "source",
+    domain: ["containers", "orchestration"],
+    source: {
+      type: "book",
+      title: "Cloud Native Infrastructure",
+      author: "Justin Garrison"
+    }
+  }
+});
+// Creates: sources/book/cloud-native-infrastructure/chapter-3-container-orchestration.md
+```
+
+### Project Decision Workflow
 
 ```javascript
 // User says: "We've decided to use Calico for our CNI in the Xlink project"
 
-// 1. Check clarification needs (project context is clear)
-
-// 2. Document the decision
+// 1. Document the project-specific decision
 await palace_store({
   title: "CNI Decision - Calico",
   content: `
@@ -548,26 +593,25 @@ We will use Calico as our CNI plugin for the Xlink project.
 - Cilium: More features but higher complexity
 `,
   intent: {
-    knowledge_type: "decision",
-    domain: ["kubernetes", "networking"],
-    scope: "project-specific",
+    capture_type: "project",
+    domain: ["infrastructure", "networking"],
     project: "xlink",
-    technologies: ["calico", "kubernetes"]
+    tags: ["decision", "cni"]
   }
 });
+// Creates: projects/xlink/cni-decision-calico.md
 
-// 3. Also ensure general Calico knowledge exists
-const calicoCheck = await palace_check({ query: "calico" });
+// 2. Ensure general Calico knowledge exists
+const calicoCheck = await palace_check({ query: "calico cni" });
 
 if (calicoCheck.recommendation === 'create_new') {
-  // Create general Calico documentation (Layer 1)
+  // Create general knowledge (not project-specific)
   await palace_store({
     title: "Calico",
     content: "Calico is a CNI plugin for Kubernetes...",
     intent: {
-      knowledge_type: "technology",
-      domain: ["kubernetes", "networking", "cni"],
-      scope: "general"
+      capture_type: "knowledge",
+      domain: ["kubernetes", "networking", "cni"]
     }
   });
 }
@@ -576,9 +620,8 @@ if (calicoCheck.recommendation === 'create_new') {
 ### Troubleshooting Workflow
 
 ```javascript
-// User solved a problem
+// User solved a problem - capture it
 
-// 1. Document the troubleshooting note
 await palace_store({
   title: "Pod CrashLoopBackOff",
   content: `
@@ -600,10 +643,10 @@ Pod continuously restarts with CrashLoopBackOff status.
 [Solution details...]
 `,
   intent: {
-    knowledge_type: "troubleshooting",
-    domain: ["kubernetes", "debugging"],
-    scope: "general",
-    technologies: ["kubernetes"]
+    capture_type: "knowledge",
+    domain: ["kubernetes", "troubleshooting"],
+    tags: ["debugging", "pods"]
   }
 });
+// Creates: kubernetes/troubleshooting/pod-crashloopbackoff.md
 ```

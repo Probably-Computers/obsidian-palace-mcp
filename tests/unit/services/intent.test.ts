@@ -1,6 +1,6 @@
 /**
- * Intent-based storage service tests
- * Tests for layer-detector, resolver, stub-manager
+ * Intent-based storage service tests (Phase 017)
+ * Tests for resolver and stub-manager with topic-based architecture
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
@@ -24,10 +24,9 @@ process.env.PALACE_WATCH_ENABLED = 'false';
 // Dynamic imports after env setup
 import { resetConfig } from '../../../src/config/index';
 import type { StorageIntent } from '../../../src/types/intent';
-import { KnowledgeLayer } from '../../../src/types/intent';
 import type { ResolvedVault, VaultConfig } from '../../../src/types/index';
 
-// Mock vault for testing
+// Mock vault for testing (Phase 017 simplified structure)
 const createMockVault = (): ResolvedVault => ({
   alias: 'test',
   path: testVault,
@@ -36,187 +35,89 @@ const createMockVault = (): ResolvedVault => ({
   config: {
     vault: { name: 'test-vault' },
     structure: {
-      technology: { path: 'technologies/{domain}/' },
-      command: { path: 'commands/{domain}/' },
-      standard: { path: 'standards/{domain}/' },
-      project: { path: 'projects/{project}/' },
-      pattern: { path: 'patterns/{domain}/' },
-      research: { path: 'research/{domain}/' },
-      infrastructure: { path: 'infrastructure/{domain}/' },
-      troubleshooting: { path: 'troubleshooting/{domain}/' },
-      client: { path: 'clients/{client}/' },
+      sources: 'sources/',
+      projects: 'projects/',
+      clients: 'clients/',
+      daily: 'daily/',
+      standards: 'standards/',
     },
     ignore: { patterns: [], marker_file: '.palace-ignore', frontmatter_key: 'palace_ignore' },
     atomic: { max_lines: 200, max_sections: 6, hub_filename: '_index.md', auto_split: true },
     stubs: { auto_create: true, min_confidence: 0.2 },
-    graph: { require_technology_links: true, warn_orphan_depth: 1, retroactive_linking: true },
+    graph: { require_technology_links: false, warn_orphan_depth: 1, retroactive_linking: true },
   } as VaultConfig,
+  indexPath: join(testPalace, 'index.sqlite'),
 });
 
-describe('Layer Detector', () => {
-  it('classifies technology knowledge as technical layer', async () => {
-    const { determineLayer } = await import('../../../src/services/vault/layer-detector');
-
-    const intent: StorageIntent = {
-      knowledge_type: 'technology',
-      domain: ['kubernetes'],
-      scope: 'general',
-    };
-
-    const layer = determineLayer(intent);
-    expect(layer).toBe(KnowledgeLayer.TECHNICAL);
-  });
-
-  it('classifies command knowledge as technical layer', async () => {
-    const { determineLayer } = await import('../../../src/services/vault/layer-detector');
-
-    const intent: StorageIntent = {
-      knowledge_type: 'command',
-      domain: ['docker'],
-      scope: 'general',
-    };
-
-    const layer = determineLayer(intent);
-    expect(layer).toBe(KnowledgeLayer.TECHNICAL);
-  });
-
-  it('classifies pattern knowledge as domain layer', async () => {
-    const { determineLayer } = await import('../../../src/services/vault/layer-detector');
-
-    const intent: StorageIntent = {
-      knowledge_type: 'pattern',
-      domain: ['architecture'],
-      scope: 'general',
-    };
-
-    const layer = determineLayer(intent);
-    expect(layer).toBe(KnowledgeLayer.DOMAIN);
-  });
-
-  it('classifies decision knowledge as contextual layer', async () => {
-    const { determineLayer } = await import('../../../src/services/vault/layer-detector');
-
-    const intent: StorageIntent = {
-      knowledge_type: 'decision',
-      domain: ['project-x'],
-      scope: 'project-specific',
-      project: 'project-x',
-    };
-
-    const layer = determineLayer(intent);
-    expect(layer).toBe(KnowledgeLayer.CONTEXTUAL);
-  });
-
-  it('classifies project-specific knowledge as contextual layer', async () => {
-    const { determineLayer } = await import('../../../src/services/vault/layer-detector');
-
-    const intent: StorageIntent = {
-      knowledge_type: 'research',
-      domain: ['api'],
-      scope: 'project-specific',
-      project: 'my-app',
-    };
-
-    const layer = determineLayer(intent);
-    expect(layer).toBe(KnowledgeLayer.CONTEXTUAL);
-  });
-
-  it('classifies client-specific knowledge as contextual layer', async () => {
-    const { determineLayer } = await import('../../../src/services/vault/layer-detector');
-
-    const intent: StorageIntent = {
-      knowledge_type: 'configuration',
-      domain: ['infrastructure'],
-      scope: 'general',
-      client: 'acme-corp',
-    };
-
-    const layer = determineLayer(intent);
-    expect(layer).toBe(KnowledgeLayer.CONTEXTUAL);
-  });
-
-  it('provides layer base folders', async () => {
-    const { getLayerBaseFolders } = await import('../../../src/services/vault/layer-detector');
-
-    expect(getLayerBaseFolders(KnowledgeLayer.TECHNICAL)).toContain('technologies');
-    expect(getLayerBaseFolders(KnowledgeLayer.DOMAIN)).toContain('patterns');
-    expect(getLayerBaseFolders(KnowledgeLayer.CONTEXTUAL)).toContain('projects');
-  });
-
-  it('provides knowledge type folders', async () => {
-    const { getKnowledgeTypeFolder } = await import('../../../src/services/vault/layer-detector');
-
-    expect(getKnowledgeTypeFolder('technology')).toBe('technologies');
-    expect(getKnowledgeTypeFolder('command')).toBe('commands');
-    expect(getKnowledgeTypeFolder('pattern')).toBe('patterns');
-  });
-
-  it('detects reusable knowledge', async () => {
-    const { isReusableKnowledge } = await import('../../../src/services/vault/layer-detector');
-
-    const intent: StorageIntent = {
-      knowledge_type: 'troubleshooting',
-      domain: ['docker'],
-      scope: 'general',
-    };
-
-    const genericContent = 'This is a best practice for Docker. Typically you should use multi-stage builds.';
-    const specificContent = 'For this project, we decided to use Docker. In our case, this works better.';
-
-    expect(isReusableKnowledge(genericContent, intent)).toBe(true);
-    expect(isReusableKnowledge(specificContent, intent)).toBe(false);
-  });
-});
-
-describe('Storage Resolver', () => {
-  it('resolves technology path with domain substitution', async () => {
+describe('Storage Resolver (Phase 017)', () => {
+  it('resolves knowledge path from domain array', async () => {
     const { resolveStorage } = await import('../../../src/services/vault/resolver');
     const vault = createMockVault();
 
     const intent: StorageIntent = {
-      knowledge_type: 'technology',
-      domain: ['kubernetes'],
-      scope: 'general',
+      capture_type: 'knowledge',
+      domain: ['kubernetes', 'networking'],
     };
 
-    const resolution = resolveStorage(intent, 'Kubernetes Networking', vault);
+    const resolution = resolveStorage(intent, 'Pod Networking', vault);
 
     expect(resolution.relativePath).toContain('kubernetes');
+    expect(resolution.relativePath).toContain('networking');
     expect(resolution.relativePath).toMatch(/\.md$/);
-    expect(resolution.layer).toBe(KnowledgeLayer.TECHNICAL);
+    expect(resolution.isNewTopLevelDomain).toBe(true); // No kubernetes folder exists yet
   });
 
-  it('resolves command path', async () => {
+  it('resolves source capture path', async () => {
     const { resolveStorage } = await import('../../../src/services/vault/resolver');
     const vault = createMockVault();
 
     const intent: StorageIntent = {
-      knowledge_type: 'command',
-      domain: ['docker'],
-      scope: 'general',
+      capture_type: 'source',
+      domain: ['book-notes'],
+      source: {
+        type: 'book',
+        title: 'Kubernetes in Action',
+        author: 'Marko Luksa',
+      },
     };
 
-    const resolution = resolveStorage(intent, 'docker build', vault);
+    const resolution = resolveStorage(intent, 'Chapter 3 Notes', vault);
 
-    expect(resolution.relativePath).toContain('docker');
-    expect(resolution.relativePath).toContain('docker-build');
+    expect(resolution.relativePath).toContain('sources');
+    expect(resolution.relativePath).toContain('book');
+    expect(resolution.relativePath).toMatch(/chapter-3-notes\.md$/);
   });
 
-  it('resolves project-specific path', async () => {
+  it('resolves project capture path', async () => {
     const { resolveStorage } = await import('../../../src/services/vault/resolver');
     const vault = createMockVault();
 
     const intent: StorageIntent = {
-      knowledge_type: 'decision',
+      capture_type: 'project',
       domain: ['architecture'],
-      scope: 'project-specific',
       project: 'my-app',
     };
 
     const resolution = resolveStorage(intent, 'Database Choice', vault);
 
+    expect(resolution.relativePath).toContain('projects');
     expect(resolution.relativePath).toContain('my-app');
-    expect(resolution.layer).toBe(KnowledgeLayer.CONTEXTUAL);
+  });
+
+  it('resolves client-specific project path', async () => {
+    const { resolveStorage } = await import('../../../src/services/vault/resolver');
+    const vault = createMockVault();
+
+    const intent: StorageIntent = {
+      capture_type: 'project',
+      domain: ['infrastructure'],
+      client: 'acme-corp',
+    };
+
+    const resolution = resolveStorage(intent, 'Server Config', vault);
+
+    expect(resolution.relativePath).toContain('clients');
+    expect(resolution.relativePath).toContain('acme-corp');
   });
 
   it('generates alternative paths', async () => {
@@ -224,9 +125,8 @@ describe('Storage Resolver', () => {
     const vault = createMockVault();
 
     const intent: StorageIntent = {
-      knowledge_type: 'research',
+      capture_type: 'knowledge',
       domain: ['kubernetes'],
-      scope: 'general',
     };
 
     const original = resolveStorage(intent, 'Pods', vault);
@@ -241,17 +141,42 @@ describe('Storage Resolver', () => {
     const vault = createMockVault();
 
     const intent: StorageIntent = {
-      knowledge_type: 'research',
+      capture_type: 'knowledge',
       domain: ['test'],
-      scope: 'general',
     };
 
     const resolution = resolveStorage(intent, 'Test Note', vault);
     const existingPaths = [resolution.relativePath, 'other/note.md'];
 
-    // checkPathConflict returns the conflicting path or undefined
     expect(checkPathConflict(resolution, existingPaths)).toBe(resolution.relativePath);
     expect(checkPathConflict(resolution, ['other/note.md'])).toBeUndefined();
+  });
+
+  it('extracts domain from existing paths', async () => {
+    const { extractDomainFromPath } = await import('../../../src/services/vault/resolver');
+
+    expect(extractDomainFromPath('kubernetes/networking/pods.md')).toEqual(['kubernetes', 'networking']);
+    expect(extractDomainFromPath('docker/images.md')).toEqual(['docker']);
+    // Special folders return content after the base folder
+    expect(extractDomainFromPath('sources/book/notes.md')).toEqual(['book']);
+  });
+
+  it('identifies special folders', async () => {
+    const { isSpecialFolder } = await import('../../../src/services/vault/resolver');
+
+    expect(isSpecialFolder('sources/book/notes.md')).toBe(true);
+    expect(isSpecialFolder('projects/my-app/readme.md')).toBe(true);
+    expect(isSpecialFolder('clients/acme/config.md')).toBe(true);
+    expect(isSpecialFolder('kubernetes/pods.md')).toBe(false);
+  });
+
+  it('detects capture type from existing paths', async () => {
+    const { getCaptureTypeFromPath } = await import('../../../src/services/vault/resolver');
+
+    expect(getCaptureTypeFromPath('sources/book/notes.md')).toBe('source');
+    expect(getCaptureTypeFromPath('projects/my-app/readme.md')).toBe('project');
+    expect(getCaptureTypeFromPath('clients/acme/config.md')).toBe('project');
+    expect(getCaptureTypeFromPath('kubernetes/pods.md')).toBe('knowledge');
   });
 });
 
@@ -285,14 +210,14 @@ describe('Stub Manager', () => {
     db.exec('DELETE FROM notes_fts');
   });
 
-  it('creates a stub note', async () => {
+  it('creates a stub note with Phase 017 schema', async () => {
     const { createStub } = await import('../../../src/services/vault/stub-manager');
     const vault = createMockVault();
 
     const stubPath = await createStub(
       'Docker',
       'Referenced in Kubernetes article',
-      'research/kubernetes.md',
+      'kubernetes/pods.md',
       vault,
       ['containers']
     );
@@ -304,11 +229,11 @@ describe('Stub Manager', () => {
     const fullPath = join(testVault, stubPath);
     expect(existsSync(fullPath)).toBe(true);
 
-    // Verify content
+    // Verify content has new Phase 017 schema
     const content = await readFile(fullPath, 'utf-8');
     expect(content).toContain('status: stub');
+    expect(content).toContain('capture_type: knowledge');
     expect(content).toContain('Docker');
-    expect(content).toContain('kubernetes');
   });
 
   it('identifies stub notes', async () => {
@@ -328,7 +253,7 @@ describe('Stub Manager', () => {
     const stubPath = await createStub(
       'Redis',
       'Mentioned in caching article',
-      'research/caching.md',
+      'caching/overview.md',
       vault,
       ['database']
     );
@@ -359,9 +284,9 @@ describe('Stub Manager', () => {
       INSERT INTO notes (path, title, type, created, modified, status, content, content_hash)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      'tech/stub-note.md',
-      'Stub Note',
-      'technology',
+      'containers/docker.md',
+      'Docker',
+      'knowledge',
       new Date().toISOString(),
       new Date().toISOString(),
       'stub',
@@ -371,7 +296,7 @@ describe('Stub Manager', () => {
 
     const stubs = findStubs(db);
     expect(stubs.length).toBe(1);
-    expect(stubs[0]!.title).toBe('Stub Note');
+    expect(stubs[0]!.title).toBe('Docker');
   });
 
   it('finds stub by title', async () => {
@@ -382,9 +307,9 @@ describe('Stub Manager', () => {
       INSERT INTO notes (path, title, type, created, modified, status, content, content_hash)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      'tech/graphql.md',
+      'api/graphql.md',
       'GraphQL',
-      'technology',
+      'knowledge',
       new Date().toISOString(),
       new Date().toISOString(),
       'stub',

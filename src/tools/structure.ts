@@ -1,5 +1,7 @@
 /**
- * palace_structure - Get the palace directory tree structure
+ * palace_structure - Get the palace directory tree structure (Phase 017)
+ *
+ * Returns vault structure with domain pattern analysis for AI decision-making.
  */
 
 import { z } from 'zod';
@@ -7,6 +9,9 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult, DirectoryEntry } from '../types/index.js';
 import { getDirectoryTree } from '../services/vault/index.js';
 import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
+
+// Special folders that are not knowledge domains
+const SPECIAL_FOLDERS = ['sources', 'projects', 'clients', 'daily', 'standards', '.palace', '.obsidian'];
 
 // Input schema
 const inputSchema = z.object({
@@ -19,7 +24,7 @@ const inputSchema = z.object({
 export const structureTool: Tool = {
   name: 'palace_structure',
   description:
-    'Get the palace directory tree structure. Useful for understanding vault organization.',
+    'Get the palace directory tree structure with domain pattern analysis. Essential for understanding vault organization before storing knowledge.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -38,6 +43,84 @@ export const structureTool: Tool = {
     },
   },
 };
+
+/**
+ * Domain pattern information
+ */
+interface DomainPattern {
+  path: string;
+  level: number;
+  noteCount: number;
+  hasHub: boolean;
+  subdomains: string[];
+}
+
+/**
+ * Extract domain patterns from directory tree
+ */
+function extractDomainPatterns(entries: DirectoryEntry[], parentPath = ''): DomainPattern[] {
+  const patterns: DomainPattern[] = [];
+
+  for (const entry of entries) {
+    if (entry.type !== 'directory') continue;
+
+    const currentPath = parentPath ? `${parentPath}/${entry.name}` : entry.name;
+    const isSpecial = SPECIAL_FOLDERS.includes(entry.name.toLowerCase());
+
+    // Skip special folders for domain analysis
+    if (isSpecial) continue;
+
+    // Count notes in this directory
+    const noteCount = entry.children?.filter((c) => c.type === 'file' && c.name.endsWith('.md')).length || 0;
+
+    // Check for hub file
+    const hasHub = entry.children?.some((c) => c.type === 'file' && c.name === '_index.md') || false;
+
+    // Get subdomain names
+    const subdomains =
+      entry.children?.filter((c) => c.type === 'directory' && !SPECIAL_FOLDERS.includes(c.name.toLowerCase())).map((c) => c.name) || [];
+
+    // Calculate level (depth from root)
+    const level = currentPath.split('/').length;
+
+    patterns.push({
+      path: currentPath,
+      level,
+      noteCount,
+      hasHub,
+      subdomains,
+    });
+
+    // Recursively process children
+    if (entry.children) {
+      const childPatterns = extractDomainPatterns(entry.children, currentPath);
+      patterns.push(...childPatterns);
+    }
+  }
+
+  return patterns;
+}
+
+/**
+ * Get top-level domain summary
+ */
+function getTopLevelDomains(patterns: DomainPattern[]): Array<{ name: string; totalNotes: number; depth: number }> {
+  const topLevel = patterns.filter((p) => p.level === 1);
+
+  return topLevel.map((domain) => {
+    // Count all notes in this domain and subdomains
+    const domainPrefix = domain.path + '/';
+    const relatedPatterns = patterns.filter((p) => p.path === domain.path || p.path.startsWith(domainPrefix));
+    const totalNotes = relatedPatterns.reduce((sum, p) => sum + p.noteCount, 0);
+    const maxDepth = Math.max(...relatedPatterns.map((p) => p.level));
+
+    return {
+      name: domain.path,
+      totalNotes,
+      depth: maxDepth,
+    };
+  });
+}
 
 /**
  * Format directory tree as readable text
@@ -85,6 +168,20 @@ function countEntries(entries: DirectoryEntry[]): { files: number; dirs: number 
   return { files, dirs };
 }
 
+/**
+ * Check which special folders exist
+ */
+function getSpecialFolders(entries: DirectoryEntry[]): Record<string, boolean> {
+  const specialFolderNames = ['sources', 'projects', 'clients', 'daily', 'standards'];
+  const existing: Record<string, boolean> = {};
+
+  for (const name of specialFolderNames) {
+    existing[name] = entries.some((e) => e.type === 'directory' && e.name.toLowerCase() === name);
+  }
+
+  return existing;
+}
+
 // Tool handler
 export async function structureHandler(args: Record<string, unknown>): Promise<ToolResult> {
   // Validate input
@@ -110,6 +207,11 @@ export async function structureHandler(args: Record<string, unknown>): Promise<T
     const counts = countEntries(tree);
     const formatted = formatTree(tree);
 
+    // Extract domain patterns (Phase 017)
+    const domainPatterns = extractDomainPatterns(tree);
+    const topLevelDomains = getTopLevelDomains(domainPatterns);
+    const specialFolders = getSpecialFolders(tree);
+
     return {
       success: true,
       data: {
@@ -121,7 +223,24 @@ export async function structureHandler(args: Record<string, unknown>): Promise<T
           directories: counts.dirs,
         },
         tree: formatted,
-        entries: tree, // Also include raw structure for programmatic use
+        entries: tree, // Raw structure for programmatic use
+
+        // Phase 017: Domain pattern analysis
+        domain_patterns: {
+          top_level_domains: topLevelDomains,
+          all_domains: domainPatterns.map((p) => ({
+            path: p.path,
+            level: p.level,
+            note_count: p.noteCount,
+            has_hub: p.hasHub,
+            subdomains: p.subdomains,
+          })),
+          special_folders: specialFolders,
+          suggestions: {
+            existing_domains: topLevelDomains.map((d) => d.name),
+            hint: 'Use existing domains when possible. Create new top-level domains only for truly distinct topics.',
+          },
+        },
       },
     };
   } catch (error) {

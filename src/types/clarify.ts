@@ -1,30 +1,35 @@
 /**
- * Clarify Types (Phase 014)
+ * Clarify Types (Phase 017 - Topic-Based Architecture)
  *
- * Types for AI support tools that help maintain graph integrity,
- * detect context, and generate clarifying questions.
+ * Types for AI support tools that help detect context and
+ * generate clarifying questions for storage intents.
+ *
+ * Phase 017 changes:
+ * - Removed 'scope' and 'technologies' from MissingContextType
+ * - Added 'capture_type' as a clarification type
+ * - Updated PartialStorageIntent to match new schema
  */
 
 import { z } from 'zod';
-import type { IntentKnowledgeType, StorageIntent } from './intent.js';
+import type { CaptureType, StorageIntent } from './intent.js';
 
-// Missing context types that need clarification
+// Missing context types that need clarification (Phase 017)
 export type MissingContextType =
-  | 'scope' // General vs project-specific
-  | 'project' // Which project
-  | 'client' // Which client
-  | 'technologies' // Confirm technology links
-  | 'domain'; // Categorization
+  | 'capture_type' // source, knowledge, or project
+  | 'domain' // Topic hierarchy
+  | 'project' // Which project (for project captures)
+  | 'client' // Which client (for client-specific projects)
+  | 'source_info'; // Source details (for source captures)
 
 // Question types for clarification
 export type QuestionType = 'choice' | 'confirm' | 'text';
 
-// Detected technology with confidence
-export interface DetectedTechnology {
+// Detected domain/topic
+export interface DetectedDomain {
   name: string;
   confidence: number;
   exists_in_vault: boolean;
-  suggested_path?: string | undefined;
+  note_count?: number | undefined;
 }
 
 // Detected project reference
@@ -41,26 +46,19 @@ export interface DetectedClient {
   path?: string | undefined;
 }
 
-// Scope detection result
-export interface DetectedScope {
-  likely: 'general' | 'project-specific';
+// Capture type detection result
+export interface DetectedCaptureType {
+  likely: CaptureType;
   confidence: number;
   indicators: string[];
 }
 
-// Domain detection result
-export interface DetectedDomain {
-  name: string;
-  confidence: number;
-}
-
-// Full context detection output
+// Full context detection output (Phase 017)
 export interface DetectedContext {
-  technologies: DetectedTechnology[];
+  capture_type: DetectedCaptureType;
+  domains: DetectedDomain[];
   projects: DetectedProject[];
   clients: DetectedClient[];
-  scope: DetectedScope;
-  domains: DetectedDomain[];
 }
 
 // A question to ask for clarification
@@ -73,13 +71,12 @@ export interface ClarifyQuestion {
   default?: string | undefined;
 }
 
-// Suggestions based on detection
+// Suggestions based on detection (Phase 017)
 export interface ClarifySuggestions {
-  scope?: 'general' | 'project-specific' | undefined;
+  capture_type?: CaptureType | undefined;
+  domain?: string[] | undefined;
   project?: string | undefined;
   client?: string | undefined;
-  technologies?: string[] | undefined;
-  domain?: string[] | undefined;
 }
 
 // Confidence scores for each field
@@ -88,12 +85,12 @@ export interface ClarifyConfidence {
   per_field: Record<string, number>;
 }
 
-// Input for palace_clarify
+// Input for palace_clarify (Phase 017)
 export interface PalaceClarifyInput {
   context: {
     title: string;
     content_preview: string; // First 500 chars
-    detected_technologies?: string[] | undefined;
+    detected_domains?: string[] | undefined;
     detected_context?: {
       possible_projects: string[];
       possible_clients: string[];
@@ -127,10 +124,9 @@ export interface PalaceClarifyOutput {
 
 // Options for context detection
 export interface ContextDetectionOptions {
-  maxTechnologies?: number | undefined;
+  maxDomains?: number | undefined;
   maxProjects?: number | undefined;
   maxClients?: number | undefined;
-  maxDomains?: number | undefined;
   minConfidence?: number | undefined;
 }
 
@@ -142,9 +138,9 @@ export interface MissingContextResult {
   reasons: Record<MissingContextType, string>;
 }
 
-// Partial storage intent for validation
+// Partial storage intent for validation (Phase 017)
 export type PartialStorageIntent = Partial<StorageIntent> & {
-  knowledge_type?: IntentKnowledgeType | undefined;
+  capture_type?: CaptureType | undefined;
 };
 
 // ============================================
@@ -152,11 +148,11 @@ export type PartialStorageIntent = Partial<StorageIntent> & {
 // ============================================
 
 export const missingContextTypeSchema = z.enum([
-  'scope',
+  'capture_type',
+  'domain',
   'project',
   'client',
-  'technologies',
-  'domain',
+  'source_info',
 ]);
 
 export const questionTypeSchema = z.enum(['choice', 'confirm', 'text']);
@@ -164,7 +160,7 @@ export const questionTypeSchema = z.enum(['choice', 'confirm', 'text']);
 export const clarifyContextSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   content_preview: z.string(),
-  detected_technologies: z.array(z.string()).optional(),
+  detected_domains: z.array(z.string()).optional(),
   detected_context: z
     .object({
       possible_projects: z.array(z.string()),
@@ -178,3 +174,4 @@ export const palaceClarifyInputSchema = z.object({
   missing: z.array(missingContextTypeSchema).default([]),
   vault: z.string().optional(),
 });
+

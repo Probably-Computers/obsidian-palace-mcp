@@ -1,73 +1,147 @@
 /**
- * Intent-Based Storage Types (Phase 011)
+ * Intent-Based Storage Types (Phase 017 - Topic-Based Architecture)
  *
- * These types define how AI expresses WHAT to store, allowing the MCP
- * to determine WHERE based on vault configuration.
+ * This module defines how AI expresses WHAT to store using a simplified
+ * topic-driven model. The domain/topic directly becomes the folder path.
+ *
+ * Key principles:
+ * - Only 3 capture types: source, knowledge, project
+ * - Domain array IS the folder path (no type-to-folder mapping)
+ * - AI observes vault structure and proposes paths
+ * - System suggests, never dictates
  */
 
 import { z } from 'zod';
 
-// Knowledge types supported for intent-based storage
-export type IntentKnowledgeType =
-  | 'technology'
-  | 'command'
-  | 'reference'
-  | 'standard'
-  | 'pattern'
-  | 'research'
-  | 'decision'
-  | 'configuration'
-  | 'troubleshooting'
-  | 'note';
+// ============================================
+// Core Capture Types (Only 3!)
+// ============================================
 
-// Knowledge layer enumeration
-export enum KnowledgeLayer {
-  TECHNICAL = 'technical', // Layer 1: technologies/, commands/, reference/
-  DOMAIN = 'domain', // Layer 2: standards/, patterns/, research/
-  CONTEXTUAL = 'contextual', // Layer 3: projects/, clients/, products/
+/**
+ * What kind of capture is this?
+ * - 'source': Raw capture from a specific source (book, video, article)
+ * - 'knowledge': Processed, reusable knowledge about a topic
+ * - 'project': Project or client specific context
+ */
+export type CaptureType = 'source' | 'knowledge' | 'project';
+
+/**
+ * Source type for source captures
+ */
+export type SourceType =
+  | 'book'
+  | 'video'
+  | 'article'
+  | 'podcast'
+  | 'conversation'
+  | 'documentation'
+  | 'other';
+
+// ============================================
+// Storage Intent (New Topic-Based Schema)
+// ============================================
+
+/**
+ * Source information for source captures
+ */
+export interface SourceInfo {
+  type: SourceType;
+  title: string;
+  author?: string | undefined;
+  url?: string | undefined;
+  date?: string | undefined;
 }
 
-// Storage intent - what the AI wants to store
+/**
+ * Storage intent - what the AI wants to store.
+ *
+ * The core principle: domain IS the folder path.
+ * No more type-to-folder mapping or layer detection.
+ */
 export interface StorageIntent {
-  // What kind of knowledge
-  knowledge_type: IntentKnowledgeType;
+  /**
+   * What kind of capture is this?
+   */
+  capture_type: CaptureType;
 
-  // Classification
-  domain: string[]; // e.g., ["kubernetes", "networking"]
-  tags?: string[] | undefined;
+  /**
+   * Topic hierarchy - THIS IS THE FOLDER PATH.
+   * AI determines this by examining vault structure and proposing paths.
+   *
+   * Examples:
+   * - ['networking', 'wireless', 'lora'] -> networking/wireless/lora/
+   * - ['gardening', 'vegetables', 'tomatoes'] -> gardening/vegetables/tomatoes/
+   */
+  domain: string[];
 
-  // Scope determination
-  scope: 'general' | 'project-specific';
+  /**
+   * Source information (required when capture_type is 'source')
+   */
+  source?: SourceInfo | undefined;
 
-  // Context (used when scope is project-specific)
+  /**
+   * Project context (required when capture_type is 'project')
+   */
   project?: string | undefined;
-  client?: string | undefined;
-  product?: string | undefined;
 
-  // Graph connections
-  technologies?: string[] | undefined; // Technologies to link/stub
-  references?: string[] | undefined; // Explicit links to create
-  parent?: string | undefined; // Parent hub if known
+  /**
+   * Client context (optional, for client-specific projects)
+   */
+  client?: string | undefined;
+
+  /**
+   * Explicit links to create to other notes.
+   */
+  references?: string[] | undefined;
+
+  /**
+   * Optional note type hint for frontmatter (not for path resolution).
+   * This is purely for categorization within the note, not for folder structure.
+   */
+  note_type?: string | undefined;
+
+  /**
+   * Tags for additional categorization.
+   */
+  tags?: string[] | undefined;
 }
 
-// Source provenance for stored knowledge
+// ============================================
+// Source Provenance
+// ============================================
+
+/**
+ * Source provenance for stored knowledge
+ */
 export interface StorageSource {
   origin: 'ai:research' | 'ai:artifact' | 'human' | `web:${string}`;
-  confidence?: number | undefined; // 0.0 - 1.0
+  confidence?: number; // 0.0 - 1.0
 }
 
-// Options for storage operations
+// ============================================
+// Storage Options
+// ============================================
+
+/**
+ * Options for storage operations
+ */
 export interface StorageOptions {
   vault?: string; // Specific vault alias
-  create_stubs?: boolean; // Create stubs for unknown tech (default: true)
+  create_stubs?: boolean; // Create stubs for unknown references (default: true)
   retroactive_link?: boolean; // Update existing notes (default: true)
-  expand_if_stub?: boolean; // Expand existing stub (default: true)
   dry_run?: boolean; // Preview without saving
   autolink?: boolean; // Auto-link content (default: true)
   force_atomic?: boolean; // Skip atomic splitting (default: false)
+  confirm_new_domain?: boolean; // Require confirmation for new top-level domains (default: true)
 }
 
-// Full input for palace_store
+// ============================================
+// Store Input/Output
+// ============================================
+
+/**
+ * Full input for palace_store
+ */
 export interface PalaceStoreInput {
   title: string;
   content: string;
@@ -76,7 +150,9 @@ export interface PalaceStoreInput {
   source?: StorageSource;
 }
 
-// Resolution result from path resolver
+/**
+ * Resolution result from path resolver
+ */
 export interface VaultResolution {
   vault: string; // Vault alias
   vaultPath: string; // Full vault path
@@ -84,18 +160,22 @@ export interface VaultResolution {
   fullPath: string; // Absolute file path
   filename: string; // Just the filename
   parentDir: string; // Parent directory path
-  hubPath?: string | undefined; // Associated hub file if any
-  layer: KnowledgeLayer; // Determined knowledge layer
+  hubPath?: string; // Associated hub file if any
+  isNewTopLevelDomain: boolean; // True if creating a new top-level domain
 }
 
-// Split result when content was atomically split
+/**
+ * Split result when content was atomically split
+ */
 export interface AtomicSplitResult {
   hub_path: string;
   children_paths: string[];
   children_count: number;
 }
 
-// Output from palace_store
+/**
+ * Output from palace_store
+ */
 export interface PalaceStoreOutput {
   success: boolean;
   vault: string;
@@ -108,7 +188,14 @@ export interface PalaceStoreOutput {
     type: 'atomic' | 'hub';
   };
 
-  // Stubs created for mentioned technologies
+  // Domain information
+  domain: {
+    path: string; // The domain path used
+    is_new: boolean; // Whether this is a new domain
+    level: number; // Domain depth (1 = top-level)
+  };
+
+  // Stubs created for referenced notes
   stubs_created?: string[] | undefined;
 
   // Links added to/from existing notes
@@ -117,9 +204,6 @@ export interface PalaceStoreOutput {
     from_existing: string[];
   } | undefined;
 
-  // If existing stub was expanded instead of creating new
-  expanded_stub?: string | undefined;
-
   // If content was split into hub + children
   split_result?: AtomicSplitResult | undefined;
 
@@ -127,14 +211,22 @@ export interface PalaceStoreOutput {
   message: string;
 }
 
-// Check result recommendation
+// ============================================
+// Check Types (with Domain Suggestions)
+// ============================================
+
+/**
+ * Check result recommendation
+ */
 export type CheckRecommendation =
   | 'create_new' // No matches found
   | 'expand_stub' // Found stub to expand
   | 'improve_existing' // Good match exists
   | 'reference_existing'; // Exact match, just reference it
 
-// Match from palace_check
+/**
+ * Match from palace_check
+ */
 export interface CheckMatch {
   path: string;
   vault: string;
@@ -144,17 +236,34 @@ export interface CheckMatch {
   relevance: number;
   summary: string;
   last_modified: string;
+  domain?: string[] | undefined; // The domain path of the match
 }
 
-// Suggestions from palace_check
+/**
+ * Domain suggestion for new knowledge
+ */
+export interface DomainSuggestion {
+  path: string[]; // Suggested domain path
+  confidence: number; // How confident we are in this suggestion
+  reason: string; // Why this is suggested
+  exists: boolean; // Whether this domain already exists
+  note_count?: number | undefined; // Number of notes in this domain
+}
+
+/**
+ * Suggestions from palace_check
+ */
 export interface CheckSuggestions {
   should_expand_stub: boolean;
   stub_path?: string | undefined;
-  missing_technologies: string[];
   similar_titles: string[];
+  // NEW: Domain suggestions
+  suggested_domains: DomainSuggestion[];
 }
 
-// Output from palace_check
+/**
+ * Output from palace_check
+ */
 export interface PalaceCheckOutput {
   found: boolean;
   vault: string;
@@ -164,7 +273,13 @@ export interface PalaceCheckOutput {
   recommendation: CheckRecommendation;
 }
 
-// Improvement mode for palace_improve
+// ============================================
+// Improve Types
+// ============================================
+
+/**
+ * Improvement mode for palace_improve
+ */
 export type ImprovementMode =
   | 'append' // Add to end
   | 'append_section' // Add as new section
@@ -173,7 +288,9 @@ export type ImprovementMode =
   | 'replace' // Full replacement
   | 'frontmatter'; // Update frontmatter only
 
-// Input for palace_improve
+/**
+ * Input for palace_improve
+ */
 export interface PalaceImproveInput {
   path: string;
   mode: ImprovementMode;
@@ -181,11 +298,13 @@ export interface PalaceImproveInput {
   section?: string; // Section name for update_section mode
   frontmatter?: Record<string, unknown>;
   autolink?: boolean;
-  author?: string; // Author of this update (added to authors array)
+  author?: string; // Author of this update
   vault?: string;
 }
 
-// Output from palace_improve
+/**
+ * Output from palace_improve
+ */
 export interface PalaceImproveOutput {
   success: boolean;
   vault: string;
@@ -193,18 +312,24 @@ export interface PalaceImproveOutput {
   path: string;
   mode: ImprovementMode;
   changes: {
-    lines_added?: number | undefined;
-    lines_removed?: number | undefined;
-    sections_modified?: string[] | undefined;
-    frontmatter_updated?: string[] | undefined;
-    links_added?: number | undefined;
-    atomic_warning?: string | undefined;
+    lines_added?: number;
+    lines_removed?: number;
+    sections_modified?: string[];
+    frontmatter_updated?: string[];
+    links_added?: number;
+    atomic_warning?: string;
   };
   version: number; // New palace.version
   message: string;
 }
 
-// Stub note metadata
+// ============================================
+// Stub Types
+// ============================================
+
+/**
+ * Stub note metadata
+ */
 export interface StubMetadata {
   path: string;
   title: string;
@@ -214,34 +339,93 @@ export interface StubMetadata {
 }
 
 // ============================================
+// Domain Types (New for Phase 017)
+// ============================================
+
+/**
+ * Domain information tracked in database
+ */
+export interface Domain {
+  id: number;
+  vault: string;
+  path: string; // Full path like 'networking/wireless/lora'
+  level: number; // Depth (1 = top-level)
+  parentPath?: string; // Parent domain path
+  noteCount: number;
+  created: string;
+  lastUsed: string;
+}
+
+/**
+ * Domain discovery result
+ */
+export interface DiscoveredDomain {
+  path: string;
+  level: number;
+  noteCount: number;
+  children: DiscoveredDomain[];
+}
+
+// ============================================
 // Zod Schemas for Validation
 // ============================================
 
-export const intentKnowledgeTypeSchema = z.enum([
-  'technology',
-  'command',
-  'reference',
-  'standard',
-  'pattern',
-  'research',
-  'decision',
-  'configuration',
-  'troubleshooting',
-  'note',
+export const captureTypeSchema = z.enum(['source', 'knowledge', 'project']);
+
+export const sourceTypeSchema = z.enum([
+  'book',
+  'video',
+  'article',
+  'podcast',
+  'conversation',
+  'documentation',
+  'other',
 ]);
 
-export const storageIntentSchema = z.object({
-  knowledge_type: intentKnowledgeTypeSchema,
-  domain: z.array(z.string()).min(1, 'At least one domain is required'),
-  tags: z.array(z.string()).optional(),
-  scope: z.enum(['general', 'project-specific']),
-  project: z.string().optional(),
-  client: z.string().optional(),
-  product: z.string().optional(),
-  technologies: z.array(z.string()).optional(),
-  references: z.array(z.string()).optional(),
-  parent: z.string().optional(),
+export const sourceInfoSchema = z.object({
+  type: sourceTypeSchema,
+  title: z.string().min(1, 'Source title is required'),
+  author: z.string().optional(),
+  url: z.string().url().optional(),
+  date: z.string().optional(),
 });
+
+export const storageIntentSchema = z
+  .object({
+    capture_type: captureTypeSchema,
+    domain: z.array(z.string()).min(1, 'At least one domain is required'),
+    source: sourceInfoSchema.optional(),
+    project: z.string().optional(),
+    client: z.string().optional(),
+    references: z.array(z.string()).optional(),
+    note_type: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+  })
+  .refine(
+    (data) => {
+      // If capture_type is 'source', source info is required
+      if (data.capture_type === 'source' && !data.source) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Source information is required when capture_type is 'source'",
+    }
+  )
+  .refine(
+    (data) => {
+      // If capture_type is 'project', project or client is required
+      if (data.capture_type === 'project' && !data.project && !data.client) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message:
+        "Project or client name is required when capture_type is 'project'",
+    }
+  );
 
 export const storageSourceSchema = z.object({
   origin: z.union([
@@ -257,10 +441,10 @@ export const storageOptionsSchema = z.object({
   vault: z.string().optional(),
   create_stubs: z.boolean().optional().default(true),
   retroactive_link: z.boolean().optional().default(true),
-  expand_if_stub: z.boolean().optional().default(true),
   dry_run: z.boolean().optional().default(false),
   autolink: z.boolean().optional().default(true),
   force_atomic: z.boolean().optional().default(false),
+  confirm_new_domain: z.boolean().optional().default(true),
 });
 
 export const palaceStoreInputSchema = z.object({
@@ -293,8 +477,8 @@ export const palaceImproveInputSchema = z.object({
 
 export const palaceCheckInputSchema = z.object({
   query: z.string().min(1, 'Query is required'),
-  knowledge_type: intentKnowledgeTypeSchema.optional(),
   domain: z.array(z.string()).optional(),
   include_stubs: z.boolean().optional().default(true),
   vault: z.string().optional(),
 });
+

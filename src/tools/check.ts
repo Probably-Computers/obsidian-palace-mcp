@@ -1,10 +1,18 @@
 /**
- * palace_check - Check for existing knowledge before creating new
+ * palace_check - Check for existing knowledge and discover domains (Phase 017)
  *
  * Part of the "check-before-store" pattern. AI should call this before
- * creating new notes to avoid duplicates and enable stub expansion.
+ * creating new notes to avoid duplicates, discover domain suggestions,
+ * and enable stub expansion.
+ *
+ * Key features:
+ * - Find existing knowledge matching query
+ * - Suggest domains based on vault structure
+ * - Recommend action: create_new, expand_stub, improve_existing, reference_existing
  */
 
+import { readdirSync, statSync } from 'fs';
+import { join, dirname } from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import type {
@@ -12,46 +20,48 @@ import type {
   CheckMatch,
   CheckSuggestions,
   CheckRecommendation,
-  IntentKnowledgeType,
+  DomainSuggestion,
 } from '../types/intent.js';
 import { palaceCheckInputSchema } from '../types/intent.js';
-import { searchNotesInVault, queryNotesInVault } from '../services/index/query.js';
+import {
+  searchNotesInVault,
+  queryNotesInVault,
+} from '../services/index/query.js';
 import { getIndexManager } from '../services/index/index.js';
-import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
+import {
+  resolveVaultParam,
+  getVaultResultInfo,
+} from '../utils/vault-param.js';
 import { slugify } from '../utils/slugify.js';
+import {
+  extractDomainFromPath,
+  isSpecialFolder,
+} from '../services/vault/resolver.js';
 
-// Tool definition
+// Tool definition with new domain discovery
 export const checkTool: Tool = {
   name: 'palace_check',
-  description:
-    'Check for existing knowledge before creating new notes. Returns matches, stub candidates, and a recommendation (create_new, expand_stub, improve_existing, reference_existing). Always call this before palace_store to avoid duplicates.',
+  description: `Check for existing knowledge before creating new notes. Returns matches, domain suggestions, and a recommendation.
+
+**ALWAYS call before palace_store** to:
+1. Find existing knowledge on the topic
+2. Get domain suggestions based on vault structure
+3. Determine best action (create_new, expand_stub, improve_existing, reference_existing)
+
+**Domain suggestions** help you choose the right path for new knowledge based on existing vault organization.`,
   inputSchema: {
     type: 'object',
     properties: {
       query: {
         type: 'string',
-        description: 'Search query - the topic or title you want to check for',
-      },
-      knowledge_type: {
-        type: 'string',
-        enum: [
-          'technology',
-          'command',
-          'reference',
-          'standard',
-          'pattern',
-          'research',
-          'decision',
-          'configuration',
-          'troubleshooting',
-          'note',
-        ],
-        description: 'Optional: filter by knowledge type',
+        description:
+          'Search query - the topic or title you want to check for',
       },
       domain: {
         type: 'array',
         items: { type: 'string' },
-        description: 'Optional: filter by domain (e.g., ["kubernetes", "networking"])',
+        description:
+          'Optional: filter by domain (e.g., ["networking", "wireless"])',
       },
       include_stubs: {
         type: 'boolean',
@@ -67,18 +77,27 @@ export const checkTool: Tool = {
 };
 
 // Tool handler
-export async function checkHandler(args: Record<string, unknown>): Promise<ToolResult<PalaceCheckOutput>> {
+export async function checkHandler(
+  args: Record<string, unknown>
+): Promise<ToolResult<PalaceCheckOutput>> {
   // Validate input
   const parseResult = palaceCheckInputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      error: parseResult.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
 
-  const { query, knowledge_type, domain, include_stubs = true, vault: vaultParam } = parseResult.data;
+  const {
+    query,
+    domain,
+    include_stubs = true,
+    vault: vaultParam,
+  } = parseResult.data;
 
   try {
     // Resolve vault
@@ -87,13 +106,14 @@ export async function checkHandler(args: Record<string, unknown>): Promise<ToolR
     const db = await manager.getIndex(vault.alias);
 
     // Perform full-text search
-    const searchOptions: { query: string; type?: string; tags?: string[]; limit: number } = {
+    const searchOptions: {
+      query: string;
+      tags?: string[];
+      limit: number;
+    } = {
       query,
       limit: 20,
     };
-    if (knowledge_type) {
-      searchOptions.type = mapKnowledgeType(knowledge_type);
-    }
     if (domain && domain.length > 0) {
       searchOptions.tags = domain;
     }
@@ -120,8 +140,12 @@ export async function checkHandler(args: Record<string, unknown>): Promise<ToolR
 
     for (const result of searchResults) {
       const fm = result.note.frontmatter as unknown as Record<string, unknown>;
-      const status = fm.status === 'stub' ? 'stub' as const : 'active' as const;
+      const status =
+        fm.status === 'stub' ? ('stub' as const) : ('active' as const);
       if (!include_stubs && status === 'stub') continue;
+
+      // Extract domain from path
+      const noteDomain = extractDomainFromPath(result.note.path);
 
       allResults.set(result.note.path, {
         path: result.note.path,
@@ -132,17 +156,22 @@ export async function checkHandler(args: Record<string, unknown>): Promise<ToolR
         relevance: result.score,
         summary: extractSummary(fm),
         last_modified: result.note.frontmatter.modified,
+        domain: noteDomain.length > 0 ? noteDomain : undefined,
       });
     }
 
     for (const note of titleResults) {
       if (!allResults.has(note.path)) {
         const fm = note.frontmatter as unknown as Record<string, unknown>;
-        const status = fm.status === 'stub' ? 'stub' as const : 'active' as const;
+        const status =
+          fm.status === 'stub' ? ('stub' as const) : ('active' as const);
         if (!include_stubs && status === 'stub') continue;
 
         // Calculate title relevance score
         const titleScore = calculateTitleRelevance(query, note.title);
+
+        // Extract domain from path
+        const noteDomain = extractDomainFromPath(note.path);
 
         allResults.set(note.path, {
           path: note.path,
@@ -153,19 +182,30 @@ export async function checkHandler(args: Record<string, unknown>): Promise<ToolR
           relevance: titleScore,
           summary: extractSummary(fm),
           last_modified: note.frontmatter.modified,
+          domain: noteDomain.length > 0 ? noteDomain : undefined,
         });
       }
     }
 
     // Sort by relevance
-    const matches = [...allResults.values()].sort((a, b) => b.relevance - a.relevance);
+    const matches = [...allResults.values()].sort(
+      (a, b) => b.relevance - a.relevance
+    );
 
-    // Get all note titles for missing technology detection
+    // Get all note titles for suggestions
     const allNotes = queryNotesInVault(db, { limit: 1000 });
     const allTitles = allNotes.map((n) => n.title);
 
-    // Build suggestions
-    const suggestions = buildSuggestions(query, matches, allTitles);
+    // Discover domains in the vault
+    const discoveredDomains = discoverDomains(vault.path);
+
+    // Build suggestions with domain discovery
+    const suggestions = buildSuggestions(
+      query,
+      matches,
+      allTitles,
+      discoveredDomains
+    );
 
     // Determine recommendation
     const recommendation = determineRecommendation(query, matches, suggestions);
@@ -192,22 +232,85 @@ export async function checkHandler(args: Record<string, unknown>): Promise<ToolR
 }
 
 /**
+ * Discover existing domains in the vault by scanning directories
+ */
+function discoverDomains(
+  vaultPath: string
+): Map<string, { noteCount: number; level: number }> {
+  const domains = new Map<string, { noteCount: number; level: number }>();
+
+  function scanDirectory(
+    dirPath: string,
+    relativePath: string,
+    level: number
+  ): void {
+    try {
+      const entries = readdirSync(dirPath, { withFileTypes: true });
+
+      let noteCount = 0;
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          // Skip special folders and hidden directories
+          if (
+            entry.name.startsWith('.') ||
+            entry.name === 'node_modules' ||
+            isSpecialFolder(entry.name)
+          ) {
+            continue;
+          }
+
+          const childRelPath = relativePath
+            ? `${relativePath}/${entry.name}`
+            : entry.name;
+
+          // Recursively scan subdirectories
+          scanDirectory(join(dirPath, entry.name), childRelPath, level + 1);
+        } else if (entry.isFile() && entry.name.endsWith('.md')) {
+          noteCount++;
+        }
+      }
+
+      // Only add as domain if it has notes or is explicitly a topic folder
+      if (noteCount > 0 && relativePath) {
+        domains.set(relativePath, { noteCount, level });
+      }
+    } catch {
+      // Directory not accessible, skip
+    }
+  }
+
+  scanDirectory(vaultPath, '', 0);
+
+  return domains;
+}
+
+/**
  * Extract summary from frontmatter
  */
 function extractSummary(frontmatter: Record<string, unknown>): string {
-  const type = frontmatter.type as string;
+  const captureType = frontmatter.capture_type as string | undefined;
+  const domain = frontmatter.domain as string[] | undefined;
   const tags = frontmatter.tags as string[] | undefined;
   const confidence = frontmatter.confidence as number | undefined;
 
-  const parts = [type];
-  if (tags && tags.length > 0) {
+  const parts: string[] = [];
+
+  if (captureType) {
+    parts.push(captureType);
+  }
+
+  if (domain && domain.length > 0) {
+    parts.push(`domain: ${domain.join('/')}`);
+  } else if (tags && tags.length > 0) {
     parts.push(`tags: ${tags.slice(0, 3).join(', ')}`);
   }
+
   if (confidence !== undefined) {
     parts.push(`confidence: ${Math.round(confidence * 100)}%`);
   }
 
-  return parts.join(' | ');
+  return parts.join(' | ') || 'No metadata';
 }
 
 /**
@@ -240,102 +343,132 @@ function calculateTitleRelevance(query: string, title: string): number {
   const overlap = [...queryWords].filter((w) => titleWords.has(w)).length;
   const maxWords = Math.max(queryWords.size, titleWords.size);
 
-  return overlap / maxWords * 0.7;
+  return (overlap / maxWords) * 0.7;
 }
 
 /**
- * Build suggestions based on matches
+ * Build suggestions based on matches and discovered domains
  */
-function buildSuggestions(query: string, matches: CheckMatch[], allTitles: string[]): CheckSuggestions {
+function buildSuggestions(
+  query: string,
+  matches: CheckMatch[],
+  allTitles: string[],
+  discoveredDomains: Map<string, { noteCount: number; level: number }>
+): CheckSuggestions {
   const stubs = matches.filter((m) => m.status === 'stub');
   const similarTitles = matches
     .filter((m) => m.relevance >= 0.7)
     .map((m) => m.title)
     .slice(0, 5);
 
-  // Find potential technology terms in query that don't have notes
-  const missingTechnologies = findMissingTechnologies(query, allTitles);
+  // Generate domain suggestions
+  const suggestedDomains = generateDomainSuggestions(
+    query,
+    matches,
+    discoveredDomains
+  );
 
   return {
     should_expand_stub: stubs.length > 0 && stubs[0]!.relevance >= 0.8,
     stub_path: stubs.length > 0 ? stubs[0]!.path : undefined,
-    missing_technologies: missingTechnologies,
     similar_titles: similarTitles,
+    suggested_domains: suggestedDomains,
   };
 }
 
 /**
- * Extract potential technology terms from query and find ones without notes
+ * Generate domain suggestions based on query and existing vault structure
  */
-function findMissingTechnologies(query: string, existingTitles: string[]): string[] {
-  // Common technology-related words to look for
-  const techPatterns = [
-    /\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g, // CamelCase (e.g., TypeScript, JavaScript)
-    /\b([a-z]+(?:-[a-z]+)+)\b/g, // kebab-case (e.g., docker-compose)
-    /\b([a-z]+(?:_[a-z]+)+)\b/g, // snake_case (e.g., some_tool)
-  ];
+function generateDomainSuggestions(
+  query: string,
+  matches: CheckMatch[],
+  discoveredDomains: Map<string, { noteCount: number; level: number }>
+): DomainSuggestion[] {
+  const suggestions: DomainSuggestion[] = [];
+  const queryWords = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+  const querySlug = slugify(query);
 
-  // Known technology terms to check (multi-word won't match patterns above)
-  const knownTechWords = new Set([
-    'docker', 'kubernetes', 'k8s', 'nginx', 'redis', 'postgres', 'postgresql',
-    'mongodb', 'mysql', 'sqlite', 'graphql', 'rest', 'api', 'grpc',
-    'react', 'vue', 'angular', 'svelte', 'node', 'nodejs', 'deno', 'bun',
-    'python', 'rust', 'golang', 'java', 'typescript', 'javascript',
-    'aws', 'azure', 'gcp', 'terraform', 'ansible', 'helm', 'istio',
-    'git', 'github', 'gitlab', 'jenkins', 'circleci', 'travis',
-    'linux', 'ubuntu', 'debian', 'centos', 'alpine', 'bash', 'zsh',
-    'vim', 'neovim', 'vscode', 'emacs', 'obsidian',
-  ]);
+  // 1. Look for domains that match query words
+  for (const [domainPath, info] of discoveredDomains) {
+    const domainParts = domainPath.toLowerCase().split('/');
+    const lastPart = domainParts[domainParts.length - 1] || '';
 
-  const candidates = new Set<string>();
-
-  // Extract CamelCase, kebab-case, snake_case terms
-  for (const pattern of techPatterns) {
-    const matches = query.matchAll(pattern);
-    for (const match of matches) {
-      if (match[1] && match[1].length >= 3) {
-        candidates.add(match[1].toLowerCase());
+    // Check if any query word matches a domain part
+    for (const word of queryWords) {
+      if (
+        lastPart.includes(word) ||
+        word.includes(lastPart) ||
+        slugify(word) === slugify(lastPart)
+      ) {
+        suggestions.push({
+          path: domainPath.split('/'),
+          confidence: 0.8,
+          reason: `Matches existing domain "${domainPath}" (${info.noteCount} notes)`,
+          exists: true,
+          note_count: info.noteCount,
+        });
+        break;
       }
     }
   }
 
-  // Check for known tech words
-  const queryLower = query.toLowerCase();
-  const words = queryLower.split(/\s+/);
-  for (const word of words) {
-    const cleanWord = word.replace(/[^a-z0-9-_]/g, '');
-    if (knownTechWords.has(cleanWord)) {
-      candidates.add(cleanWord);
+  // 2. Look at domains of matching notes
+  for (const match of matches.slice(0, 5)) {
+    if (match.domain && match.domain.length > 0) {
+      const domainKey = match.domain.join('/');
+      // Don't add if we already have this domain
+      if (!suggestions.some((s) => s.path.join('/') === domainKey)) {
+        suggestions.push({
+          path: match.domain,
+          confidence: match.relevance * 0.9,
+          reason: `Similar note "${match.title}" is in this domain`,
+          exists: true,
+          note_count:
+            discoveredDomains.get(domainKey)?.noteCount || undefined,
+        });
+      }
     }
   }
 
-  // Filter out terms that already have notes
-  const existingLower = new Set(existingTitles.map(t => t.toLowerCase()));
-  const existingSlugs = new Set(existingTitles.map(t => slugify(t)));
+  // 3. Suggest new domain based on query words if no good matches
+  if (suggestions.length === 0 || suggestions[0]!.confidence < 0.5) {
+    // Create a suggested domain from query words
+    const suggestedPath = queryWords
+      .filter((w) => w.length > 2)
+      .slice(0, 3)
+      .map(slugify);
 
-  const missing: string[] = [];
-  for (const term of candidates) {
-    const termSlug = slugify(term);
-    // Check if a note exists with this title or slug
-    const exists = existingLower.has(term) ||
-                   existingSlugs.has(termSlug) ||
-                   existingTitles.some(t =>
-                     t.toLowerCase().includes(term) ||
-                     slugify(t).includes(termSlug)
-                   );
-    if (!exists) {
-      missing.push(term);
+    if (suggestedPath.length > 0) {
+      suggestions.push({
+        path: suggestedPath,
+        confidence: 0.5,
+        reason: 'Suggested based on query keywords',
+        exists: false,
+      });
     }
   }
 
-  return missing.slice(0, 5); // Limit to 5 suggestions
+  // Sort by confidence and deduplicate
+  const seen = new Set<string>();
+  return suggestions
+    .sort((a, b) => b.confidence - a.confidence)
+    .filter((s) => {
+      const key = s.path.join('/');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 5);
 }
 
 /**
  * Determine the recommendation based on matches
  */
 function determineRecommendation(
-  query: string,
+  _query: string,
   matches: CheckMatch[],
   suggestions: CheckSuggestions
 ): CheckRecommendation {
@@ -368,23 +501,4 @@ function determineRecommendation(
 
   // Default - create new but be aware of similar content
   return 'create_new';
-}
-
-/**
- * Map intent knowledge types to existing types for query
- */
-function mapKnowledgeType(intentType: IntentKnowledgeType): string {
-  const typeMap: Record<string, string> = {
-    technology: 'research',
-    command: 'command',
-    reference: 'research',
-    standard: 'pattern',
-    pattern: 'pattern',
-    research: 'research',
-    decision: 'project',
-    configuration: 'infrastructure',
-    troubleshooting: 'troubleshooting',
-    note: 'research',
-  };
-  return typeMap[intentType] ?? 'research';
 }

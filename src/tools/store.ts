@@ -1,9 +1,14 @@
 /**
- * palace_store - Intent-based knowledge storage
+ * palace_store - Topic-Based Knowledge Storage (Phase 017)
  *
- * AI expresses WHAT to store, MCP determines WHERE based on vault config.
- * This replaces the path-based approach of palace_remember.
- * Supports automatic atomic note splitting when content exceeds limits.
+ * AI expresses WHAT to store with domain/topic hierarchy.
+ * The domain directly becomes the folder path - no type-to-folder mapping.
+ *
+ * Key principles:
+ * - Only 3 capture types: source, knowledge, project
+ * - Domain array IS the folder path
+ * - AI observes vault structure and proposes paths
+ * - System suggests, never dictates
  */
 
 import { mkdir, writeFile } from 'fs/promises';
@@ -12,23 +17,56 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import type { PalaceStoreOutput } from '../types/intent.js';
 import { palaceStoreInputSchema } from '../types/intent.js';
-import { resolveStorage, checkPathConflict, generateAlternativePath } from '../services/vault/resolver.js';
-import { createStub, findStubByTitle, expandStub, createStubsForUnresolvedLinks } from '../services/vault/stub-manager.js';
-import { findUnlinkedMentions, addRetroactiveLinks } from '../services/graph/retroactive.js';
-import { buildCompleteIndex, scanForMatches, autolinkContent } from '../services/autolink/index.js';
+import {
+  resolveStorage,
+  checkPathConflict,
+  generateAlternativePath,
+} from '../services/vault/resolver.js';
+import {
+  createStub,
+  findStubByTitle,
+  expandStub,
+  createStubsForUnresolvedLinks,
+} from '../services/vault/stub-manager.js';
+import {
+  findUnlinkedMentions,
+  addRetroactiveLinks,
+} from '../services/graph/retroactive.js';
+import {
+  buildCompleteIndex,
+  scanForMatches,
+  autolinkContent,
+} from '../services/autolink/index.js';
 import { getIndexManager } from '../services/index/index.js';
-import { getIndexedPaths, indexNote, trackTechnologyMentions } from '../services/index/sync.js';
+import { getIndexedPaths, indexNote } from '../services/index/sync.js';
 import { readNote } from '../services/vault/reader.js';
-import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../utils/vault-param.js';
+import {
+  resolveVaultParam,
+  enforceWriteAccess,
+  getVaultResultInfo,
+} from '../utils/vault-param.js';
 import { stringifyFrontmatter } from '../utils/frontmatter.js';
 import { logger } from '../utils/logger.js';
-import { shouldSplit, splitContent, createHub, createChildNote } from '../services/atomic/index.js';
+import {
+  shouldSplit,
+  splitContent,
+  createHub,
+  createChildNote,
+} from '../services/atomic/index.js';
 
-// Tool definition
+// Tool definition with new topic-based schema
 export const storeTool: Tool = {
   name: 'palace_store',
-  description:
-    'Store new knowledge using intent-based resolution. Express WHAT to store (knowledge type, domain, scope), and Palace determines WHERE based on vault configuration. Supports automatic stub creation for mentioned technologies and retroactive linking.',
+  description: `Store knowledge using topic-based resolution. Express WHAT to store with capture_type and domain.
+
+**Capture Types:**
+- 'source': Raw capture from a specific source (book, video, article) → sources/{type}/{title}/
+- 'knowledge': Processed, reusable knowledge about a topic → {domain}/{subdomain}/
+- 'project': Project or client specific context → projects/{project}/ or clients/{client}/
+
+**Domain IS the path:** ['networking', 'wireless', 'lora'] → networking/wireless/lora/
+
+**IMPORTANT:** Before storing, use palace_structure to observe the vault and palace_check to find existing knowledge.`,
   inputSchema: {
     type: 'object',
     properties: {
@@ -42,67 +80,71 @@ export const storeTool: Tool = {
       },
       intent: {
         type: 'object',
-        description: 'Storage intent - what kind of knowledge and its classification',
+        description: 'Storage intent - capture type and domain classification',
         properties: {
-          knowledge_type: {
+          capture_type: {
             type: 'string',
-            enum: [
-              'technology',
-              'command',
-              'reference',
-              'standard',
-              'pattern',
-              'research',
-              'decision',
-              'configuration',
-              'troubleshooting',
-              'note',
-            ],
-            description: 'What kind of knowledge this is',
+            enum: ['source', 'knowledge', 'project'],
+            description:
+              "'source': from a book/video/article, 'knowledge': reusable knowledge, 'project': project-specific",
           },
           domain: {
             type: 'array',
             items: { type: 'string' },
-            description: 'Domain classification hierarchy (e.g., ["kubernetes", "networking"])',
+            description:
+              'Topic hierarchy - THIS IS THE FOLDER PATH (e.g., ["gardening", "vegetables", "tomatoes"])',
           },
-          tags: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Tags for categorization',
-          },
-          scope: {
-            type: 'string',
-            enum: ['general', 'project-specific'],
-            description: 'Is this general knowledge or project-specific?',
+          source: {
+            type: 'object',
+            description:
+              "Source information (required for capture_type='source')",
+            properties: {
+              type: {
+                type: 'string',
+                enum: [
+                  'book',
+                  'video',
+                  'article',
+                  'podcast',
+                  'conversation',
+                  'documentation',
+                  'other',
+                ],
+              },
+              title: { type: 'string', description: 'Source title' },
+              author: { type: 'string', description: 'Author (optional)' },
+              url: { type: 'string', description: 'URL (optional)' },
+              date: { type: 'string', description: 'Date (optional)' },
+            },
+            required: ['type', 'title'],
           },
           project: {
             type: 'string',
-            description: 'Project name (required if scope is project-specific)',
+            description:
+              "Project name (required for capture_type='project' without client)",
           },
           client: {
             type: 'string',
-            description: 'Client name (for client-specific knowledge)',
-          },
-          product: {
-            type: 'string',
-            description: 'Product name (for product-specific knowledge)',
-          },
-          technologies: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Technologies mentioned - stubs will be created if they don\'t exist',
+            description:
+              'Client name (optional, for client-specific projects)',
           },
           references: {
             type: 'array',
             items: { type: 'string' },
             description: 'Explicit links to create to other notes',
           },
-          parent: {
+          note_type: {
             type: 'string',
-            description: 'Parent hub note if known',
+            description:
+              'Optional note type hint for frontmatter (not for path resolution)',
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Tags for categorization',
           },
         },
-        required: ['knowledge_type', 'domain', 'scope'],
+        required: ['capture_type', 'domain'],
       },
       options: {
         type: 'object',
@@ -114,15 +156,13 @@ export const storeTool: Tool = {
           },
           create_stubs: {
             type: 'boolean',
-            description: 'Create stubs for mentioned technologies (default: true)',
+            description:
+              'Create stubs for unresolved [[links]] in content (default: true)',
           },
           retroactive_link: {
             type: 'boolean',
-            description: 'Update existing notes with links to this new note (default: true)',
-          },
-          expand_if_stub: {
-            type: 'boolean',
-            description: 'If a stub exists for this title, expand it instead of creating new (default: true)',
+            description:
+              'Update existing notes with links to this new note (default: true)',
           },
           dry_run: {
             type: 'boolean',
@@ -130,11 +170,18 @@ export const storeTool: Tool = {
           },
           autolink: {
             type: 'boolean',
-            description: 'Automatically insert wiki-links for mentions of existing notes (default: true)',
+            description:
+              'Automatically insert wiki-links for mentions of existing notes (default: true)',
           },
           force_atomic: {
             type: 'boolean',
-            description: 'Skip atomic splitting even if content exceeds limits (default: false)',
+            description:
+              'Skip atomic splitting even if content exceeds limits (default: false)',
+          },
+          confirm_new_domain: {
+            type: 'boolean',
+            description:
+              'Warn if creating a new top-level domain (default: true)',
           },
         },
       },
@@ -144,7 +191,8 @@ export const storeTool: Tool = {
         properties: {
           origin: {
             type: 'string',
-            description: 'Where this knowledge came from (ai:research, ai:artifact, human, web:url)',
+            description:
+              'Where this knowledge came from (ai:research, ai:artifact, human, web:url)',
           },
           confidence: {
             type: 'number',
@@ -158,13 +206,17 @@ export const storeTool: Tool = {
 };
 
 // Tool handler
-export async function storeHandler(args: Record<string, unknown>): Promise<ToolResult<PalaceStoreOutput>> {
+export async function storeHandler(
+  args: Record<string, unknown>
+): Promise<ToolResult<PalaceStoreOutput>> {
   // Validate input
   const parseResult = palaceStoreInputSchema.safeParse(args);
   if (!parseResult.success) {
     return {
       success: false,
-      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      error: parseResult.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; '),
       code: 'VALIDATION_ERROR',
     };
   }
@@ -174,10 +226,10 @@ export async function storeHandler(args: Record<string, unknown>): Promise<ToolR
   const vaultParam = options?.vault;
   const create_stubs = options?.create_stubs ?? true;
   const retroactive_link = options?.retroactive_link ?? true;
-  const expand_if_stub = options?.expand_if_stub ?? true;
   const dry_run = options?.dry_run ?? false;
   const autolink = options?.autolink ?? true;
   const force_atomic = options?.force_atomic ?? false;
+  const confirm_new_domain = options?.confirm_new_domain ?? true;
 
   try {
     // Resolve and validate vault
@@ -188,48 +240,57 @@ export async function storeHandler(args: Record<string, unknown>): Promise<ToolR
     const db = await manager.getIndex(vault.alias);
 
     // Check if a stub exists for this title and should be expanded
-    if (expand_if_stub) {
-      const existingStub = findStubByTitle(db, title);
-      if (existingStub) {
-        if (!dry_run) {
-          await expandStub(
-            existingStub.path,
-            content,
-            vault,
-            source ?? { origin: 'ai:research', confidence: 0.5 }
-          );
+    const existingStub = findStubByTitle(db, title);
+    if (existingStub) {
+      if (!dry_run) {
+        await expandStub(
+          existingStub.path,
+          content,
+          vault,
+          source ?? { origin: 'ai:research', confidence: 0.5 }
+        );
 
-          // Re-index the expanded note
-          const updatedNote = await readNote(existingStub.path, {
-            vaultPath: vault.path,
-            ignoreConfig: vault.config.ignore,
-          });
-          if (updatedNote) {
-            indexNote(db, updatedNote);
-          }
+        // Re-index the expanded note
+        const updatedNote = await readNote(existingStub.path, {
+          vaultPath: vault.path,
+          ignoreConfig: vault.config.ignore,
+        });
+        if (updatedNote) {
+          indexNote(db, updatedNote);
         }
-
-        const vaultInfo = getVaultResultInfo(vault);
-        return {
-          success: true,
-          data: {
-            success: true,
-            vault: vaultInfo.vault,
-            vaultPath: vaultInfo.vault_path,
-            created: {
-              path: existingStub.path,
-              title,
-              type: 'atomic',
-            },
-            expanded_stub: existingStub.path,
-            message: `Expanded stub: ${existingStub.path}`,
-          },
-        };
       }
+
+      const vaultInfo = getVaultResultInfo(vault);
+      return {
+        success: true,
+        data: {
+          success: true,
+          vault: vaultInfo.vault,
+          vaultPath: vaultInfo.vault_path,
+          created: {
+            path: existingStub.path,
+            title,
+            type: 'atomic',
+          },
+          domain: {
+            path: dirname(existingStub.path),
+            is_new: false,
+            level: existingStub.path.split('/').length - 1,
+          },
+          message: `Expanded stub: ${existingStub.path}`,
+        },
+      };
     }
 
     // Resolve storage location
     const resolution = resolveStorage(intent, title, vault);
+
+    // Check for new top-level domain
+    if (resolution.isNewTopLevelDomain && confirm_new_domain) {
+      logger.info(
+        `Creating new top-level domain: ${intent.domain[0]}`
+      );
+    }
 
     // Check for path conflicts
     const existingPaths = getIndexedPaths(db);
@@ -302,72 +363,40 @@ export async function storeHandler(args: Record<string, unknown>): Promise<ToolR
     // Build frontmatter for single atomic note
     const now = new Date().toISOString();
     const frontmatter: Record<string, unknown> = {
-      type: mapKnowledgeType(intent.knowledge_type),
+      capture_type: intent.capture_type,
+      domain: intent.domain,
       status: 'active',
       created: now,
       modified: now,
       source: source?.origin ?? 'ai:research',
       confidence: source?.confidence ?? 0.5,
       verified: false,
-      tags: [...(intent.tags ?? []), ...intent.domain],
+      tags: intent.tags ?? [],
       related: intent.references?.map((r) => `[[${r}]]`) ?? [],
       aliases: [],
-      palace: {
-        version: 1,
-        layer: resolution.layer,
-      },
     };
 
-    // Add context fields
+    // Add source capture metadata
+    if (intent.capture_type === 'source' && intent.source) {
+      frontmatter.source_type = intent.source.type;
+      frontmatter.source_title = intent.source.title;
+      if (intent.source.author) frontmatter.source_author = intent.source.author;
+      if (intent.source.url) frontmatter.source_url = intent.source.url;
+    }
+
+    // Add project/client context
     if (intent.project) frontmatter.project = intent.project;
     if (intent.client) frontmatter.client = intent.client;
-    if (intent.product) frontmatter.product = intent.product;
-    if (intent.parent) frontmatter.parent = `[[${intent.parent}]]`;
+
+    // Add optional note type
+    if (intent.note_type) frontmatter.note_type = intent.note_type;
 
     // Build full note content
-    const body = `# ${title}
-
-${processedContent}`;
+    const body = `# ${title}\n\n${processedContent}`;
     const noteContent = stringifyFrontmatter(frontmatter, body);
 
-    // Create stubs for mentioned technologies
+    // Create stubs for unresolved [[wiki-links]]
     const stubsCreated: string[] = [];
-
-    if (create_stubs && intent.technologies && intent.technologies.length > 0) {
-      for (const tech of intent.technologies) {
-        // Check if note exists for this technology
-        const techNote = findStubByTitle(db, tech);
-        const techExists = existingPaths.some(
-          (p) =>
-            p.toLowerCase().includes(tech.toLowerCase()) ||
-            p.toLowerCase().endsWith(`${tech.toLowerCase()}.md`)
-        );
-
-        if (!techNote && !techExists && !dry_run) {
-          try {
-            const stubPath = await createStub(
-              tech,
-              `Referenced in ${title}`,
-              finalResolution.relativePath,
-              vault,
-              intent.domain
-            );
-            stubsCreated.push(stubPath);
-
-            // Index the stub
-            const stubNote = await readNote(stubPath, {
-              vaultPath: vault.path,
-              ignoreConfig: vault.config.ignore,
-            });
-            if (stubNote) {
-              indexNote(db, stubNote);
-            }
-          } catch (stubError) {
-            logger.warn(`Failed to create stub for ${tech}`, stubError);
-          }
-        }
-      }
-    }
 
     // Save the note
     if (!dry_run) {
@@ -406,17 +435,23 @@ ${processedContent}`;
             }
           }
         } catch (linkStubError) {
-          logger.warn('Failed to create stubs for unresolved links', linkStubError);
+          logger.warn(
+            'Failed to create stubs for unresolved links',
+            linkStubError
+          );
         }
       }
     }
 
     // Handle retroactive linking
-    const linksToExisting: string[] = [];
     const linksFromExisting: string[] = [];
 
     if (retroactive_link && !dry_run) {
-      const matches = findUnlinkedMentions(db, title, finalResolution.relativePath);
+      const matches = findUnlinkedMentions(
+        db,
+        title,
+        finalResolution.relativePath
+      );
       if (matches.length > 0) {
         const result = await addRetroactiveLinks(
           title,
@@ -428,10 +463,9 @@ ${processedContent}`;
       }
     }
 
-    // Track technology mentions for this note
-    if (intent.technologies && intent.technologies.length > 0 && !dry_run) {
-      trackTechnologyMentions(db, finalResolution.relativePath, intent.technologies);
-    }
+    // Calculate domain info
+    const domainPath = intent.domain.join('/');
+    const domainLevel = intent.domain.length;
 
     const vaultResultInfo = getVaultResultInfo(vault);
     return {
@@ -445,11 +479,16 @@ ${processedContent}`;
           title,
           type: 'atomic',
         },
+        domain: {
+          path: domainPath,
+          is_new: resolution.isNewTopLevelDomain,
+          level: domainLevel,
+        },
         stubs_created: stubsCreated.length > 0 ? stubsCreated : undefined,
         links_added:
-          linksAdded > 0 || linksToExisting.length > 0 || linksFromExisting.length > 0
+          linksAdded > 0 || linksFromExisting.length > 0
             ? {
-                to_existing: linksToExisting,
+                to_existing: [],
                 from_existing: linksFromExisting,
               }
             : undefined,
@@ -469,25 +508,6 @@ ${processedContent}`;
       code: 'STORE_ERROR',
     };
   }
-}
-
-/**
- * Map intent knowledge types to existing types
- */
-function mapKnowledgeType(intentType: string): string {
-  const typeMap: Record<string, string> = {
-    technology: 'research',
-    command: 'command',
-    reference: 'research',
-    standard: 'pattern',
-    pattern: 'pattern',
-    research: 'research',
-    decision: 'project',
-    configuration: 'infrastructure',
-    troubleshooting: 'troubleshooting',
-    note: 'research',
-  };
-  return typeMap[intentType] ?? 'research';
 }
 
 /**
@@ -511,7 +531,9 @@ function buildSuccessMessage(
   }
 
   if (retroactiveUpdates.length > 0) {
-    parts.push(`${retroactiveUpdates.length} existing note${retroactiveUpdates.length > 1 ? 's' : ''} updated with links`);
+    parts.push(
+      `${retroactiveUpdates.length} existing note${retroactiveUpdates.length > 1 ? 's' : ''} updated with links`
+    );
   }
 
   return parts.join(' | ');
@@ -523,20 +545,27 @@ function buildSuccessMessage(
 async function handleAtomicSplit(
   title: string,
   content: string,
-  resolution: { relativePath: string; parentDir: string; fullPath: string; layer: string },
+  resolution: ReturnType<typeof resolveStorage>,
   vault: ReturnType<typeof resolveVaultParam>,
-  intent: { knowledge_type: string; domain: string[]; tags?: string[] | undefined; references?: string[] | undefined; project?: string | undefined; client?: string | undefined; product?: string | undefined; technologies?: string[] | undefined },
+  intent: {
+    capture_type: string;
+    domain: string[];
+    tags?: string[] | undefined;
+    references?: string[] | undefined;
+    project?: string | undefined;
+    client?: string | undefined;
+    source?: { type: string; title: string; author?: string | undefined; url?: string | undefined } | undefined;
+  },
   source: { origin?: string | undefined; confidence?: number | undefined } | undefined,
   db: Awaited<ReturnType<ReturnType<typeof getIndexManager>['getIndex']>>,
   dryRun: boolean,
   createStubs: boolean,
-  retroactiveLink: boolean,
+  _retroactiveLink: boolean,
   linksAdded: number
 ): Promise<ToolResult<PalaceStoreOutput>> {
   const atomicConfig = vault.config.atomic;
 
   // Determine target directory for hub and children
-  // Use the parent directory of the intended path, creating a subdirectory named after the note
   const targetDir = dirname(resolution.relativePath);
 
   // Split the content
@@ -544,13 +573,13 @@ async function handleAtomicSplit(
     targetDir,
     title,
     originalFrontmatter: {
-      type: mapKnowledgeType(intent.knowledge_type),
+      capture_type: intent.capture_type,
+      domain: intent.domain,
       source: source?.origin ?? 'ai:research',
       confidence: source?.confidence ?? 0.5,
     },
     hubFilename: atomicConfig.hub_filename,
     domain: intent.domain,
-    layer: resolution.layer,
   });
 
   const createdPaths: string[] = [];
@@ -576,7 +605,7 @@ async function handleAtomicSplit(
         hubFilename: atomicConfig.hub_filename,
         domain: intent.domain,
         originalFrontmatter: {
-          type: mapKnowledgeType(intent.knowledge_type),
+          capture_type: intent.capture_type,
         },
       }
     );
@@ -605,7 +634,7 @@ async function handleAtomicSplit(
         {
           domain: intent.domain,
           originalFrontmatter: {
-            type: mapKnowledgeType(intent.knowledge_type),
+            capture_type: intent.capture_type,
           },
         }
       );
@@ -624,28 +653,20 @@ async function handleAtomicSplit(
       }
     }
 
-    // Create stubs for mentioned technologies
-    if (createStubs && intent.technologies && intent.technologies.length > 0) {
-      const existingPaths = getIndexedPaths(db);
-      for (const tech of intent.technologies) {
-        const techNote = findStubByTitle(db, tech);
-        const techExists = existingPaths.some(
-          (p) =>
-            p.toLowerCase().includes(tech.toLowerCase()) ||
-            p.toLowerCase().endsWith(`${tech.toLowerCase()}.md`)
-        );
+    // Create stubs for unresolved [[wiki-links]]
+    if (createStubs) {
+      try {
+        for (const childPath of createdPaths) {
+          const linkStubs = await createStubsForUnresolvedLinks(
+            content,
+            childPath,
+            db,
+            vault,
+            intent.domain
+          );
+          stubsCreated.push(...linkStubs);
 
-        if (!techNote && !techExists) {
-          try {
-            const stubPath = await createStub(
-              tech,
-              `Referenced in ${title}`,
-              splitResult.hub.relativePath,
-              vault,
-              intent.domain
-            );
-            stubsCreated.push(stubPath);
-
+          for (const stubPath of linkStubs) {
             const stubNote = await readNote(stubPath, {
               vaultPath: vault.path,
               ignoreConfig: vault.config.ignore,
@@ -653,21 +674,18 @@ async function handleAtomicSplit(
             if (stubNote) {
               indexNote(db, stubNote);
             }
-          } catch (stubError) {
-            logger.warn(`Failed to create stub for ${tech}`, stubError);
           }
         }
+      } catch (stubError) {
+        logger.warn('Failed to create stubs', stubError);
       }
-    }
-
-    // Track technology mentions
-    if (intent.technologies && intent.technologies.length > 0) {
-      trackTechnologyMentions(db, splitResult.hub.relativePath, intent.technologies);
     }
   }
 
   const vaultResultInfo = getVaultResultInfo(vault);
   const childCount = splitResult.children.length;
+  const domainPath = intent.domain.join('/');
+  const domainLevel = intent.domain.length;
 
   return {
     success: true,
@@ -680,13 +698,19 @@ async function handleAtomicSplit(
         title,
         type: 'hub',
       },
+      domain: {
+        path: domainPath,
+        is_new: resolution.isNewTopLevelDomain,
+        level: domainLevel,
+      },
       split_result: {
         hub_path: splitResult.hub.relativePath,
         children_paths: splitResult.children.map((c) => c.relativePath),
         children_count: childCount,
       },
       stubs_created: stubsCreated.length > 0 ? stubsCreated : undefined,
-      links_added: linksAdded > 0 ? { to_existing: [], from_existing: [] } : undefined,
+      links_added:
+        linksAdded > 0 ? { to_existing: [], from_existing: [] } : undefined,
       message: dryRun
         ? `Would create hub with ${childCount} children at ${splitResult.hub.relativePath}`
         : `Created hub with ${childCount} children: ${splitResult.hub.relativePath}`,

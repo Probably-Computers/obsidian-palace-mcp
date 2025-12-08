@@ -1,10 +1,10 @@
 /**
- * Unit tests for AI Support services
+ * Unit tests for AI Support services (Phase 017)
  */
 
 import { describe, it, expect } from 'vitest';
 
-describe('AI Support System', () => {
+describe('AI Support System (Phase 017)', () => {
   describe('Context Detector Exports', () => {
     it('should export detectContext function', async () => {
       const { detectContext } = await import(
@@ -14,12 +14,12 @@ describe('AI Support System', () => {
       expect(typeof detectContext).toBe('function');
     });
 
-    it('should export detectTechnologies function', async () => {
-      const { detectTechnologies } = await import(
+    it('should export detectDomains function', async () => {
+      const { detectDomains } = await import(
         '../../../../src/services/ai-support/context-detector.js'
       );
-      expect(detectTechnologies).toBeDefined();
-      expect(typeof detectTechnologies).toBe('function');
+      expect(detectDomains).toBeDefined();
+      expect(typeof detectDomains).toBe('function');
     });
 
     it('should export detectProjects function', async () => {
@@ -38,26 +38,18 @@ describe('AI Support System', () => {
       expect(typeof detectClients).toBe('function');
     });
 
-    it('should export detectScope function', async () => {
-      const { detectScope } = await import(
+    it('should export detectCaptureType function', async () => {
+      const { detectCaptureType } = await import(
         '../../../../src/services/ai-support/context-detector.js'
       );
-      expect(detectScope).toBeDefined();
-      expect(typeof detectScope).toBe('function');
-    });
-
-    it('should export detectDomains function', async () => {
-      const { detectDomains } = await import(
-        '../../../../src/services/ai-support/context-detector.js'
-      );
-      expect(detectDomains).toBeDefined();
-      expect(typeof detectDomains).toBe('function');
+      expect(detectCaptureType).toBeDefined();
+      expect(typeof detectCaptureType).toBe('function');
     });
 
     it('should export vocabulary builders', async () => {
-      const { buildTechVocabulary, buildProjectVocabulary, buildClientVocabulary } =
+      const { buildDomainVocabulary, buildProjectVocabulary, buildClientVocabulary } =
         await import('../../../../src/services/ai-support/context-detector.js');
-      expect(buildTechVocabulary).toBeDefined();
+      expect(buildDomainVocabulary).toBeDefined();
       expect(buildProjectVocabulary).toBeDefined();
       expect(buildClientVocabulary).toBeDefined();
     });
@@ -125,126 +117,111 @@ describe('AI Support System', () => {
 
   describe('Index Exports', () => {
     it('should export all context detector functions', async () => {
-      const exports = await import('../../../../src/services/ai-support/index.js');
-      expect(exports.detectContext).toBeDefined();
-      expect(exports.detectTechnologies).toBeDefined();
-      expect(exports.detectProjects).toBeDefined();
-      expect(exports.detectClients).toBeDefined();
-      expect(exports.detectScope).toBeDefined();
-      expect(exports.detectDomains).toBeDefined();
+      const {
+        detectContext,
+        detectDomains,
+        detectProjects,
+        detectClients,
+        detectCaptureType,
+      } = await import('../../../../src/services/ai-support/index.js');
+
+      expect(detectContext).toBeDefined();
+      expect(detectDomains).toBeDefined();
+      expect(detectProjects).toBeDefined();
+      expect(detectClients).toBeDefined();
+      expect(detectCaptureType).toBeDefined();
     });
 
     it('should export all missing identifier functions', async () => {
-      const exports = await import('../../../../src/services/ai-support/index.js');
-      expect(exports.identifyMissing).toBeDefined();
-      expect(exports.isIntentComplete).toBeDefined();
-      expect(exports.prioritizeMissing).toBeDefined();
+      const { identifyMissing, isIntentComplete, prioritizeMissing } = await import(
+        '../../../../src/services/ai-support/index.js'
+      );
+
+      expect(identifyMissing).toBeDefined();
+      expect(isIntentComplete).toBeDefined();
+      expect(prioritizeMissing).toBeDefined();
     });
 
     it('should export all question generator functions', async () => {
-      const exports = await import('../../../../src/services/ai-support/index.js');
-      expect(exports.generateQuestions).toBeDefined();
-      expect(exports.generateSuggestions).toBeDefined();
-      expect(exports.calculateConfidence).toBeDefined();
-      expect(exports.generateSummaryMessage).toBeDefined();
+      const {
+        generateQuestions,
+        generateSuggestions,
+        calculateConfidence,
+        generateSummaryMessage,
+      } = await import('../../../../src/services/ai-support/index.js');
+
+      expect(generateQuestions).toBeDefined();
+      expect(generateSuggestions).toBeDefined();
+      expect(calculateConfidence).toBeDefined();
+      expect(generateSummaryMessage).toBeDefined();
     });
   });
 });
 
-describe('Technology Detection', () => {
-  it('should detect known technologies by patterns', async () => {
-    const { detectTechnologies } = await import(
+describe('Capture Type Detection (Phase 017)', () => {
+  it('should detect source capture type', async () => {
+    const { detectCaptureType } = await import(
       '../../../../src/services/ai-support/context-detector.js'
     );
 
-    const content = 'This uses Docker and Kubernetes for container orchestration.';
-    const vocab = new Map<string, string>();
+    const sourceContent = 'From the book "Kubernetes in Action", the author says that pods are the basic unit.';
+    const result = detectCaptureType(sourceContent);
 
-    const detected = detectTechnologies(content, vocab);
-
-    expect(detected.some((t) => t.name === 'docker')).toBe(true);
-    expect(detected.some((t) => t.name === 'kubernetes')).toBe(true);
-  });
-
-  it('should detect technologies from code blocks', async () => {
-    const { detectTechnologies } = await import(
-      '../../../../src/services/ai-support/context-detector.js'
-    );
-
-    const content = '```typescript\nconst x = 1;\n```';
-    const vocab = new Map<string, string>();
-
-    const detected = detectTechnologies(content, vocab);
-
-    expect(detected.some((t) => t.name === 'typescript')).toBe(true);
-  });
-
-  it('should include vault path for known technologies', async () => {
-    const { detectTechnologies } = await import(
-      '../../../../src/services/ai-support/context-detector.js'
-    );
-
-    const content = 'Working with Docker containers.';
-    const vocab = new Map<string, string>([['docker', 'technologies/docker.md']]);
-
-    const detected = detectTechnologies(content, vocab);
-    const docker = detected.find((t) => t.name === 'docker');
-
-    expect(docker).toBeDefined();
-    expect(docker?.exists_in_vault).toBe(true);
-    expect(docker?.suggested_path).toBe('technologies/docker.md');
-  });
-});
-
-describe('Scope Detection', () => {
-  it('should detect project-specific scope', async () => {
-    const { detectScope } = await import(
-      '../../../../src/services/ai-support/context-detector.js'
-    );
-
-    const content = 'Our project uses a custom configuration for the internal API.';
-    const result = detectScope(content);
-
-    expect(result.likely).toBe('project-specific');
+    expect(result.likely).toBe('source');
     expect(result.confidence).toBeGreaterThan(0.3);
     expect(result.indicators.length).toBeGreaterThan(0);
   });
 
-  it('should detect general scope', async () => {
-    const { detectScope } = await import(
+  it('should detect project capture type', async () => {
+    const { detectCaptureType } = await import(
       '../../../../src/services/ai-support/context-detector.js'
     );
 
-    const content =
-      'This is a general best practice for handling authentication in web applications.';
-    const result = detectScope(content);
+    const projectContent = 'For our project, we decided to use MongoDB. This is specific to our team.';
+    const result = detectCaptureType(projectContent);
 
-    expect(result.likely).toBe('general');
+    expect(result.likely).toBe('project');
     expect(result.confidence).toBeGreaterThan(0.3);
+    expect(result.indicators.length).toBeGreaterThan(0);
   });
 
-  it('should return low confidence when no indicators', async () => {
-    const { detectScope } = await import(
+  it('should detect knowledge capture type by default', async () => {
+    const { detectCaptureType } = await import(
       '../../../../src/services/ai-support/context-detector.js'
     );
 
-    const content = 'Simple technical content without scope hints.';
-    const result = detectScope(content);
+    const knowledgeContent = 'This is a best practice guide for Docker. Typically you should use multi-stage builds.';
+    const result = detectCaptureType(knowledgeContent);
 
-    expect(result.confidence).toBeLessThanOrEqual(0.3);
+    expect(result.likely).toBe('knowledge');
+    expect(result.indicators.length).toBeGreaterThan(0);
+  });
+
+  it('should return low confidence when no indicators found', async () => {
+    const { detectCaptureType } = await import(
+      '../../../../src/services/ai-support/context-detector.js'
+    );
+
+    const content = 'Hello world.';
+    const result = detectCaptureType(content);
+
+    expect(result.confidence).toBeLessThanOrEqual(0.4);
   });
 });
 
-describe('Domain Detection', () => {
+describe('Domain Detection (Phase 017)', () => {
   it('should detect networking domain', async () => {
     const { detectDomains } = await import(
       '../../../../src/services/ai-support/context-detector.js'
     );
 
-    const content = 'Configure the network with DNS and firewall rules.';
-    const detected = detectDomains(content);
+    const domainVocab = new Map<string, { path: string; noteCount: number }>();
+    const content = 'This document covers TCP/IP networking and firewall configuration.';
+    const domains = detectDomains(content, domainVocab);
 
-    expect(detected.some((d) => d.name === 'networking')).toBe(true);
+    const networkingDomain = domains.find((d) => d.name === 'networking');
+    expect(networkingDomain).toBeDefined();
+    expect(networkingDomain?.confidence).toBeGreaterThan(0.3);
   });
 
   it('should detect security domain', async () => {
@@ -252,10 +229,13 @@ describe('Domain Detection', () => {
       '../../../../src/services/ai-support/context-detector.js'
     );
 
-    const content = 'Security best practices for authentication and encryption.';
-    const detected = detectDomains(content);
+    const domainVocab = new Map<string, { path: string; noteCount: number }>();
+    const content = 'Authentication and encryption are important for security.';
+    const domains = detectDomains(content, domainVocab);
 
-    expect(detected.some((d) => d.name === 'security')).toBe(true);
+    const securityDomain = domains.find((d) => d.name === 'security');
+    expect(securityDomain).toBeDefined();
+    expect(securityDomain?.confidence).toBeGreaterThan(0.3);
   });
 
   it('should detect multiple domains', async () => {
@@ -263,272 +243,287 @@ describe('Domain Detection', () => {
       '../../../../src/services/ai-support/context-detector.js'
     );
 
-    const content =
-      'DevOps pipeline for deploying the backend API with database migrations.';
-    const detected = detectDomains(content);
+    const domainVocab = new Map<string, { path: string; noteCount: number }>();
+    const content = 'The backend API needs authentication. Database queries should be optimized.';
+    const domains = detectDomains(content, domainVocab);
 
-    expect(detected.length).toBeGreaterThanOrEqual(2);
+    expect(domains.length).toBeGreaterThan(1);
+    const domainNames = domains.map((d) => d.name);
+    expect(domainNames).toContain('backend');
+    expect(domainNames).toContain('security');
+  });
+
+  it('should detect domains from code blocks', async () => {
+    const { detectDomains } = await import(
+      '../../../../src/services/ai-support/context-detector.js'
+    );
+
+    const domainVocab = new Map<string, { path: string; noteCount: number }>();
+    const content = '```typescript\nconst x = 1;\n```';
+    const domains = detectDomains(content, domainVocab);
+
+    const tsDomain = domains.find((d) => d.name === 'typescript');
+    expect(tsDomain).toBeDefined();
+    expect(tsDomain?.confidence).toBeGreaterThanOrEqual(0.5);
   });
 });
 
-describe('Missing Identifier', () => {
-  it('should identify missing domain for technology type', async () => {
+describe('Project Detection', () => {
+  it('should detect project mentions', async () => {
+    const { detectProjects } = await import(
+      '../../../../src/services/ai-support/context-detector.js'
+    );
+
+    const projectVocab = new Map<string, string>();
+    projectVocab.set('myapp', 'projects/myapp/');
+
+    const content = 'For the myapp project, we need to configure the database.';
+    const projects = detectProjects(content, projectVocab);
+
+    expect(projects.length).toBeGreaterThan(0);
+    expect(projects[0]?.name).toBe('myapp');
+    expect(projects[0]?.confidence).toBeGreaterThan(0.5);
+  });
+
+  it('should detect projects from patterns', async () => {
+    const { detectProjects } = await import(
+      '../../../../src/services/ai-support/context-detector.js'
+    );
+
+    const projectVocab = new Map<string, string>();
+    const content = 'This is for the alpha project codebase.';
+    const projects = detectProjects(content, projectVocab);
+
+    expect(projects.length).toBeGreaterThan(0);
+  });
+});
+
+describe('Client Detection', () => {
+  it('should detect client mentions', async () => {
+    const { detectClients } = await import(
+      '../../../../src/services/ai-support/context-detector.js'
+    );
+
+    const clientVocab = new Map<string, string>();
+    clientVocab.set('acme', 'clients/acme/');
+
+    const content = 'For the acme client, we need specific configuration.';
+    const clients = detectClients(content, clientVocab);
+
+    expect(clients.length).toBeGreaterThan(0);
+    expect(clients[0]?.name).toBe('acme');
+    expect(clients[0]?.confidence).toBeGreaterThan(0.5);
+  });
+});
+
+describe('Missing Identifier (Phase 017)', () => {
+  it('should identify missing capture_type', async () => {
     const { identifyMissing } = await import(
       '../../../../src/services/ai-support/missing-identifier.js'
     );
 
-    const intent = {
-      knowledge_type: 'technology' as const,
-      domain: [],
+    const partialIntent = {
+      domain: ['kubernetes'],
     };
 
-    const result = identifyMissing(intent);
+    const result = identifyMissing(partialIntent);
+
+    expect(result.missing).toContain('capture_type');
+  });
+
+  it('should identify missing domain', async () => {
+    const { identifyMissing } = await import(
+      '../../../../src/services/ai-support/missing-identifier.js'
+    );
+
+    const partialIntent = {
+      capture_type: 'knowledge' as const,
+    };
+
+    const result = identifyMissing(partialIntent);
 
     expect(result.missing).toContain('domain');
   });
 
-  it('should identify missing project for project-specific scope', async () => {
+  it('should identify missing project for project capture type', async () => {
     const { identifyMissing } = await import(
       '../../../../src/services/ai-support/missing-identifier.js'
     );
 
-    const intent = {
-      knowledge_type: 'decision' as const,
-      domain: ['kubernetes'],
-      scope: 'project-specific' as const,
+    const partialIntent = {
+      capture_type: 'project' as const,
+      domain: ['architecture'],
     };
 
-    const result = identifyMissing(intent);
+    const result = identifyMissing(partialIntent);
 
     expect(result.missing).toContain('project');
   });
 
-  it('should mark complete fields', async () => {
-    const { identifyMissing } = await import(
-      '../../../../src/services/ai-support/missing-identifier.js'
-    );
-
-    const intent = {
-      knowledge_type: 'technology' as const,
-      domain: ['kubernetes', 'networking'],
-    };
-
-    const result = identifyMissing(intent);
-
-    expect(result.complete).toContain('domain');
-  });
-
-  it('should provide reasons for missing fields', async () => {
-    const { identifyMissing } = await import(
-      '../../../../src/services/ai-support/missing-identifier.js'
-    );
-
-    const intent = {
-      knowledge_type: 'technology' as const,
-      domain: [],
-    };
-
-    const result = identifyMissing(intent);
-
-    expect(result.reasons['domain']).toBeDefined();
-    expect(result.reasons['domain'].length).toBeGreaterThan(0);
-  });
-});
-
-describe('Intent Completeness', () => {
-  it('should detect complete technology intent', async () => {
+  it('should mark intent complete when all fields present', async () => {
     const { isIntentComplete } = await import(
       '../../../../src/services/ai-support/missing-identifier.js'
     );
 
-    const intent = {
-      knowledge_type: 'technology' as const,
+    const completeIntent = {
+      capture_type: 'knowledge' as const,
       domain: ['kubernetes'],
     };
 
-    expect(isIntentComplete(intent)).toBe(true);
+    expect(isIntentComplete(completeIntent)).toBe(true);
   });
 
-  it('should detect incomplete decision intent', async () => {
+  it('should detect incomplete source intent without source info', async () => {
     const { isIntentComplete } = await import(
       '../../../../src/services/ai-support/missing-identifier.js'
     );
 
-    const intent = {
-      knowledge_type: 'decision' as const,
-      domain: ['kubernetes'],
-      scope: 'project-specific' as const,
-      // Missing project
+    const incompleteIntent = {
+      capture_type: 'source' as const,
+      domain: ['book-notes'],
+      // Missing source info
     };
 
-    expect(isIntentComplete(intent)).toBe(false);
+    expect(isIntentComplete(incompleteIntent)).toBe(false);
   });
 });
 
-describe('Missing Field Priority', () => {
-  it('should prioritize scope first', async () => {
+describe('Missing Field Priority (Phase 017)', () => {
+  it('should prioritize capture_type first', async () => {
     const { prioritizeMissing } = await import(
       '../../../../src/services/ai-support/missing-identifier.js'
     );
 
-    const missing = ['technologies', 'domain', 'scope'] as const;
-    const partial = [] as const;
+    const missing = ['domain', 'capture_type', 'project'];
+    const partial: string[] = [];
+    const prioritized = prioritizeMissing(missing as any, partial as any);
 
-    const prioritized = prioritizeMissing([...missing], [...partial]);
-
-    expect(prioritized[0]).toBe('scope');
+    expect(prioritized[0]).toBe('capture_type');
   });
 
-  it('should prioritize domain over project', async () => {
+  it('should prioritize domain before project', async () => {
     const { prioritizeMissing } = await import(
       '../../../../src/services/ai-support/missing-identifier.js'
     );
 
-    const missing = ['project', 'domain'] as const;
-    const partial = [] as const;
+    const missing = ['project', 'domain'];
+    const partial: string[] = [];
+    const prioritized = prioritizeMissing(missing as any, partial as any);
 
-    const prioritized = prioritizeMissing([...missing], [...partial]);
-
-    expect(prioritized.indexOf('domain')).toBeLessThan(prioritized.indexOf('project'));
+    const domainIdx = prioritized.indexOf('domain' as any);
+    const projectIdx = prioritized.indexOf('project' as any);
+    expect(domainIdx).toBeLessThan(projectIdx);
   });
 });
 
-describe('Question Generator', () => {
+describe('Question Generator (Phase 017)', () => {
   it('should generate questions for missing fields', async () => {
     const { generateQuestions } = await import(
       '../../../../src/services/ai-support/question-generator.js'
     );
 
-    const missing = ['scope'] as const;
-    const partial = [] as const;
     const detected = {
-      technologies: [],
+      capture_type: { likely: 'knowledge' as const, confidence: 0.5, indicators: [] },
+      domains: [{ name: 'kubernetes', confidence: 0.7, exists_in_vault: false }],
       projects: [],
       clients: [],
-      scope: { likely: 'general' as const, confidence: 0.4, indicators: [] },
-      domains: [],
     };
 
     const questions = generateQuestions(
-      [...missing],
-      [...partial],
-      'Docker Networking',
-      'How to configure Docker networking...',
+      ['capture_type'],
+      [],
+      'Test Note',
+      'Test content preview',
       detected,
-      { scope: 'Unable to determine scope' }
+      { capture_type: 'Needs confirmation' }
     );
 
     expect(questions.length).toBe(1);
-    expect(questions[0]?.key).toBe('scope');
-    expect(questions[0]?.type).toBe('choice');
+    expect(questions[0]?.key).toBe('capture_type');
+    expect(questions[0]?.question).toBeDefined();
   });
 
-  it('should include detected hints in questions', async () => {
+  it('should include domain options from detection', async () => {
     const { generateQuestions } = await import(
       '../../../../src/services/ai-support/question-generator.js'
     );
 
-    const missing = [] as const;
-    const partial = ['technologies'] as const;
     const detected = {
-      technologies: [
-        { name: 'docker', confidence: 0.8, exists_in_vault: true },
-        { name: 'kubernetes', confidence: 0.7, exists_in_vault: false },
+      capture_type: { likely: 'knowledge' as const, confidence: 0.5, indicators: [] },
+      domains: [
+        { name: 'kubernetes', confidence: 0.8, exists_in_vault: true },
+        { name: 'docker', confidence: 0.6, exists_in_vault: false },
       ],
       projects: [],
       clients: [],
-      scope: { likely: 'general' as const, confidence: 0.5, indicators: [] },
-      domains: [],
     };
 
     const questions = generateQuestions(
-      [...missing],
-      [...partial],
-      'Container Orchestration',
-      'Setting up containers...',
+      ['domain'],
+      [],
+      'Test Note',
+      'Test content preview',
       detected,
-      { technologies: 'Detected technologies need confirmation' }
+      { domain: 'Domain needed' }
     );
 
-    const techQuestion = questions.find((q) => q.key === 'technologies');
-    expect(techQuestion).toBeDefined();
-    expect(techQuestion?.detected_hints).toContain('docker');
-    expect(techQuestion?.detected_hints).toContain('kubernetes');
+    expect(questions[0]?.options).toBeDefined();
+    expect(questions[0]?.options).toContain('kubernetes');
+    expect(questions[0]?.options).toContain('docker');
   });
 });
 
-describe('Suggestion Generation', () => {
-  it('should suggest scope when confident', async () => {
+describe('Suggestion Generation (Phase 017)', () => {
+  it('should suggest capture_type when confident', async () => {
     const { generateSuggestions } = await import(
       '../../../../src/services/ai-support/question-generator.js'
     );
 
     const detected = {
-      technologies: [],
+      capture_type: { likely: 'knowledge' as const, confidence: 0.7, indicators: [] },
+      domains: [],
       projects: [],
       clients: [],
-      scope: { likely: 'general' as const, confidence: 0.7, indicators: ['best practice'] },
-      domains: [],
     };
 
     const suggestions = generateSuggestions(detected);
 
-    expect(suggestions.scope).toBe('general');
+    expect(suggestions.capture_type).toBe('knowledge');
   });
 
-  it('should not suggest when confidence low', async () => {
+  it('should suggest domains with high confidence', async () => {
     const { generateSuggestions } = await import(
       '../../../../src/services/ai-support/question-generator.js'
     );
 
     const detected = {
-      technologies: [],
-      projects: [],
-      clients: [],
-      scope: { likely: 'general' as const, confidence: 0.3, indicators: [] },
-      domains: [],
-    };
-
-    const suggestions = generateSuggestions(detected);
-
-    expect(suggestions.scope).toBeUndefined();
-  });
-
-  it('should suggest technologies with high confidence', async () => {
-    const { generateSuggestions } = await import(
-      '../../../../src/services/ai-support/question-generator.js'
-    );
-
-    const detected = {
-      technologies: [
+      capture_type: { likely: 'knowledge' as const, confidence: 0.5, indicators: [] },
+      domains: [
         { name: 'docker', confidence: 0.8, exists_in_vault: true },
-        { name: 'nginx', confidence: 0.3, exists_in_vault: false },
+        { name: 'nginx', confidence: 0.4, exists_in_vault: false },
       ],
       projects: [],
       clients: [],
-      scope: { likely: 'general' as const, confidence: 0.5, indicators: [] },
-      domains: [],
     };
 
     const suggestions = generateSuggestions(detected);
 
-    expect(suggestions.technologies).toContain('docker');
-    expect(suggestions.technologies).not.toContain('nginx');
+    expect(suggestions.domain).toContain('docker');
+    expect(suggestions.domain).not.toContain('nginx');
   });
 });
 
-describe('Confidence Calculation', () => {
+describe('Confidence Calculation (Phase 017)', () => {
   it('should calculate overall confidence', async () => {
     const { calculateConfidence } = await import(
       '../../../../src/services/ai-support/question-generator.js'
     );
 
     const detected = {
-      technologies: [{ name: 'docker', confidence: 0.8, exists_in_vault: true }],
+      capture_type: { likely: 'knowledge' as const, confidence: 0.7, indicators: [] },
+      domains: [{ name: 'kubernetes', confidence: 0.8, exists_in_vault: true }],
       projects: [],
       clients: [],
-      scope: { likely: 'general' as const, confidence: 0.7, indicators: [] },
-      domains: [{ name: 'devops', confidence: 0.6 }],
     };
 
     const result = calculateConfidence(detected, [], []);
@@ -543,134 +538,51 @@ describe('Confidence Calculation', () => {
     );
 
     const detected = {
-      technologies: [{ name: 'docker', confidence: 0.8, exists_in_vault: true }],
+      capture_type: { likely: 'knowledge' as const, confidence: 0.7, indicators: [] },
+      domains: [{ name: 'kubernetes', confidence: 0.8, exists_in_vault: true }],
       projects: [],
       clients: [],
-      scope: { likely: 'general' as const, confidence: 0.7, indicators: [] },
-      domains: [],
     };
 
     const result = calculateConfidence(detected, [], []);
 
-    expect(result.per_field['scope']).toBe(0.7);
-    expect(result.per_field['technologies']).toBe(0.8);
-  });
-
-  it('should penalize missing fields', async () => {
-    const { calculateConfidence } = await import(
-      '../../../../src/services/ai-support/question-generator.js'
-    );
-
-    const detected = {
-      technologies: [{ name: 'docker', confidence: 0.8, exists_in_vault: true }],
-      projects: [],
-      clients: [],
-      scope: { likely: 'general' as const, confidence: 0.7, indicators: [] },
-      domains: [{ name: 'devops', confidence: 0.8 }], // Include domain so there's something to penalize
-    };
-
-    const withMissing = calculateConfidence(detected, ['domain'], []);
-    const withoutMissing = calculateConfidence(detected, [], []);
-
-    // With domain detected but marked as missing, score should be lower
-    expect(withMissing.overall).toBeLessThanOrEqual(withoutMissing.overall);
+    expect(result.per_field['capture_type']).toBe(0.7);
+    expect(result.per_field['domain']).toBe(0.8);
   });
 });
 
-describe('Summary Message', () => {
-  it('should indicate when no questions needed', async () => {
+describe('Summary Message Generation', () => {
+  it('should generate message for high confidence', async () => {
     const { generateSummaryMessage } = await import(
       '../../../../src/services/ai-support/question-generator.js'
     );
 
-    const message = generateSummaryMessage([], {}, 0.8);
+    const message = generateSummaryMessage([{ key: 'domain', question: 'Q?', type: 'choice' }], {}, 0.8);
+
+    expect(message).toContain('High confidence');
+  });
+
+  it('should generate message for low confidence', async () => {
+    const { generateSummaryMessage } = await import(
+      '../../../../src/services/ai-support/question-generator.js'
+    );
+
+    const message = generateSummaryMessage(
+      [{ key: 'capture_type', question: 'Q?', type: 'choice' }],
+      {},
+      0.3
+    );
+
+    expect(message).toContain('Limited context');
+  });
+
+  it('should return complete message when no questions', async () => {
+    const { generateSummaryMessage } = await import(
+      '../../../../src/services/ai-support/question-generator.js'
+    );
+
+    const message = generateSummaryMessage([], {}, 0.9);
 
     expect(message).toContain('complete');
-  });
-
-  it('should list fields needing clarification', async () => {
-    const { generateSummaryMessage } = await import(
-      '../../../../src/services/ai-support/question-generator.js'
-    );
-
-    const questions = [
-      { key: 'scope' as const, question: 'test', type: 'choice' as const },
-      { key: 'domain' as const, question: 'test', type: 'choice' as const },
-    ];
-
-    const message = generateSummaryMessage(questions, {}, 0.5);
-
-    expect(message).toContain('scope');
-    expect(message).toContain('domain');
-  });
-
-  it('should indicate confidence level', async () => {
-    const { generateSummaryMessage } = await import(
-      '../../../../src/services/ai-support/question-generator.js'
-    );
-
-    const questions = [{ key: 'scope' as const, question: 'test', type: 'choice' as const }];
-
-    const highConfidence = generateSummaryMessage(questions, {}, 0.8);
-    const lowConfidence = generateSummaryMessage(questions, {}, 0.3);
-
-    expect(highConfidence).toContain('High confidence');
-    expect(lowConfidence).toContain('Limited');
-  });
-});
-
-describe('Clarify Types', () => {
-  it('should define missing context types', async () => {
-    type MissingContextType =
-      | 'scope'
-      | 'project'
-      | 'client'
-      | 'technologies'
-      | 'domain';
-
-    const types: MissingContextType[] = [
-      'scope',
-      'project',
-      'client',
-      'technologies',
-      'domain',
-    ];
-
-    expect(types.length).toBe(5);
-  });
-
-  it('should define question types', async () => {
-    type QuestionType = 'choice' | 'confirm' | 'text';
-
-    const types: QuestionType[] = ['choice', 'confirm', 'text'];
-
-    expect(types.length).toBe(3);
-  });
-
-  it('should have correct clarify output structure', () => {
-    const output = {
-      success: true,
-      vault: 'default',
-      vaultPath: '/path/to/vault',
-      detected: {
-        technologies: [],
-        projects: [],
-        clients: [],
-        scope: { likely: 'general' as const, confidence: 0.5, indicators: [] },
-        domains: [],
-      },
-      questions: [],
-      suggestions: {},
-      confidence: { overall: 0.5, per_field: {} },
-      message: 'test',
-    };
-
-    expect(output).toHaveProperty('success');
-    expect(output).toHaveProperty('vault');
-    expect(output).toHaveProperty('detected');
-    expect(output).toHaveProperty('questions');
-    expect(output).toHaveProperty('suggestions');
-    expect(output).toHaveProperty('confidence');
-    expect(output).toHaveProperty('message');
   });
 });

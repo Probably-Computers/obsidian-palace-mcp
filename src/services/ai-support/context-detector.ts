@@ -1,96 +1,81 @@
 /**
- * Context detector for AI support tools
+ * Context detector for AI support tools (Phase 017)
  *
- * Detects technologies, projects, clients, scope, and domains in content
+ * Detects domains, projects, clients, and capture type in content
  * to help AI determine storage intent automatically.
+ *
+ * Phase 017 changes:
+ * - Removed technology detection (domains serve this purpose)
+ * - Removed scope detection (capture_type determines context)
+ * - Added capture type detection
  */
 
 import Database from 'better-sqlite3';
 import { logger } from '../../utils/logger.js';
 import type {
   DetectedContext,
-  DetectedTechnology,
+  DetectedDomain,
   DetectedProject,
   DetectedClient,
-  DetectedScope,
-  DetectedDomain,
+  DetectedCaptureType,
   ContextDetectionOptions,
 } from '../../types/clarify.js';
+import type { CaptureType } from '../../types/intent.js';
 
 // Default detection options
 const DEFAULT_OPTIONS: Required<ContextDetectionOptions> = {
-  maxTechnologies: 10,
+  maxDomains: 10,
   maxProjects: 5,
   maxClients: 5,
-  maxDomains: 5,
   minConfidence: 0.3,
 };
 
-// Known technology patterns (case-insensitive)
-const TECH_PATTERNS: Record<string, RegExp> = {
-  // Languages
-  typescript: /\btypescript\b|\bts\b(?!\s*=)/i,
-  javascript: /\bjavascript\b|\bjs\b(?!\s*=)/i,
-  python: /\bpython\b|\bpy\b/i,
-  rust: /\brust\b|\brustc\b/i,
-  go: /\bgolang\b|\bgo\s+(?:mod|build|run)\b/i,
-  java: /\bjava\b(?!script)/i,
-  csharp: /\bc#\b|\bcsharp\b|\.net\b/i,
-
-  // Frameworks
-  react: /\breact\b|\breact\.js\b|\breactjs\b/i,
-  vue: /\bvue\b|\bvue\.js\b|\bvuejs\b/i,
-  angular: /\bangular\b/i,
-  nextjs: /\bnext\.js\b|\bnextjs\b/i,
-  express: /\bexpress\b|\bexpress\.js\b/i,
-  fastapi: /\bfastapi\b/i,
-  django: /\bdjango\b/i,
-
-  // Infrastructure
-  docker: /\bdocker\b|\bcontainer\b|\bdockerfile\b/i,
-  kubernetes: /\bkubernetes\b|\bk8s\b|\bkubectl\b/i,
-  terraform: /\bterraform\b|\btf\b|\b\.tf\b/i,
-  ansible: /\bansible\b/i,
-  nginx: /\bnginx\b/i,
-  aws: /\baws\b|\bamazon\s+web\s+services\b/i,
-  azure: /\bazure\b|\bmicrosoft\s+azure\b/i,
-  gcp: /\bgcp\b|\bgoogle\s+cloud\b/i,
-
-  // Databases
-  postgresql: /\bpostgres(?:ql)?\b|\bpg\b/i,
-  mysql: /\bmysql\b/i,
-  mongodb: /\bmongodb\b|\bmongo\b/i,
-  redis: /\bredis\b/i,
-  sqlite: /\bsqlite\b/i,
-  elasticsearch: /\belasticsearch\b|\belastic\b/i,
-
-  // Tools
-  git: /\bgit\b(?!hub)/i,
-  github: /\bgithub\b/i,
-  gitlab: /\bgitlab\b/i,
-  npm: /\bnpm\b|\bpackage\.json\b/i,
-  yarn: /\byarn\b/i,
-  webpack: /\bwebpack\b/i,
-  vite: /\bvite\b/i,
+// Domain patterns for common knowledge areas
+const DOMAIN_PATTERNS: Record<string, RegExp[]> = {
+  networking: [/\bnetwork(?:ing)?\b/i, /\btcp\b|\budp\b/i, /\bip\s+address\b/i, /\bdns\b/i, /\bfirewall\b/i],
+  security: [/\bsecurity\b/i, /\bauthentication\b/i, /\bauthorization\b/i, /\bencryption\b/i, /\bssl\b|\btls\b/i],
+  database: [/\bdatabase\b/i, /\bsql\b/i, /\bquery\b/i, /\btable\b|\bschema\b/i],
+  devops: [/\bdevops\b/i, /\bci\/cd\b/i, /\bpipeline\b/i, /\bdeployment\b/i],
+  frontend: [/\bfrontend\b/i, /\bui\b|\bux\b/i, /\bcss\b/i, /\bhtml\b/i, /\bdom\b/i],
+  backend: [/\bbackend\b/i, /\bapi\b/i, /\bserver\b/i, /\bendpoint\b/i],
+  testing: [/\btest(?:ing)?\b/i, /\bunit\s+test\b/i, /\bintegration\s+test\b/i, /\be2e\b/i],
+  documentation: [/\bdocumentation\b/i, /\breadme\b/i, /\bcomment(?:s)?\b/i],
+  typescript: [/\btypescript\b|\bts\b(?!\s*=)/i],
+  javascript: [/\bjavascript\b|\bjs\b(?!\s*=)/i],
+  python: [/\bpython\b|\bpy\b/i],
+  rust: [/\brust\b|\brustc\b/i],
+  go: [/\bgolang\b|\bgo\s+(?:mod|build|run)\b/i],
+  docker: [/\bdocker\b|\bcontainer\b|\bdockerfile\b/i],
+  kubernetes: [/\bkubernetes\b|\bk8s\b|\bkubectl\b/i],
+  terraform: [/\bterraform\b|\btf\b|\b\.tf\b/i],
+  aws: [/\baws\b|\bamazon\s+web\s+services\b/i],
+  azure: [/\bazure\b|\bmicrosoft\s+azure\b/i],
+  gcp: [/\bgcp\b|\bgoogle\s+cloud\b/i],
+  postgresql: [/\bpostgres(?:ql)?\b|\bpg\b/i],
+  mongodb: [/\bmongodb\b|\bmongo\b/i],
+  redis: [/\bredis\b/i],
+  git: [/\bgit\b(?!hub)/i, /\bgithub\b/i, /\bgitlab\b/i],
 };
 
 // Code block language hints
 const CODE_BLOCK_PATTERN = /```(\w+)/gi;
 
-// File extension patterns
-const FILE_EXT_PATTERNS: Record<string, string[]> = {
-  typescript: ['.ts', '.tsx'],
-  javascript: ['.js', '.jsx', '.mjs', '.cjs'],
-  python: ['.py'],
-  rust: ['.rs'],
-  go: ['.go'],
-  yaml: ['.yaml', '.yml'],
-  json: ['.json'],
-  dockerfile: ['Dockerfile', '.dockerfile'],
-};
+// Source capture indicators
+const SOURCE_INDICATORS = [
+  /\bfrom\s+(?:the\s+)?book\b/i,
+  /\bfrom\s+(?:the\s+)?article\b/i,
+  /\bfrom\s+(?:the\s+)?video\b/i,
+  /\bfrom\s+(?:the\s+)?podcast\b/i,
+  /\baccording\s+to\b/i,
+  /\bauthor\s+says\b/i,
+  /\bquote(?:d)?\b/i,
+  /\bsource:\s/i,
+  /\breference:\s/i,
+  /\bcitation\b/i,
+];
 
-// Scope indicators
-const PROJECT_SPECIFIC_INDICATORS = [
+// Project capture indicators
+const PROJECT_INDICATORS = [
   /\bour\s+\w+/i,
   /\bwe\s+(?:use|have|need|want|should)\b/i,
   /\bus\s+(?:to|for)\b/i,
@@ -104,67 +89,48 @@ const PROJECT_SPECIFIC_INDICATORS = [
   /\bproprietary\b/i,
 ];
 
-const GENERAL_INDICATORS = [
+// Knowledge capture indicators (default)
+const KNOWLEDGE_INDICATORS = [
   /\bgeneral(?:ly)?\b/i,
-  /\buniversal(?:ly)?\b/i,
   /\bstandard\s+(?:way|approach|practice)\b/i,
   /\bbest\s+practice\b/i,
   /\bcommon(?:ly)?\b/i,
-  /\btypical(?:ly)?\b/i,
+  /\bhow\s+to\b/i,
   /\bofficial\s+documentation\b/i,
-  /\bin\s+general\b/i,
-  /\bby\s+default\b/i,
+  /\btutorial\b/i,
+  /\bguide\b/i,
 ];
 
-// Domain patterns
-const DOMAIN_PATTERNS: Record<string, RegExp[]> = {
-  networking: [/\bnetwork(?:ing)?\b/i, /\btcp\b|\budp\b/i, /\bip\s+address\b/i, /\bdns\b/i, /\bfirewall\b/i],
-  security: [/\bsecurity\b/i, /\bauthentication\b/i, /\bauthorization\b/i, /\bencryption\b/i, /\bssl\b|\btls\b/i],
-  database: [/\bdatabase\b/i, /\bsql\b/i, /\bquery\b/i, /\btable\b|\bschema\b/i],
-  devops: [/\bdevops\b/i, /\bci\/cd\b/i, /\bpipeline\b/i, /\bdeployment\b/i],
-  frontend: [/\bfrontend\b/i, /\bui\b|\bux\b/i, /\bcss\b/i, /\bhtml\b/i, /\bdom\b/i],
-  backend: [/\bbackend\b/i, /\bapi\b/i, /\bserver\b/i, /\bendpoint\b/i],
-  testing: [/\btest(?:ing)?\b/i, /\bunit\s+test\b/i, /\bintegration\s+test\b/i, /\be2e\b/i],
-  documentation: [/\bdocumentation\b/i, /\breadme\b/i, /\bcomment(?:s)?\b/i],
-};
-
 /**
- * Build technology vocabulary from vault index
+ * Build domain vocabulary from vault index
  */
-export function buildTechVocabulary(db: Database.Database): Map<string, string> {
-  const vocab = new Map<string, string>();
+export function buildDomainVocabulary(db: Database.Database): Map<string, { path: string; noteCount: number }> {
+  const vocab = new Map<string, { path: string; noteCount: number }>();
 
   try {
-    // Get all notes in technologies/ directory
-    const techNotes = db
-      .prepare("SELECT path, title FROM notes WHERE path LIKE 'technologies/%' OR path LIKE 'tech/%'")
-      .all() as Array<{ path: string; title: string }>;
+    // Get distinct top-level directories and their note counts
+    const directories = db
+      .prepare(`
+        SELECT
+          SUBSTR(path, 1, INSTR(path, '/') - 1) as domain,
+          COUNT(*) as note_count
+        FROM notes
+        WHERE path LIKE '%/%'
+        GROUP BY domain
+        HAVING domain != ''
+      `)
+      .all() as Array<{ domain: string; note_count: number }>;
 
-    for (const note of techNotes) {
-      const title = note.title.toLowerCase();
-      vocab.set(title, note.path);
-
-      // Also add path-based variants
-      const filename = note.path.split('/').pop()?.replace(/\.md$/i, '');
-      if (filename) {
-        vocab.set(filename.toLowerCase(), note.path);
-      }
+    for (const dir of directories) {
+      vocab.set(dir.domain.toLowerCase(), {
+        path: dir.domain,
+        noteCount: dir.note_count,
+      });
     }
 
-    // Get notes with type=technology or similar tags
-    const typedNotes = db
-      .prepare("SELECT path, title FROM notes WHERE type IN ('technology', 'research', 'command')")
-      .all() as Array<{ path: string; title: string }>;
-
-    for (const note of typedNotes) {
-      if (!vocab.has(note.title.toLowerCase())) {
-        vocab.set(note.title.toLowerCase(), note.path);
-      }
-    }
-
-    logger.debug(`Built tech vocabulary with ${vocab.size} entries`);
+    logger.debug(`Built domain vocabulary with ${vocab.size} entries`);
   } catch (error) {
-    logger.warn('Failed to build tech vocabulary:', error);
+    logger.warn('Failed to build domain vocabulary:', error);
   }
 
   return vocab;
@@ -237,86 +203,75 @@ export function buildClientVocabulary(db: Database.Database): Map<string, string
 }
 
 /**
- * Detect technologies in content
+ * Detect domains in content
  */
-export function detectTechnologies(
+export function detectDomains(
   content: string,
-  techVocab: Map<string, string>,
+  domainVocab: Map<string, { path: string; noteCount: number }>,
   options: ContextDetectionOptions = {}
-): DetectedTechnology[] {
+): DetectedDomain[] {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  const detected = new Map<string, DetectedTechnology>();
+  const detected = new Map<string, DetectedDomain>();
 
-  // Check against known tech patterns
-  for (const [tech, pattern] of Object.entries(TECH_PATTERNS)) {
-    const matches = content.match(pattern);
-    if (matches) {
-      const existsPath = techVocab.get(tech.toLowerCase());
-      const confidence = Math.min(0.5 + matches.length * 0.1, 0.9);
+  // Check against known domain patterns
+  for (const [domain, patterns] of Object.entries(DOMAIN_PATTERNS)) {
+    let matchCount = 0;
+    for (const pattern of patterns) {
+      if (pattern.test(content)) {
+        matchCount++;
+      }
+    }
 
-      detected.set(tech, {
-        name: tech,
+    if (matchCount > 0) {
+      const existsInVault = domainVocab.has(domain.toLowerCase());
+      const vaultInfo = domainVocab.get(domain.toLowerCase());
+      const confidence = Math.min(0.3 + matchCount * 0.2, 0.9);
+
+      detected.set(domain, {
+        name: domain,
         confidence,
-        exists_in_vault: !!existsPath,
-        suggested_path: existsPath,
+        exists_in_vault: existsInVault,
+        note_count: vaultInfo?.noteCount,
       });
     }
   }
 
-  // Check code block languages
+  // Check code block languages as domains
   const codeBlocks = [...content.matchAll(CODE_BLOCK_PATTERN)];
   for (const match of codeBlocks) {
     const lang = match[1]?.toLowerCase();
     if (lang && !detected.has(lang)) {
-      const existsPath = techVocab.get(lang);
+      const existsInVault = domainVocab.has(lang);
+      const vaultInfo = domainVocab.get(lang);
       detected.set(lang, {
         name: lang,
         confidence: 0.7,
-        exists_in_vault: !!existsPath,
-        suggested_path: existsPath,
+        exists_in_vault: existsInVault,
+        note_count: vaultInfo?.noteCount,
       });
     }
   }
 
-  // Check file extensions mentioned
-  for (const [tech, exts] of Object.entries(FILE_EXT_PATTERNS)) {
-    for (const ext of exts) {
-      if (content.includes(ext) && !detected.has(tech)) {
-        const existsPath = techVocab.get(tech.toLowerCase());
-        detected.set(tech, {
-          name: tech,
-          confidence: 0.5,
-          exists_in_vault: !!existsPath,
-          suggested_path: existsPath,
-        });
-      }
-    }
-  }
-
-  // Check against vault vocabulary
-  for (const [term, path] of techVocab.entries()) {
+  // Check against vault vocabulary for existing domains
+  for (const [term, info] of domainVocab.entries()) {
     if (!detected.has(term)) {
-      // Check if the term appears in content (case-insensitive word boundary)
       const pattern = new RegExp(`\\b${escapeRegex(term)}\\b`, 'i');
       if (pattern.test(content)) {
         detected.set(term, {
           name: term,
           confidence: 0.6,
           exists_in_vault: true,
-          suggested_path: path,
+          note_count: info.noteCount,
         });
       }
     }
   }
 
-  // Filter by confidence and limit
-  const minConfidence = opts.minConfidence !== undefined ? opts.minConfidence : 0.3;
-  const results = [...detected.values()]
-    .filter((t) => t.confidence >= minConfidence)
+  const minConfidence = opts.minConfidence ?? 0.3;
+  return [...detected.values()]
+    .filter((d) => d.confidence >= minConfidence)
     .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, opts.maxTechnologies);
-
-  return results;
+    .slice(0, opts.maxDomains);
 }
 
 /**
@@ -368,7 +323,7 @@ export function detectProjects(
     }
   }
 
-  const minConfidence = opts.minConfidence !== undefined ? opts.minConfidence : 0.3;
+  const minConfidence = opts.minConfidence ?? 0.3;
   return [...detected.values()]
     .filter((p) => p.confidence >= minConfidence)
     .sort((a, b) => b.confidence - a.confidence)
@@ -424,7 +379,7 @@ export function detectClients(
     }
   }
 
-  const minConfidence = opts.minConfidence !== undefined ? opts.minConfidence : 0.3;
+  const minConfidence = opts.minConfidence ?? 0.3;
   return [...detected.values()]
     .filter((c) => c.confidence >= minConfidence)
     .sort((a, b) => b.confidence - a.confidence)
@@ -432,44 +387,62 @@ export function detectClients(
 }
 
 /**
- * Detect scope (general vs project-specific)
+ * Detect capture type (source, knowledge, or project)
  */
-export function detectScope(content: string): DetectedScope {
+export function detectCaptureType(content: string): DetectedCaptureType {
   const indicators: string[] = [];
+  let sourceScore = 0;
   let projectScore = 0;
-  let generalScore = 0;
+  let knowledgeScore = 0;
 
-  // Check project-specific indicators
-  for (const pattern of PROJECT_SPECIFIC_INDICATORS) {
+  // Check source indicators
+  for (const pattern of SOURCE_INDICATORS) {
+    const match = content.match(pattern);
+    if (match) {
+      sourceScore += 1;
+      indicators.push(`Source: "${match[0]}"`);
+    }
+  }
+
+  // Check project indicators
+  for (const pattern of PROJECT_INDICATORS) {
     const match = content.match(pattern);
     if (match) {
       projectScore += 1;
-      indicators.push(`Contains "${match[0]}"`);
+      indicators.push(`Project: "${match[0]}"`);
     }
   }
 
-  // Check general indicators
-  for (const pattern of GENERAL_INDICATORS) {
+  // Check knowledge indicators
+  for (const pattern of KNOWLEDGE_INDICATORS) {
     const match = content.match(pattern);
     if (match) {
-      generalScore += 1;
-      indicators.push(`Contains "${match[0]}"`);
+      knowledgeScore += 1;
+      indicators.push(`Knowledge: "${match[0]}"`);
     }
   }
 
-  // Default to general if no strong indicators
-  if (projectScore === 0 && generalScore === 0) {
-    return {
-      likely: 'general',
-      confidence: 0.3,
-      indicators: ['No specific scope indicators found'],
-    };
+  // Determine likely capture type
+  let likely: CaptureType = 'knowledge';
+  let maxScore = knowledgeScore;
+
+  if (sourceScore > maxScore) {
+    likely = 'source';
+    maxScore = sourceScore;
   }
 
-  const total = projectScore + generalScore;
-  const likely = projectScore > generalScore ? 'project-specific' : 'general';
-  const winningScore = Math.max(projectScore, generalScore);
-  const confidence = Math.min(0.5 + (winningScore / total) * 0.4, 0.9);
+  if (projectScore > maxScore) {
+    likely = 'project';
+    maxScore = projectScore;
+  }
+
+  // Calculate confidence
+  const total = sourceScore + projectScore + knowledgeScore;
+  let confidence = 0.3; // Default low confidence
+
+  if (total > 0) {
+    confidence = Math.min(0.4 + (maxScore / total) * 0.5, 0.9);
+  }
 
   return {
     likely,
@@ -479,41 +452,7 @@ export function detectScope(content: string): DetectedScope {
 }
 
 /**
- * Detect domains in content
- */
-export function detectDomains(
-  content: string,
-  options: ContextDetectionOptions = {}
-): DetectedDomain[] {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
-  const detected = new Map<string, DetectedDomain>();
-
-  for (const [domain, patterns] of Object.entries(DOMAIN_PATTERNS)) {
-    let matchCount = 0;
-    for (const pattern of patterns) {
-      if (pattern.test(content)) {
-        matchCount++;
-      }
-    }
-
-    if (matchCount > 0) {
-      const confidence = Math.min(0.3 + matchCount * 0.2, 0.9);
-      detected.set(domain, {
-        name: domain,
-        confidence,
-      });
-    }
-  }
-
-  const minConfidence = opts.minConfidence !== undefined ? opts.minConfidence : 0.3;
-  return [...detected.values()]
-    .filter((d) => d.confidence >= minConfidence)
-    .sort((a, b) => b.confidence - a.confidence)
-    .slice(0, opts.maxDomains);
-}
-
-/**
- * Full context detection
+ * Full context detection (Phase 017)
  */
 export function detectContext(
   content: string,
@@ -521,16 +460,15 @@ export function detectContext(
   options: ContextDetectionOptions = {}
 ): DetectedContext {
   // Build vocabularies from index
-  const techVocab = buildTechVocabulary(db);
+  const domainVocab = buildDomainVocabulary(db);
   const projectVocab = buildProjectVocabulary(db);
   const clientVocab = buildClientVocabulary(db);
 
   return {
-    technologies: detectTechnologies(content, techVocab, options),
+    capture_type: detectCaptureType(content),
+    domains: detectDomains(content, domainVocab, options),
     projects: detectProjects(content, projectVocab, options),
     clients: detectClients(content, clientVocab, options),
-    scope: detectScope(content),
-    domains: detectDomains(content, options),
   };
 }
 

@@ -30,11 +30,60 @@ interface ToolResult<T> {
 
 ---
 
+## Core Types (Phase 017)
+
+### CaptureType
+
+```typescript
+type CaptureType = 'source' | 'knowledge' | 'project';
+```
+
+- **source**: Raw capture from a specific source (book, video, article, podcast, etc.)
+- **knowledge**: Processed, reusable knowledge about a topic
+- **project**: Project or client-specific context
+
+### StorageIntent
+
+```typescript
+interface StorageIntent {
+  capture_type: CaptureType;           // What kind of capture
+  domain: string[];                     // Topic hierarchy - THIS IS THE FOLDER PATH
+  source?: SourceInfo;                  // Required when capture_type is 'source'
+  project?: string;                     // Project context (for project captures)
+  client?: string;                      // Client context (optional)
+  references?: string[];                // Explicit links to create
+  note_type?: string;                   // Optional frontmatter hint
+  tags?: string[];                      // Additional tags
+}
+```
+
+### SourceInfo
+
+```typescript
+interface SourceInfo {
+  type: 'book' | 'video' | 'article' | 'podcast' | 'conversation' | 'documentation' | 'other';
+  title: string;
+  author?: string;
+  url?: string;
+  date?: string;
+}
+```
+
+### Path Resolution Rules
+
+| Capture Type | Path Format |
+|--------------|-------------|
+| `knowledge` | `{domain.join('/')}/` (topic IS the path) |
+| `source` | `sources/{source.type}/{source.title}/` |
+| `project` | `projects/{project}/` or `clients/{client}/` |
+
+---
+
 ## Core Tools
 
 ### palace_store
 
-Store new knowledge using intent-based resolution. AI expresses WHAT to store, and Palace determines WHERE based on vault configuration.
+Store new knowledge using intent-based resolution. AI expresses WHAT to store, Palace determines WHERE based on domain.
 
 **Input Schema:**
 
@@ -43,35 +92,32 @@ Store new knowledge using intent-based resolution. AI expresses WHAT to store, a
   title: string;                    // Note title (required)
   content: string;                  // Content in markdown (required)
   intent: {                         // Storage intent (required)
-    knowledge_type:                 // What kind of knowledge
-      | 'technology'                // Technology documentation
-      | 'command'                   // CLI commands, scripts
-      | 'reference'                 // Quick reference material
-      | 'standard'                  // Standards and conventions
-      | 'pattern'                   // Reusable patterns
-      | 'research'                  // Research findings
-      | 'decision'                  // Project decisions
-      | 'configuration'             // Project-specific config
-      | 'troubleshooting'           // Problems and solutions
-      | 'note';                     // General notes
-    domain: string[];               // Domain hierarchy (e.g., ["kubernetes", "networking"])
-    scope: 'general' | 'project-specific';
-    tags?: string[];                // Additional tags
-    project?: string;               // Project name (if project-specific)
-    client?: string;                // Client name
-    product?: string;               // Product name
-    technologies?: string[];        // Technologies to link/create stubs for
+    capture_type:                   // What kind of capture
+      | 'source'                    // From a specific source
+      | 'knowledge'                 // Processed, reusable knowledge
+      | 'project';                  // Project-specific context
+    domain: string[];               // Topic hierarchy - becomes folder path
+    source?: {                      // Required for 'source' capture
+      type: 'book' | 'video' | 'article' | 'podcast' | 'conversation' | 'documentation' | 'other';
+      title: string;
+      author?: string;
+      url?: string;
+      date?: string;
+    };
+    project?: string;               // Project name (for project captures)
+    client?: string;                // Client name (optional)
     references?: string[];          // Explicit links to create
-    parent?: string;                // Parent hub if known
+    note_type?: string;             // Optional frontmatter hint
+    tags?: string[];                // Additional tags
   };
   options?: {
     vault?: string;                 // Vault alias (default: default vault)
-    create_stubs?: boolean;         // Create stubs for technologies (default: true)
+    create_stubs?: boolean;         // Create stubs for references (default: true)
     retroactive_link?: boolean;     // Update existing notes with links (default: true)
-    expand_if_stub?: boolean;       // Expand existing stub (default: true)
     dry_run?: boolean;              // Preview without saving (default: false)
     autolink?: boolean;             // Auto-link to existing notes (default: true)
     force_atomic?: boolean;         // Skip atomic splitting (default: false)
+    confirm_new_domain?: boolean;   // Require confirmation for new domains (default: true)
   };
   source?: {
     origin?: string;                // Origin: ai:research, ai:artifact, human, web:url
@@ -92,6 +138,11 @@ Store new knowledge using intent-based resolution. AI expresses WHAT to store, a
     title: string;
     type: 'atomic' | 'hub';
   };
+  domain: {
+    path: string;                   // The domain path used
+    is_new: boolean;                // Whether this is a new domain
+    level: number;                  // Domain depth (1 = top-level)
+  };
   split_result?: {                  // If content was split
     hub_path: string;
     children_paths: string[];
@@ -102,42 +153,74 @@ Store new knowledge using intent-based resolution. AI expresses WHAT to store, a
     to_existing: string[];
     from_existing: string[];
   };
-  expanded_stub?: string;           // If a stub was expanded
   message: string;
 }
 ```
 
-**Example:**
+**Example - Knowledge Capture:**
 
 ```javascript
 palace_store({
-  title: "Docker Bridge Networking",
-  content: "Docker's bridge network is the default network driver...",
+  title: "Kubernetes Pod Networking",
+  content: "Pods communicate via the CNI (Container Network Interface)...",
   intent: {
-    knowledge_type: "command",
-    domain: ["docker", "networking"],
-    scope: "general",
-    technologies: ["docker"]
+    capture_type: "knowledge",
+    domain: ["kubernetes", "networking"],
+    tags: ["containers", "cni"]
   },
   source: {
     origin: "ai:research",
-    confidence: 0.8
+    confidence: 0.85
   }
 })
+// Creates: kubernetes/networking/kubernetes-pod-networking.md
+```
+
+**Example - Source Capture:**
+
+```javascript
+palace_store({
+  title: "Chapter 5 Notes",
+  content: "Key insights from chapter 5...",
+  intent: {
+    capture_type: "source",
+    domain: ["containers"],
+    source: {
+      type: "book",
+      title: "Kubernetes in Action",
+      author: "Marko Luksa"
+    }
+  }
+})
+// Creates: sources/book/kubernetes-in-action/chapter-5-notes.md
+```
+
+**Example - Project Capture:**
+
+```javascript
+palace_store({
+  title: "Database Selection Decision",
+  content: "We chose PostgreSQL for the following reasons...",
+  intent: {
+    capture_type: "project",
+    domain: ["architecture"],
+    project: "myapp"
+  }
+})
+// Creates: projects/myapp/database-selection-decision.md
 ```
 
 ---
 
 ### palace_check
 
-Check for existing knowledge before creating new notes. Part of the "check-before-store" pattern to prevent duplicates.
+Check for existing knowledge before creating new notes. Returns domain suggestions for organizing new knowledge.
 
 **Input Schema:**
 
 ```typescript
 {
   query: string;                    // Topic to search for (required)
-  knowledge_type?: string;          // Filter by type (optional)
   domain?: string[];                // Filter by domain (optional)
   include_stubs?: boolean;          // Include stubs (default: true)
   vault?: string;                   // Vault alias
@@ -160,12 +243,19 @@ Check for existing knowledge before creating new notes. Part of the "check-befor
     relevance: number;              // Search relevance score
     summary: string;
     last_modified: string;
+    domain?: string[];              // The domain path of the match
   }>;
   suggestions: {
     should_expand_stub: boolean;
     stub_path?: string;
-    missing_technologies: string[];
     similar_titles: string[];
+    suggested_domains: Array<{      // Domain suggestions for new knowledge
+      path: string[];               // Suggested domain path
+      confidence: number;
+      reason: string;
+      exists: boolean;              // Whether domain exists
+      note_count?: number;
+    }>;
   };
   recommendation:
     | 'create_new'                  // No matches, create new
@@ -179,10 +269,10 @@ Check for existing knowledge before creating new notes. Part of the "check-befor
 
 ```javascript
 palace_check({
-  query: "kubernetes pod networking",
-  knowledge_type: "technology",
+  query: "kubernetes networking",
   domain: ["kubernetes"]
 })
+// Returns matches and suggests domain: ["kubernetes", "networking"]
 ```
 
 ---
@@ -228,7 +318,7 @@ Read a specific note's content.
 
 ```javascript
 palace_read({
-  path: "technologies/kubernetes/concepts/pods.md"
+  path: "kubernetes/networking/pods.md"
 })
 ```
 
@@ -285,9 +375,9 @@ Intelligently update existing notes with multiple modes.
 
 ```javascript
 palace_improve({
-  path: "technologies/docker/concepts/networking.md",
+  path: "kubernetes/networking/pods.md",
   mode: "append_section",
-  content: "## Bridge Network Details\n\nThe bridge network is...",
+  content: "## Service Discovery\n\nKubernetes provides built-in DNS...",
   author: "ai:claude"
 })
 ```
@@ -303,7 +393,7 @@ Search across the vault using full-text search with FTS5 BM25 ranking.
 ```typescript
 {
   query: string;                    // Search query (required)
-  type?: string | 'all';            // Filter by type
+  type?: string | 'all';            // Filter by capture_type
   tags?: string[];                  // Filter by tags (AND logic)
   path?: string;                    // Filter by path prefix
   min_confidence?: number;          // Minimum confidence (0-1)
@@ -336,7 +426,7 @@ Search across the vault using full-text search with FTS5 BM25 ranking.
 ```javascript
 palace_recall({
   query: "kubernetes service mesh",
-  type: "technology",
+  type: "knowledge",
   tags: ["networking"],
   limit: 5
 })
@@ -355,7 +445,7 @@ List notes in a directory with optional filtering.
 ```typescript
 {
   path?: string;                    // Directory path (default: root)
-  type?: string;                    // Filter by type
+  type?: string;                    // Filter by capture_type
   recursive?: boolean;              // Include subdirectories (default: false)
   limit?: number;                   // Max results (default: 50)
   vault?: string;                   // Vault alias
@@ -383,15 +473,14 @@ List notes in a directory with optional filtering.
 
 ### palace_structure
 
-Get vault directory tree structure.
+Get vault directory tree structure with domain pattern analysis. Essential for understanding vault organization before storing knowledge.
 
 **Input Schema:**
 
 ```typescript
 {
   path?: string;                    // Starting path (default: root)
-  depth?: number;                   // Max depth (default: 3)
-  include_counts?: boolean;         // Include note counts
+  depth?: number;                   // Max depth (default: 3, max: 10)
   vault?: string;                   // Vault alias
 }
 ```
@@ -402,8 +491,53 @@ Get vault directory tree structure.
 {
   success: boolean;
   vault: string;
-  tree: DirectoryNode;              // Nested directory structure
+  vaultPath: string;
+  path: string;
+  depth: number;
+  stats: {
+    files: number;
+    directories: number;
+  };
+  tree: string;                     // Formatted tree view
+  entries: DirectoryEntry[];        // Raw structure for programmatic use
+  domain_patterns: {                // Phase 017 domain analysis
+    top_level_domains: Array<{
+      name: string;
+      totalNotes: number;
+      depth: number;
+    }>;
+    all_domains: Array<{
+      path: string;
+      level: number;
+      note_count: number;
+      has_hub: boolean;
+      subdomains: string[];
+    }>;
+    special_folders: {
+      sources: boolean;
+      projects: boolean;
+      clients: boolean;
+      daily: boolean;
+      standards: boolean;
+    };
+    suggestions: {
+      existing_domains: string[];
+      hint: string;
+    };
+  };
 }
+```
+
+**Example:**
+
+```javascript
+palace_structure({
+  depth: 3
+})
+// Returns tree structure plus domain analysis:
+// - Top-level domains: kubernetes, docker, networking
+// - Each with note counts, depths, and subdomain info
+// - Suggestions for where to place new knowledge
 ```
 
 ---
@@ -599,7 +733,7 @@ Query notes by properties without full-text search.
 
 ```typescript
 {
-  type?: string | 'all';            // Knowledge type
+  type?: string | 'all';            // Capture type filter
   tags?: string[];                  // Must have ALL tags
   path?: string;                    // Path prefix filter
   source?: string;                  // Source filter
@@ -660,9 +794,9 @@ Execute Dataview Query Language (DQL) queries.
 **Example Queries:**
 
 ```dataview
-TABLE title, confidence FROM "research" WHERE verified = false SORT confidence DESC
-LIST FROM "commands" WHERE contains(tags, "kubernetes")
-TABLE title, type WHERE confidence > 0.8 SORT modified DESC LIMIT 10
+TABLE title, confidence FROM "kubernetes" WHERE status = "stub" SORT confidence DESC
+LIST FROM "sources" WHERE contains(tags, "networking")
+TABLE title, capture_type WHERE confidence > 0.8 SORT modified DESC LIMIT 10
 ```
 
 **Output Schema:**
@@ -771,7 +905,7 @@ Detect context and generate clarifying questions when storage intent is incomple
       possible_clients?: string[];
     };
   };
-  missing?: Array<'scope' | 'project' | 'client' | 'technologies' | 'domain'>;
+  missing?: Array<'capture_type' | 'domain' | 'project' | 'client' | 'source_info'>;
   vault?: string;
 }
 ```
@@ -784,11 +918,27 @@ Detect context and generate clarifying questions when storage intent is incomple
   vault: string;
   vaultPath: string;
   detected: {
-    technologies: Array<{ name: string; confidence: number; exists_in_vault: boolean }>;
-    projects: Array<{ name: string; confidence: number }>;
-    clients: Array<{ name: string; confidence: number }>;
-    scope: { likely: 'general' | 'project-specific'; confidence: number; indicators: string[] };
-    domains: Array<{ name: string; confidence: number }>;
+    capture_type: {
+      likely: 'source' | 'knowledge' | 'project';
+      confidence: number;
+      indicators: string[];
+    };
+    domains: Array<{
+      name: string;
+      confidence: number;
+      exists_in_vault: boolean;
+      note_count?: number;
+    }>;
+    projects: Array<{
+      name: string;
+      confidence: number;
+      path?: string;
+    }>;
+    clients: Array<{
+      name: string;
+      confidence: number;
+      path?: string;
+    }>;
   };
   questions: Array<{
     key: string;
@@ -799,11 +949,10 @@ Detect context and generate clarifying questions when storage intent is incomple
     default?: string;
   }>;
   suggestions: {
-    scope?: 'general' | 'project-specific';
+    capture_type?: 'source' | 'knowledge' | 'project';
+    domain?: string[];
     project?: string;
     client?: string;
-    technologies?: string[];
-    domain?: string[];
   };
   confidence: {
     overall: number;
@@ -811,6 +960,20 @@ Detect context and generate clarifying questions when storage intent is incomple
   };
   message: string;
 }
+```
+
+**Example:**
+
+```javascript
+palace_clarify({
+  context: {
+    title: "Docker Networking",
+    content_preview: "Docker uses bridge networking by default..."
+  },
+  missing: ["domain"]
+})
+// Returns detected capture_type: "knowledge"
+// Suggests domain: ["docker", "networking"]
 ```
 
 ---
@@ -878,27 +1041,37 @@ Add an entry to the current session.
 
 ## Workflow Examples
 
-### Check-Before-Store Pattern
+### Check-Before-Store Pattern (Phase 017)
 
 ```javascript
-// 1. Check for existing knowledge
+// 1. Understand vault structure
+const structure = palace_structure({ depth: 3 });
+// See existing domains: kubernetes, docker, networking, etc.
+
+// 2. Check for existing knowledge
 const check = palace_check({
-  query: "docker networking bridge",
-  knowledge_type: "command"
+  query: "kubernetes pod networking",
+  domain: ["kubernetes"]
 });
 
-// 2. Based on recommendation
+// 3. Based on recommendation and domain suggestions
 if (check.recommendation === 'create_new') {
+  // Use suggested domain from check
+  const suggestedDomain = check.suggestions.suggested_domains[0]?.path;
+
   palace_store({
-    title: "Docker Bridge Networking",
+    title: "Pod Network Model",
     content: "...",
-    intent: { knowledge_type: "command", domain: ["docker", "networking"], scope: "general" }
+    intent: {
+      capture_type: "knowledge",
+      domain: suggestedDomain || ["kubernetes", "networking"]
+    }
   });
 } else if (check.recommendation === 'expand_stub') {
-  palace_store({
-    title: check.suggestions.stub_path,
-    content: "...",
-    options: { expand_if_stub: true }
+  palace_improve({
+    path: check.suggestions.stub_path,
+    mode: "replace",
+    content: "..."
   });
 } else if (check.recommendation === 'improve_existing') {
   palace_improve({
@@ -909,6 +1082,26 @@ if (check.recommendation === 'create_new') {
 }
 ```
 
+### Source Capture Workflow
+
+```javascript
+// Capturing notes from a book
+palace_store({
+  title: "Chapter 3 - Container Orchestration",
+  content: "Key points:\n- Kubernetes manages container lifecycle...",
+  intent: {
+    capture_type: "source",
+    domain: ["containers", "orchestration"],
+    source: {
+      type: "book",
+      title: "Cloud Native Infrastructure",
+      author: "Justin Garrison"
+    }
+  }
+})
+// Creates: sources/book/cloud-native-infrastructure/chapter-3-container-orchestration.md
+```
+
 ### Session Workflow
 
 ```javascript
@@ -916,8 +1109,12 @@ if (check.recommendation === 'create_new') {
 palace_session_start({ topic: "Kubernetes networking research" });
 
 // 2. Research and store knowledge
-palace_store({ ... });
-palace_session_log({ entry: "Documented CNI plugins", notes_created: ["..."] });
+palace_store({
+  title: "CNI Plugins Overview",
+  content: "...",
+  intent: { capture_type: "knowledge", domain: ["kubernetes", "networking", "cni"] }
+});
+palace_session_log({ entry: "Documented CNI plugins", notes_created: ["kubernetes/networking/cni/cni-plugins-overview.md"] });
 
 // 3. Continue research
 palace_store({ ... });
@@ -936,5 +1133,5 @@ console.log(standards.acknowledgment_message);
 // 3. Work following standards...
 
 // 4. Validate compliance
-palace_standards_validate({ path: "new-note.md" });
+palace_standards_validate({ path: "kubernetes/pods.md" });
 ```

@@ -1,8 +1,13 @@
 /**
- * Missing context identifier for AI support tools
+ * Missing context identifier for AI support tools (Phase 017)
  *
  * Identifies what context is missing from a partial storage intent
  * to help AI ask the right clarifying questions.
+ *
+ * Phase 017 changes:
+ * - Simplified to 3 capture types: source, knowledge, project
+ * - Removed scope/technologies requirements
+ * - Added source_info and capture_type requirements
  */
 
 import type {
@@ -11,33 +16,13 @@ import type {
   PartialStorageIntent,
   DetectedContext,
 } from '../../types/clarify.js';
-import type { IntentKnowledgeType } from '../../types/intent.js';
+import type { CaptureType } from '../../types/intent.js';
 
-// Required fields by knowledge type
-const REQUIRED_BY_TYPE: Record<IntentKnowledgeType, MissingContextType[]> = {
-  // Layer 1 - Technical (never trapped in projects)
-  technology: ['domain'],
-  command: ['domain', 'technologies'],
-  reference: ['domain'],
-
-  // Layer 2 - Domain
-  standard: ['domain', 'scope'],
-  pattern: ['domain', 'scope'],
-  research: ['domain', 'scope'],
-
-  // Layer 3 - Contextual (always need context)
-  decision: ['domain', 'scope', 'project'],
-  configuration: ['domain', 'scope', 'technologies'],
-  troubleshooting: ['domain', 'scope', 'technologies'],
-
-  // Generic
-  note: ['domain'],
-};
-
-// Scope-dependent requirements
-const SCOPE_REQUIREMENTS: Record<string, MissingContextType[]> = {
-  'project-specific': ['project'],
-  general: [],
+// Required fields by capture type
+const REQUIRED_BY_CAPTURE_TYPE: Record<CaptureType, MissingContextType[]> = {
+  source: ['domain', 'source_info'],
+  knowledge: ['domain'],
+  project: ['domain', 'project'],
 };
 
 /**
@@ -48,25 +33,26 @@ function isFieldComplete(
   intent: PartialStorageIntent
 ): boolean {
   switch (field) {
-    case 'scope':
-      return !!intent.scope;
+    case 'capture_type':
+      return !!intent.capture_type;
+
+    case 'domain':
+      // At least one domain should be specified
+      return !!(intent.domain && intent.domain.length > 0);
 
     case 'project':
-      // Only required if scope is project-specific
-      if (intent.scope !== 'project-specific') return true;
+      // Only required if capture_type is project
+      if (intent.capture_type !== 'project') return true;
       return !!intent.project;
 
     case 'client':
       // Optional unless explicitly needed
       return true;
 
-    case 'technologies':
-      // At least one technology should be specified for tech-related types
-      return !!(intent.technologies && intent.technologies.length > 0);
-
-    case 'domain':
-      // At least one domain should be specified
-      return !!(intent.domain && intent.domain.length > 0);
+    case 'source_info':
+      // Only required if capture_type is source
+      if (intent.capture_type !== 'source') return true;
+      return !!intent.source;
 
     default:
       return true;
@@ -74,7 +60,7 @@ function isFieldComplete(
 }
 
 /**
- * Check if a field is partially complete
+ * Check if a field is partially complete (has hints from detection)
  */
 function isFieldPartial(
   field: MissingContextType,
@@ -82,9 +68,17 @@ function isFieldPartial(
   detected: DetectedContext | undefined
 ): boolean {
   switch (field) {
-    case 'scope':
+    case 'capture_type':
       // Partial if we have hints but no explicit value
-      return !intent.scope && !!detected?.scope && detected.scope.confidence >= 0.5;
+      return !intent.capture_type && !!detected?.capture_type && detected.capture_type.confidence >= 0.5;
+
+    case 'domain':
+      // Partial if we detected some but none were specified
+      return (
+        (!intent.domain || intent.domain.length === 0) &&
+        !!detected?.domains &&
+        detected.domains.length > 0
+      );
 
     case 'project':
       // Partial if we have hints but no explicit value
@@ -103,21 +97,9 @@ function isFieldPartial(
         detected.clients[0]!.confidence >= 0.5
       );
 
-    case 'technologies':
-      // Partial if we detected some but none were specified
-      return (
-        (!intent.technologies || intent.technologies.length === 0) &&
-        !!detected?.technologies &&
-        detected.technologies.length > 0
-      );
-
-    case 'domain':
-      // Partial if we detected some but none were specified
-      return (
-        (!intent.domain || intent.domain.length === 0) &&
-        !!detected?.domains &&
-        detected.domains.length > 0
-      );
+    case 'source_info':
+      // No detection for source info yet
+      return false;
 
     default:
       return false;
@@ -133,18 +115,25 @@ function getMissingReason(
   detected: DetectedContext | undefined
 ): string {
   switch (field) {
-    case 'scope':
-      if (detected?.scope && detected.scope.confidence >= 0.5) {
-        return `Detected ${detected.scope.likely} scope (${Math.round(detected.scope.confidence * 100)}% confidence) but needs confirmation`;
+    case 'capture_type':
+      if (detected?.capture_type && detected.capture_type.confidence >= 0.5) {
+        return `Detected ${detected.capture_type.likely} capture type (${Math.round(detected.capture_type.confidence * 100)}% confidence) but needs confirmation`;
       }
-      return 'Unable to determine if this is general knowledge or project-specific';
+      return 'Unable to determine if this is a source capture, knowledge, or project context';
+
+    case 'domain':
+      if (detected?.domains && detected.domains.length > 0) {
+        const domains = detected.domains.map((d) => d.name).join(', ');
+        return `Detected domains (${domains}) but should confirm categorization`;
+      }
+      return 'Domain/topic path is required for proper organization';
 
     case 'project':
       if (detected?.projects && detected.projects.length > 0) {
         const top = detected.projects[0]!;
         return `Possible project "${top.name}" detected but needs confirmation`;
       }
-      return 'Project-specific scope requires a project name';
+      return 'Project context capture requires a project name';
 
     case 'client':
       if (detected?.clients && detected.clients.length > 0) {
@@ -153,19 +142,8 @@ function getMissingReason(
       }
       return 'Client context could help with organization';
 
-    case 'technologies':
-      if (detected?.technologies && detected.technologies.length > 0) {
-        const techs = detected.technologies.map((t) => t.name).join(', ');
-        return `Detected technologies (${techs}) but should confirm which to link`;
-      }
-      return 'Knowledge type typically requires technology links';
-
-    case 'domain':
-      if (detected?.domains && detected.domains.length > 0) {
-        const domains = detected.domains.map((d) => d.name).join(', ');
-        return `Detected domains (${domains}) but should confirm categorization`;
-      }
-      return 'Domain categorization is required for proper organization';
+    case 'source_info':
+      return 'Source captures require source information (type, title, author)';
 
     default:
       return 'This field is required';
@@ -187,19 +165,9 @@ export function identifyMissing(
     string
   >;
 
-  // Get required fields for this knowledge type
-  const knowledgeType = intent.knowledge_type ?? 'note';
-  const requiredFields = REQUIRED_BY_TYPE[knowledgeType] ?? ['domain'];
-
-  // Add scope-dependent requirements
-  if (intent.scope) {
-    const scopeReqs = SCOPE_REQUIREMENTS[intent.scope] ?? [];
-    for (const field of scopeReqs) {
-      if (!requiredFields.includes(field)) {
-        requiredFields.push(field);
-      }
-    }
-  }
+  // First, check if capture_type is known
+  const captureType = intent.capture_type ?? 'knowledge';
+  const requiredFields: MissingContextType[] = ['capture_type', ...REQUIRED_BY_CAPTURE_TYPE[captureType]];
 
   // Check each required field
   for (const field of requiredFields) {
@@ -214,18 +182,19 @@ export function identifyMissing(
     }
   }
 
-  // Special case: if scope is missing, we might need to ask about project
-  // even if project isn't in required fields yet
-  if (!intent.scope && detected?.scope?.likely === 'project-specific') {
-    if (!missing.includes('project') && !partial.includes('project')) {
-      partial.push('scope');
-      reasons['scope'] = 'Scope appears project-specific but should confirm';
+  // If capture_type not set but detected as 'project', mark project as partial
+  if (!intent.capture_type && detected?.capture_type?.likely === 'project') {
+    if (!partial.includes('project') && !complete.includes('project') && !missing.includes('project')) {
+      partial.push('project');
+      reasons['project'] = 'Project name may be needed if capture type is confirmed as project';
+    }
+  }
 
-      // Also mark project as partial if not already
-      if (!partial.includes('project') && !complete.includes('project')) {
-        partial.push('project');
-        reasons['project'] = 'Project name may be needed if scope is confirmed as project-specific';
-      }
+  // If capture_type not set but detected as 'source', mark source_info as partial
+  if (!intent.capture_type && detected?.capture_type?.likely === 'source') {
+    if (!partial.includes('source_info') && !complete.includes('source_info') && !missing.includes('source_info')) {
+      partial.push('source_info');
+      reasons['source_info'] = 'Source info may be needed if capture type is confirmed as source';
     }
   }
 
@@ -244,22 +213,14 @@ export function isIntentComplete(
   intent: PartialStorageIntent,
   strict = false
 ): boolean {
-  const knowledgeType = intent.knowledge_type ?? 'note';
-  const requiredFields = REQUIRED_BY_TYPE[knowledgeType] ?? ['domain'];
+  const captureType = intent.capture_type ?? 'knowledge';
+  const requiredFields = ['capture_type', ...REQUIRED_BY_CAPTURE_TYPE[captureType]] as MissingContextType[];
 
   for (const field of requiredFields) {
     if (!isFieldComplete(field, intent)) {
+      // In non-strict mode, capture_type can default to 'knowledge'
+      if (!strict && field === 'capture_type') continue;
       return false;
-    }
-  }
-
-  // In strict mode, also check scope-dependent requirements
-  if (strict && intent.scope) {
-    const scopeReqs = SCOPE_REQUIREMENTS[intent.scope] ?? [];
-    for (const field of scopeReqs) {
-      if (!isFieldComplete(field, intent)) {
-        return false;
-      }
     }
   }
 
@@ -273,14 +234,14 @@ export function prioritizeMissing(
   missing: MissingContextType[],
   partial: MissingContextType[]
 ): MissingContextType[] {
-  // Priority order: scope first (determines other requirements),
-  // then domain, then project/client, then technologies
+  // Priority order: capture_type first (determines other requirements),
+  // then domain, then project/client, then source_info
   const priority: MissingContextType[] = [
-    'scope',
+    'capture_type',
     'domain',
     'project',
     'client',
-    'technologies',
+    'source_info',
   ];
 
   const combined = [...missing, ...partial];

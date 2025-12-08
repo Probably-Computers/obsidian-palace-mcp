@@ -13,7 +13,7 @@ import {
 import { filenameFromTitle } from '../../utils/slugify.js';
 import { logger } from '../../utils/logger.js';
 import { readNote, noteExists, type ReadOptions } from './reader.js';
-import type { Note, NoteFrontmatter, KnowledgeType } from '../../types/index.js';
+import type { Note, NoteFrontmatter } from '../../types/index.js';
 
 /**
  * Options for write operations
@@ -46,7 +46,7 @@ async function ensureDir(dirPath: string): Promise<void> {
  * Create a new note
  */
 export async function createNote(
-  type: KnowledgeType,
+  type: string,
   subPath: string,
   title: string,
   content: string,

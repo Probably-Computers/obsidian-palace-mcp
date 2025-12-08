@@ -1,5 +1,5 @@
 /**
- * AI Support Services
+ * AI Support Services (Phase 017)
  *
  * Exports for context detection, missing identification,
  * and question generation.
@@ -8,12 +8,11 @@
 // Context detector
 export {
   detectContext,
-  detectTechnologies,
+  detectDomains,
   detectProjects,
   detectClients,
-  detectScope,
-  detectDomains,
-  buildTechVocabulary,
+  detectCaptureType,
+  buildDomainVocabulary,
   buildProjectVocabulary,
   buildClientVocabulary,
 } from './context-detector.js';

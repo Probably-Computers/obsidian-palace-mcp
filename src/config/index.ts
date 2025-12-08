@@ -84,7 +84,6 @@ export {
 export {
   loadVaultConfig,
   createDefaultVaultConfig,
-  getStructurePath,
-  getSubpath,
+  isStandardsPath,
   getAiBinding,
 } from './vault-config.js';

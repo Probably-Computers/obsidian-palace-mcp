@@ -6,7 +6,7 @@
 import Database from 'better-sqlite3';
 import { basename } from 'path';
 import { logger } from '../../utils/logger.js';
-import type { GraphLink, NoteMetadata, NoteFrontmatter, KnowledgeType, KnowledgeSource } from '../../types/index.js';
+import type { GraphLink, NoteMetadata, NoteFrontmatter, KnowledgeSource } from '../../types/index.js';
 
 /**
  * Get outgoing links from a note
@@ -202,7 +202,6 @@ export function rowToNoteMetadata(
   }
 ): NoteMetadata {
   const frontmatter: NoteFrontmatter = {
-    type: (row.type as KnowledgeType) ?? 'research',
     created: row.created ?? new Date().toISOString(),
     modified: row.modified ?? new Date().toISOString(),
   };

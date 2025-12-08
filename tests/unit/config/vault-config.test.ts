@@ -1,5 +1,5 @@
 /**
- * Per-vault configuration tests
+ * Per-vault configuration tests (Phase 017)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -9,13 +9,12 @@ import { tmpdir } from 'os';
 import {
   loadVaultConfig,
   createDefaultVaultConfig,
-  getStructurePath,
-  getSubpath,
   getAiBinding,
+  isStandardsPath,
   schemas,
 } from '../../../src/config/vault-config';
 
-describe('Vault Configuration', () => {
+describe('Vault Configuration (Phase 017)', () => {
   const testDir = join(tmpdir(), `palace-vault-config-test-${Date.now()}`);
 
   beforeEach(() => {
@@ -31,13 +30,18 @@ describe('Vault Configuration', () => {
   });
 
   describe('Zod Schemas', () => {
-    it('validates structure mapping', () => {
-      const mapping = {
-        path: 'technologies/{domain}/',
-        hub_file: '_index.md',
+    it('validates simplified structure config', () => {
+      const structure = {
+        sources: 'my-sources/',
+        projects: 'my-projects/',
       };
-      const result = schemas.structureMapping.safeParse(mapping);
+      const result = schemas.vaultStructure.safeParse(structure);
       expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.sources).toBe('my-sources/');
+        expect(result.data.projects).toBe('my-projects/');
+        expect(result.data.clients).toBe('clients/'); // default
+      }
     });
 
     it('validates atomic config with defaults', () => {
@@ -66,13 +70,14 @@ describe('Vault Configuration', () => {
       expect(config.vault.name).toBe('My Vault');
     });
 
-    it('includes default structure mappings', () => {
+    it('includes simplified structure with special folders (Phase 017)', () => {
       const config = createDefaultVaultConfig(testDir);
 
-      expect(config.structure.technology).toBeDefined();
-      expect(config.structure.technology?.path).toBe('technologies/{domain}/');
-      expect(config.structure.command).toBeDefined();
-      expect(config.structure.project).toBeDefined();
+      expect(config.structure.sources).toBe('sources/');
+      expect(config.structure.projects).toBe('projects/');
+      expect(config.structure.clients).toBe('clients/');
+      expect(config.structure.daily).toBe('daily/');
+      expect(config.structure.standards).toBe('standards/');
     });
 
     it('includes default ignore patterns', () => {
@@ -113,8 +118,8 @@ vault:
   description: My custom vault
 
 structure:
-  technology:
-    path: tech/{domain}/
+  sources: my-sources/
+  projects: my-projects/
 
 atomic:
   max_lines: 150
@@ -126,6 +131,7 @@ atomic:
 
       expect(config.vault.name).toBe('custom-vault');
       expect(config.vault.description).toBe('My custom vault');
+      expect(config.structure.sources).toBe('my-sources/');
       expect(config.atomic.max_lines).toBe(150);
       expect(config.atomic.hub_filename).toBe('index.md');
     });
@@ -146,7 +152,7 @@ atomic:
       expect(config.atomic.max_lines).toBe(100);
       // Defaults should be applied
       expect(config.atomic.max_sections).toBe(6);
-      expect(config.structure.technology).toBeDefined();
+      expect(config.structure.sources).toBe('sources/');
     });
 
     it('returns defaults for invalid config', () => {
@@ -163,63 +169,41 @@ vault:
     });
   });
 
-  describe('getStructurePath', () => {
-    it('returns path for known knowledge type', () => {
+  describe('isStandardsPath', () => {
+    it('returns true for paths in standards folder', () => {
       const config = createDefaultVaultConfig(testDir);
-      const path = getStructurePath(config, 'technology', { domain: 'docker' });
 
-      expect(path).toBe('technologies/docker/');
+      expect(isStandardsPath(config, 'standards/git-workflow.md')).toBe(true);
+      expect(isStandardsPath(config, 'standards/code-style/typescript.md')).toBe(true);
     });
 
-    it('replaces multiple variables', () => {
+    it('returns false for paths outside standards folder', () => {
       const config = createDefaultVaultConfig(testDir);
-      const path = getStructurePath(config, 'project', { project: 'myproject' });
 
-      expect(path).toBe('projects/myproject/');
+      expect(isStandardsPath(config, 'kubernetes/pods.md')).toBe(false);
+      expect(isStandardsPath(config, 'projects/myapp/readme.md')).toBe(false);
     });
 
-    it('returns null for unknown knowledge type', () => {
+    it('uses custom standards folder from config', () => {
       const config = createDefaultVaultConfig(testDir);
-      const path = getStructurePath(config, 'unknown');
+      config.structure.standards = 'my-standards/';
 
-      expect(path).toBeNull();
-    });
-  });
-
-  describe('getSubpath', () => {
-    it('returns subpath for project type', () => {
-      const config = createDefaultVaultConfig(testDir);
-      const subpath = getSubpath(config, 'project', 'decision');
-
-      expect(subpath).toBe('decisions/');
-    });
-
-    it('returns null for missing subpath', () => {
-      const config = createDefaultVaultConfig(testDir);
-      const subpath = getSubpath(config, 'project', 'unknown');
-
-      expect(subpath).toBeNull();
-    });
-
-    it('returns null for type without subpaths', () => {
-      const config = createDefaultVaultConfig(testDir);
-      const subpath = getSubpath(config, 'technology', 'any');
-
-      expect(subpath).toBeNull();
+      expect(isStandardsPath(config, 'my-standards/workflow.md')).toBe(true);
+      expect(isStandardsPath(config, 'standards/workflow.md')).toBe(false);
     });
   });
 
   describe('getAiBinding', () => {
-    it('returns ai_binding for standard type', () => {
+    it('returns required for paths in standards folder', () => {
       const config = createDefaultVaultConfig(testDir);
-      const binding = getAiBinding(config, 'standard');
+      const binding = getAiBinding(config, 'standards/git-workflow.md');
 
       expect(binding).toBe('required');
     });
 
-    it('returns undefined for types without binding', () => {
+    it('returns undefined for paths outside standards folder', () => {
       const config = createDefaultVaultConfig(testDir);
-      const binding = getAiBinding(config, 'technology');
+      const binding = getAiBinding(config, 'kubernetes/pods.md');
 
       expect(binding).toBeUndefined();
     });

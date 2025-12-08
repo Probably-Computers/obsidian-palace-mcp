@@ -9,7 +9,7 @@ import { join } from 'path';
 import { mkdir, writeFile, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import type Database from 'better-sqlite3';
-import type { ResolvedVault, NoteMetadata, KnowledgeType } from '../../types/index.js';
+import type { ResolvedVault, NoteMetadata } from '../../types/index.js';
 import type { StorageIntent } from '../../types/intent.js';
 import { slugify } from '../../utils/slugify.js';
 import { parseFrontmatter, stringifyFrontmatter } from '../../utils/frontmatter.js';
@@ -28,11 +28,10 @@ export async function createStub(
   vault: ResolvedVault,
   domain: string[] = []
 ): Promise<string> {
-  // Resolve where to put the stub
+  // Resolve where to put the stub (Phase 017: use knowledge capture type)
   const intent: StorageIntent = {
-    knowledge_type: 'technology',
+    capture_type: 'knowledge',
     domain: domain.length > 0 ? domain : [slugify(title)],
-    scope: 'general',
   };
 
   const resolution = resolveStorage(intent, title, vault);
@@ -40,17 +39,18 @@ export async function createStub(
   // Ensure parent directory exists
   await mkdir(resolution.parentDir, { recursive: true });
 
-  // Build stub content
+  // Build stub content (Phase 017: use capture_type instead of type)
   const now = new Date().toISOString();
   const frontmatter: Record<string, unknown> = {
-    type: 'technology',
+    capture_type: 'knowledge',
+    domain: intent.domain,
     status: 'stub',
     stub_context: context,
     created: now,
     modified: now,
     mentioned_in: [mentionedIn],
     confidence: 0.2, // Low confidence for stubs
-    tags: ['stub', ...domain],
+    tags: ['stub'],
   };
 
   const stubBody = `# ${title}
@@ -178,9 +178,11 @@ function buildFrontmatterFromRow(row: {
   related: string | null;
   aliases: string | null;
   source: string | null;
+  capture_type?: string | null;
+  domain?: string | null;
 }): NoteMetadata['frontmatter'] {
   const frontmatter: NoteMetadata['frontmatter'] = {
-    type: row.type as KnowledgeType,
+    type: row.type, // Keep for backward compatibility
     created: row.created,
     modified: row.modified,
     verified: Boolean(row.verified),
@@ -188,6 +190,12 @@ function buildFrontmatterFromRow(row: {
     related: row.related ? JSON.parse(row.related) : [],
     aliases: row.aliases ? JSON.parse(row.aliases) : [],
   };
+  if (row.capture_type) {
+    frontmatter.capture_type = row.capture_type as 'source' | 'knowledge' | 'project';
+  }
+  if (row.domain) {
+    frontmatter.domain = row.domain.split(',');
+  }
   if (row.confidence !== null) {
     frontmatter.confidence = row.confidence;
   }

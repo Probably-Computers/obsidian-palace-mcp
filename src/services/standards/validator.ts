@@ -96,14 +96,14 @@ function standardApplies(standard: LoadedStandard, note: Note): boolean {
     return true;
   }
 
-  // Check by type
-  const noteType = note.frontmatter.type;
-  if (noteType && appliesTo.includes(noteType)) {
+  // Check by capture_type
+  const captureType = note.frontmatter.capture_type;
+  if (captureType && appliesTo.includes(captureType)) {
     return true;
   }
 
   // Check by domain in frontmatter
-  const noteDomain = (note.frontmatter as unknown as Record<string, unknown>).domain;
+  const noteDomain = note.frontmatter.domain;
   if (Array.isArray(noteDomain)) {
     for (const d of noteDomain) {
       if (appliesTo.includes(d)) {
