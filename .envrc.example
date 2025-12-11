@@ -2,8 +2,13 @@
 # Copy this file to .envrc and customize for your environment
 # See: https://direnv.net/
 
-# Path to the Obsidian vault used for development and testing
-export PALACE_VAULT_PATH="/path/to/your/obsidian/vault"
+# Vault configuration: path:alias:mode (rw = read-write, ro = read-only)
+# Single vault:
+export PALACE_VAULTS="/path/to/your/obsidian/vault:main:rw"
+
+# Multi-vault example:
+# export PALACE_VAULTS="/path/to/work:work:rw,/path/to/personal:personal:rw"
+# export PALACE_DEFAULT_VAULT="work"
 
 # Log level (debug, info, warn, error)
 export PALACE_LOG_LEVEL="debug"
@@ -11,5 +16,5 @@ export PALACE_LOG_LEVEL="debug"
 # Enable file watcher for external changes
 export PALACE_WATCH_ENABLED="true"
 
-# Optional: Custom index location (defaults to {vault}/.palace/index.sqlite)
-# export PALACE_INDEX_PATH="/custom/path/to/index.sqlite"
+# Optional: Use config file instead of PALACE_VAULTS
+# export PALACE_CONFIG_PATH="~/.config/palace/config.yaml"

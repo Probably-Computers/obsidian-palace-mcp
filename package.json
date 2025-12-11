@@ -47,12 +47,16 @@
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://gitlab.com/AdamClaassens/obsidian-palace-mcp.git"
+    "url": "https://github.com/Probably-Computers/obsidian-palace-mcp.git"
   },
   "bugs": {
-    "url": "https://gitlab.com/AdamClaassens/obsidian-palace-mcp/-/issues"
+    "url": "https://github.com/Probably-Computers/obsidian-palace-mcp/issues"
   },
-  "homepage": "https://gitlab.com/AdamClaassens/obsidian-palace-mcp#readme",
+  "homepage": "https://github.com/Probably-Computers/obsidian-palace-mcp#readme",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/Probably-Computers"
+  },
   "engines": {
     "node": ">=18.0.0"
   },

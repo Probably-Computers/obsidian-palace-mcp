@@ -1,7 +1,9 @@
 # Obsidian Palace MCP
 
+[![npm version](https://img.shields.io/npm/v/obsidian-palace-mcp.svg)](https://www.npmjs.com/package/obsidian-palace-mcp)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/Probably-Computers?label=Sponsor&logo=GitHub)](https://github.com/sponsors/Probably-Computers)
 
 An MCP server that turns your Obsidian vault into an AI memory palace.
 
@@ -299,6 +301,40 @@ AI: [Follows git workflow standard from vault]
 
 *Required unless `PALACE_CONFIG_PATH` is set pointing to a config file.
 
+## Troubleshooting
+
+### Server won't start
+
+**"PALACE_VAULTS is required"**
+- Ensure you've set `PALACE_VAULTS` in your MCP client config or use `PALACE_CONFIG_PATH`
+- Format: `path:alias:mode` (e.g., `/path/to/vault:main:rw`)
+
+**"Cannot find module 'better-sqlite3'"**
+- Run `npm rebuild better-sqlite3` if you installed globally
+- This native module may need recompilation for your Node version
+
+### Notes not appearing
+
+**Check vault path**
+- Verify the path in `PALACE_VAULTS` points to your actual Obsidian vault
+- The path should contain `.obsidian/` folder
+
+**Check ignore patterns**
+- Files in `.obsidian/`, `templates/`, or directories with `.palace-ignore` are skipped
+- Notes with `palace_ignore: true` in frontmatter are also skipped
+
+### Search not finding notes
+
+**Rebuild the index**
+- Delete `.palace/index.sqlite` in your vault and restart the server
+- The index will be rebuilt automatically on startup
+
+### Permission errors
+
+**Read-only vault**
+- Check the mode in `PALACE_VAULTS` - use `:rw` for read-write, `:ro` for read-only
+- Verify file system permissions on the vault directory
+
 ## Documentation
 
 - [API Reference](docs/API.md) - Complete tool documentation
@@ -310,7 +346,7 @@ AI: [Follows git workflow standard from vault]
 
 ```bash
 # Clone the repository
-git clone https://gitlab.com/AdamClaassens/obsidian-palace-mcp.git
+git clone https://github.com/Probably-Computers/obsidian-palace-mcp.git
 cd obsidian-palace-mcp
 
 # Install dependencies
@@ -334,7 +370,7 @@ Contributions are welcome! Please:
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Merge Request
+5. Open a Pull Request
 
 See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
 
@@ -345,6 +381,14 @@ This project is licensed under the **GNU Affero General Public License v3.0 (AGP
 ### Commercial Use
 
 If you need to use Obsidian Palace MCP in proprietary software or as part of a commercial SaaS without open-sourcing your modifications, commercial licenses are available. See [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md) for options.
+
+## Support the Project
+
+If you find Obsidian Palace MCP useful, consider supporting its development:
+
+- [GitHub Sponsors](https://github.com/sponsors/Probably-Computers) - Monthly sponsorship
+- [Star the repo](https://github.com/Probably-Computers/obsidian-palace-mcp) - Help others discover it
+- [Report issues](https://github.com/Probably-Computers/obsidian-palace-mcp/issues) - Help improve quality
 
 ## Credits
 

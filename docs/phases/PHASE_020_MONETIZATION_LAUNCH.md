@@ -1,7 +1,7 @@
 # Phase 020: Monetization & Public Launch
 
-**Status**: Planning
-**Start Date**: TBD
+**Status**: In Progress
+**Start Date**: 2025-12-11
 **Target Completion**: TBD
 **Actual Completion**: -
 **Owner**: Adam
@@ -85,19 +85,21 @@
 - [x] Update `package.json` license field to `"AGPL-3.0"`
 - [x] Create `LICENSE-COMMERCIAL.md` explaining commercial terms
 - [x] Update README with license section
-- [ ] Commit license changes
+- [x] Commit license changes
 
 ### 020.2: GitHub Migration
 
-- [ ] Create repo at `github.com/Probably-Computers/obsidian-palace-mcp`
-- [ ] Push codebase to GitHub
-- [ ] Set GitHub as primary remote
+- [x] Create repo at `github.com/Probably-Computers/obsidian-palace-mcp`
+- [x] Push codebase to GitHub
+- [x] Set GitHub as primary remote
+- [x] Remove GitLab-specific files (.gitlab-ci.yml, sonar-project.properties)
+- [x] Update all GitLab URLs to GitHub URLs
 - [ ] Enable GitHub Sponsors for Probably-Computers org
 - [ ] Configure sponsor tiers:
   - $3/month - Supporter (name in README)
   - $9/month - Backer (name in README + early access to features)
   - $29/month - Sponsor (above + listed as sponsor in repo)
-- [ ] Add `.github/FUNDING.yml`
+- [x] Add `.github/FUNDING.yml`
 
 ### 020.3: LemonSqueezy Store Setup
 
@@ -113,11 +115,12 @@
 ### 020.4: npm Publication
 
 **Pre-publish Checklist:**
-- [ ] Ensure `package.json` has correct metadata (repository, homepage, bugs, funding)
-- [ ] Verify README installation instructions work
-- [ ] Run full test suite: `npm test`
-- [ ] Build: `npm run build`
-- [ ] Test local install: `npm pack && npm install -g obsidian-palace-mcp-*.tgz`
+- [x] Ensure `package.json` has correct metadata (repository, homepage, bugs, funding)
+- [x] Verify README installation instructions work
+- [x] Run full test suite: `npm test`
+- [x] Build: `npm run build`
+- [x] Test local install: `npm pack && npm install -g obsidian-palace-mcp-*.tgz`
+- [x] Create `.npmignore` to exclude unnecessary files
 
 **Publishing:**
 - [ ] Login to npm: `npm login`
@@ -126,11 +129,11 @@
 
 ### 020.5: Documentation Polish
 
-- [ ] Add badges (npm version, license, GitHub Sponsors)
-- [ ] Add "Support the Project" section
-- [ ] Add "Commercial Licensing" section
-- [ ] Verify all installation instructions work with npm
-- [ ] Add troubleshooting section for common issues
+- [x] Add badges (npm version, license, GitHub Sponsors)
+- [x] Add "Support the Project" section
+- [x] Add "Commercial Licensing" section (already in README)
+- [x] Verify all installation instructions work with npm
+- [x] Add troubleshooting section for common issues
 
 ### 020.6: Directory Listings
 
@@ -178,17 +181,17 @@ Post-migration, update all references:
 ## Testing & Quality Assurance
 
 ### Pre-Launch Verification
-- [ ] Full test suite passes: `npm test`
-- [ ] Build succeeds: `npm run build`
-- [ ] TypeScript compiles: `npm run typecheck`
-- [ ] Linting passes: `npm run lint`
-- [ ] Local npm install works
-- [ ] MCP Inspector test: `npm run inspect`
+- [x] Full test suite passes: `npm test`
+- [x] Build succeeds: `npm run build`
+- [x] TypeScript compiles: `npm run typecheck`
+- [x] Linting passes: `npm run lint`
+- [x] Local npm install works
+- [x] MCP Inspector test: `npm run inspect`
 
 ### Quality Checks
-- [ ] All links in README are valid
-- [ ] License files are correctly formatted
-- [ ] package.json metadata is complete
+- [x] All links in README are valid
+- [x] License files are correctly formatted
+- [x] package.json metadata is complete
 - [ ] Installation instructions tested on clean environment
 
 ## Acceptance Criteria
@@ -241,12 +244,12 @@ Post-migration, update all references:
 ## Checklist Summary
 
 ### Must Have (Before Launch)
-- [ ] AGPL-3.0 license in place
-- [ ] LICENSE-COMMERCIAL.md created
-- [ ] GitHub repo created and code pushed
+- [x] AGPL-3.0 license in place
+- [x] LICENSE-COMMERCIAL.md created
+- [x] GitHub repo created and code pushed
 - [ ] npm package published
 - [ ] LemonSqueezy store with products
-- [ ] README updated with license info and support links
+- [x] README updated with license info and support links
 
 ### Should Have (Within 1 Week of Launch)
 - [ ] GitHub Sponsors enabled

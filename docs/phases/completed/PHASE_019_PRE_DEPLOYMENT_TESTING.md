@@ -84,7 +84,7 @@ Add the obsidian-palace server to the `mcpServers` object:
   "mcpServers": {
     "obsidian-palace": {
       "command": "node",
-      "args": ["/Users/adamc/Documents/GitLab/obsidian-palace-mcp/dist/index.js"],
+      "args": ["/Users/adamc/Documents/GitHub/obsidian-palace-mcp/dist/index.js"],
       "env": {
         "PALACE_VAULTS": "/Users/adamc/Documents/Claude Palace:claude:rw,/Users/adamc/Documents/Luci-Palace:luci:ro",
         "PALACE_DEFAULT_VAULT": "claude",
@@ -98,7 +98,7 @@ Add the obsidian-palace server to the `mcpServers` object:
 **Step 3: Build the project**
 
 ```bash
-cd /Users/adamc/Documents/GitLab/obsidian-palace-mcp
+cd /Users/adamc/Documents/GitHub/obsidian-palace-mcp
 npm run build
 ```
 

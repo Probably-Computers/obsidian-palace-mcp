@@ -11,7 +11,7 @@ An open-source MCP server that enables any AI assistant to use Obsidian as a per
 - **Dataview integration** — Query your vault using Dataview syntax
 - **Provenance tracking** — Know where every piece of knowledge came from
 
-**Repository:** `https://gitlab.com/AdamClaassens/obsidian-palace-mcp`
+**Repository:** `https://github.com/Probably-Computers/obsidian-palace-mcp`
 **Package:** `obsidian-palace-mcp` (npm)
 
 ---
@@ -912,7 +912,7 @@ mkdir -p docs
     "model-context-protocol"
   ],
   "author": "Probably Computers",
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/probablycomputers/obsidian-palace-mcp"
@@ -1039,7 +1039,7 @@ tags: [kubernetes, networking]
 
 ## License
 
-MIT
+AGPL-3.0
 ```
 
 ---

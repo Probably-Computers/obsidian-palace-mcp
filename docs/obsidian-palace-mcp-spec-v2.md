@@ -3,7 +3,7 @@
 **Version:** 2.0.0-draft
 **Date:** 2025-12-06
 **Status:** Specification Complete, Ready for Engineering
-**Repository:** https://gitlab.com/AdamClaassens/obsidian-palace-mcp
+**Repository:** https://github.com/Probably-Computers/obsidian-palace-mcp
 
 ---
 
@@ -2015,7 +2015,7 @@ Before saving content:
 - Example configurations
 - CHANGELOG.md update
 - npm package preparation
-- GitLab release
+- GitHub release
 
 **See:** [PHASE_013_DOCUMENTATION_RELEASE.md](phases/PHASE_013_DOCUMENTATION_RELEASE.md)
 

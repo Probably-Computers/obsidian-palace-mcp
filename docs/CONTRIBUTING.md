@@ -14,7 +14,7 @@ Thank you for your interest in contributing to Obsidian Palace MCP! This documen
 
 1. Clone the repository:
    ```bash
-   git clone https://gitlab.com/AdamClaassens/obsidian-palace-mcp.git
+   git clone https://github.com/Probably-Computers/obsidian-palace-mcp.git
    cd obsidian-palace-mcp
    ```
 
@@ -141,7 +141,7 @@ docs(readme): update installation instructions
 3. Ensure tests pass: `npm test`
 4. Ensure linting passes: `npm run lint`
 5. Commit with conventional commit message
-6. Push and create a Merge Request
+6. Push and create a Pull Request
 
 ## Adding New Tools
 
@@ -250,4 +250,4 @@ Open an issue or reach out to the maintainers.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the AGPL-3.0 License.
