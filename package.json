@@ -44,7 +44,7 @@
     "wiki-links"
   ],
   "author": "Probably Computers <adam@probablycomputers.co.za>",
-  "license": "MIT",
+  "license": "AGPL-3.0",
   "repository": {
     "type": "git",
     "url": "https://gitlab.com/AdamClaassens/obsidian-palace-mcp.git"

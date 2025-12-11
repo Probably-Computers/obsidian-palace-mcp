@@ -1,6 +1,6 @@
 # Obsidian Palace MCP
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 
 An MCP server that turns your Obsidian vault into an AI memory palace.
@@ -340,7 +340,11 @@ See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** - see [LICENSE](LICENSE) for details.
+
+### Commercial Use
+
+If you need to use Obsidian Palace MCP in proprietary software or as part of a commercial SaaS without open-sourcing your modifications, commercial licenses are available. See [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md) for options.
 
 ## Credits
 
