@@ -1,0 +1,44 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#0a0a0b"/>
+
+  <!-- Decorative grid pattern -->
+  <defs>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M 60 0 L 0 0 0 60" fill="none" stroke="#1a1a1d" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#grid)" opacity="0.5"/>
+
+  <!-- Logo -->
+  <g transform="translate(540, 140)">
+    <path fill="#7c3aed" d="M60 0L0 30v80l60 30 60-30V30L60 0zm0 20l40 20-40 20-40-20 40-20zM10 57.5l40 20v45l-40-20v-45zm100 0v45l-40 20v-45l40-20z"/>
+  </g>
+
+  <!-- Title -->
+  <text x="600" y="340" font-family="Inter, system-ui, sans-serif" font-size="56" font-weight="700" fill="#fafafa" text-anchor="middle">
+    Obsidian Palace
+  </text>
+
+  <!-- Subtitle -->
+  <text x="600" y="400" font-family="Inter, system-ui, sans-serif" font-size="28" fill="#888888" text-anchor="middle">
+    Turn Your Obsidian Vault Into an AI Memory Palace
+  </text>
+
+  <!-- Features bar -->
+  <g transform="translate(200, 480)">
+    <text font-family="Inter, system-ui, sans-serif" font-size="18" fill="#7c3aed" text-anchor="middle" x="100">MCP Server</text>
+    <text font-family="Inter, system-ui, sans-serif" font-size="18" fill="#888888" text-anchor="middle" x="100" dy="28">Any AI Assistant</text>
+
+    <text font-family="Inter, system-ui, sans-serif" font-size="18" fill="#7c3aed" text-anchor="middle" x="400">Multi-Vault</text>
+    <text font-family="Inter, system-ui, sans-serif" font-size="18" fill="#888888" text-anchor="middle" x="400" dy="28">Full Control</text>
+
+    <text font-family="Inter, system-ui, sans-serif" font-size="18" fill="#7c3aed" text-anchor="middle" x="700">Auto-Linking</text>
+    <text font-family="Inter, system-ui, sans-serif" font-size="18" fill="#888888" text-anchor="middle" x="700" dy="28">Knowledge Graph</text>
+  </g>
+
+  <!-- URL -->
+  <text x="600" y="595" font-family="Inter, system-ui, sans-serif" font-size="20" fill="#888888" text-anchor="middle">
+    obsidianpalace.dev
+  </text>
+</svg>

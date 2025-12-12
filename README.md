@@ -117,7 +117,7 @@ structure:
     path: "projects/{project}/"
 ```
 
-See [Configuration Guide](docs/CONFIGURATION.md) for full options.
+See [Configuration Guide](docs/technical/CONFIGURATION.md) for full options.
 
 ## Tools
 
@@ -337,10 +337,10 @@ AI: [Follows git workflow standard from vault]
 
 ## Documentation
 
-- [API Reference](docs/API.md) - Complete tool documentation
-- [Configuration Guide](docs/CONFIGURATION.md) - All configuration options
-- [AI Behavior Guide](docs/AI-BEHAVIOR.md) - Protocols for AI assistants
-- [Changelog](docs/CHANGELOG.md) - Version history
+- [API Reference](docs/technical/API.md) - Complete tool documentation
+- [Configuration Guide](docs/technical/CONFIGURATION.md) - All configuration options
+- [AI Behavior Guide](docs/technical/AI-BEHAVIOR.md) - Protocols for AI assistants
+- [Changelog](docs/technical/CHANGELOG.md) - Version history
 
 ## Development
 
@@ -372,7 +372,7 @@ Contributions are welcome! Please:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed guidelines.
+See [CONTRIBUTING.md](docs/technical/CONTRIBUTING.md) for detailed guidelines.
 
 ## License
 

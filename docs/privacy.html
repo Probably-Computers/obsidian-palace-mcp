@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Obsidian Palace</title>
+  <meta name="description" content="Privacy policy for Obsidian Palace MCP Server.">
+
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            palace: {
+              bg: '#0a0a0b',
+              surface: '#1a1a1d',
+              border: '#2a2a2d',
+              text: '#fafafa',
+              muted: '#888888',
+              accent: '#7c3aed',
+              'accent-hover': '#a78bfa',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background-color: #0a0a0b; }
+  </style>
+</head>
+<body class="font-sans text-palace-text antialiased">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-palace-bg/80 backdrop-blur-md border-b border-palace-border">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo -->
+        <a href="/" class="flex items-center space-x-2">
+          <svg class="w-8 h-8 text-palace-accent" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 2L4 8v16l12 6 12-6V8L16 2zm0 4l8 4-8 4-8-4 8-4zM6 11.5l8 4v9l-8-4v-9zm20 0v9l-8 4v-9l8-4z"/>
+          </svg>
+          <span class="text-xl font-bold">Obsidian Palace</span>
+        </a>
+
+        <!-- Desktop Navigation -->
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="/#features" class="text-palace-muted hover:text-palace-text transition-colors">Features</a>
+          <a href="pricing.html" class="text-palace-muted hover:text-palace-text transition-colors">Pricing</a>
+          <a href="technical/API.md" class="text-palace-muted hover:text-palace-text transition-colors">Docs</a>
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="text-palace-muted hover:text-palace-text transition-colors" target="_blank" rel="noopener">GitHub</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="pt-32 pb-20 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-4xl font-bold mb-4">Privacy Policy</h1>
+      <p class="text-palace-muted mb-8">Last updated: December 12, 2025</p>
+
+      <div class="prose prose-invert max-w-none space-y-8">
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Overview</h2>
+          <p class="text-palace-muted leading-relaxed">
+            Obsidian Palace MCP Server ("Palace", "we", "us", "our") is committed to protecting your privacy. This policy explains what data we collect and how we use it.
+          </p>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            <strong class="text-palace-text">The short version:</strong> Palace runs entirely locally on your machine. We don't collect, transmit, or store any of your vault data. The only time we receive any information is when you purchase a commercial license.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Data We Don't Collect</h2>
+          <p class="text-palace-muted leading-relaxed">Palace is a local-first application. We do not collect:</p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li>Your Obsidian vault contents</li>
+            <li>Your notes, documents, or files</li>
+            <li>Your AI conversations</li>
+            <li>Usage analytics or telemetry</li>
+            <li>Personal information during normal usage</li>
+            <li>IP addresses or device information</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Data We Collect (Commercial Licenses Only)</h2>
+          <p class="text-palace-muted leading-relaxed">
+            If you purchase a commercial license, we collect the following information solely for license delivery and support:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li><strong class="text-palace-text">Email address</strong> - To send your license key and provide support</li>
+            <li><strong class="text-palace-text">Payment information</strong> - Processed by Paddle (our payment processor); we do not store credit card details</li>
+            <li><strong class="text-palace-text">Company name</strong> - For Commercial licenses, to identify the licensed organization</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Payment Processing</h2>
+          <p class="text-palace-muted leading-relaxed">
+            Payments are processed by <a href="https://paddle.com" class="text-palace-accent hover:text-palace-accent-hover underline" target="_blank" rel="noopener">Paddle</a>, who acts as our Merchant of Record. Paddle handles all payment processing, VAT/tax compliance, and stores payment information according to their own privacy policy.
+          </p>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            We receive only: your email address, name/company name, and confirmation of successful payment. We never see or store your full credit card number.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">How We Use Your Data</h2>
+          <p class="text-palace-muted leading-relaxed">
+            The limited data we collect from license purchases is used only for:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li>Delivering your license key</li>
+            <li>Providing technical support</li>
+            <li>Sending important product updates (you can opt out)</li>
+            <li>Processing refunds if requested</li>
+          </ul>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            We do not sell, rent, or share your personal information with third parties for marketing purposes.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Data Retention</h2>
+          <p class="text-palace-muted leading-relaxed">
+            License purchase records are retained for accounting and legal purposes (typically 7 years). You can request deletion of your email from our mailing list at any time by contacting us.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Your Rights</h2>
+          <p class="text-palace-muted leading-relaxed">
+            You have the right to:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li>Request a copy of any personal data we hold about you</li>
+            <li>Request correction of inaccurate data</li>
+            <li>Request deletion of your data (subject to legal retention requirements)</li>
+            <li>Opt out of marketing communications</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">POPIA Compliance (South Africa)</h2>
+          <p class="text-palace-muted leading-relaxed">
+            Probably Computers is based in South Africa and complies with the Protection of Personal Information Act (POPIA). Our Information Officer can be reached at the contact details below for any POPIA-related queries.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Third-Party Services</h2>
+          <p class="text-palace-muted leading-relaxed">
+            This website uses:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li><strong class="text-palace-text">GitHub Pages</strong> - For website hosting</li>
+            <li><strong class="text-palace-text">Cloudflare</strong> - For DNS services</li>
+            <li><strong class="text-palace-text">Paddle</strong> - For payment processing (when purchasing licenses)</li>
+            <li><strong class="text-palace-text">Google Fonts</strong> - For typography</li>
+          </ul>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            We do not use analytics, tracking cookies, or advertising services on this website.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Changes to This Policy</h2>
+          <p class="text-palace-muted leading-relaxed">
+            We may update this policy from time to time. Significant changes will be announced via our GitHub repository. The "Last updated" date at the top indicates when this policy was last revised.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">Contact Us</h2>
+          <p class="text-palace-muted leading-relaxed">
+            For privacy-related questions or to exercise your rights, contact us at:
+          </p>
+          <div class="mt-4 p-4 rounded-lg bg-palace-surface border border-palace-border">
+            <p class="text-palace-text font-medium">Probably Computers</p>
+            <p class="text-palace-muted mt-2">Email: <a href="mailto:adam@probably.co.za" class="text-palace-accent hover:text-palace-accent-hover">adam@probably.co.za</a></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="py-12 px-4 border-t border-palace-border">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center space-x-2">
+          <svg class="w-6 h-6 text-palace-accent" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 2L4 8v16l12 6 12-6V8L16 2zm0 4l8 4-8 4-8-4 8-4zM6 11.5l8 4v9l-8-4v-9zm20 0v9l-8 4v-9l8-4z"/>
+          </svg>
+          <span class="font-semibold">Obsidian Palace</span>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-6 text-sm text-palace-muted">
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="hover:text-palace-text transition-colors" target="_blank" rel="noopener">GitHub</a>
+          <a href="technical/API.md" class="hover:text-palace-text transition-colors">Documentation</a>
+          <a href="privacy.html" class="text-palace-text font-medium">Privacy</a>
+          <a href="terms.html" class="hover:text-palace-text transition-colors">Terms</a>
+          <a href="mailto:adam@probably.co.za" class="hover:text-palace-text transition-colors">Contact</a>
+        </div>
+        <p class="text-sm text-palace-muted">
+          &copy; 2025 Probably Computers. AGPL-3.0 License.
+        </p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing - Obsidian Palace</title>
+  <meta name="description" content="Obsidian Palace pricing. Free for personal use, affordable commercial licenses available.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Obsidian Palace Pricing">
+  <meta property="og:description" content="Free for personal use under AGPL-3.0. Commercial licenses available.">
+  <meta property="og:image" content="https://obsidianpalace.dev/assets/images/og-image.png">
+  <meta property="og:url" content="https://obsidianpalace.dev/pricing.html">
+  <meta property="og:type" content="website">
+
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            palace: {
+              bg: '#0a0a0b',
+              surface: '#1a1a1d',
+              border: '#2a2a2d',
+              text: '#fafafa',
+              muted: '#888888',
+              accent: '#7c3aed',
+              'accent-hover': '#a78bfa',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background-color: #0a0a0b; }
+  </style>
+</head>
+<body class="font-sans text-palace-text antialiased">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-palace-bg/80 backdrop-blur-md border-b border-palace-border">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo -->
+        <a href="/" class="flex items-center space-x-2">
+          <svg class="w-8 h-8 text-palace-accent" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 2L4 8v16l12 6 12-6V8L16 2zm0 4l8 4-8 4-8-4 8-4zM6 11.5l8 4v9l-8-4v-9zm20 0v9l-8 4v-9l8-4z"/>
+          </svg>
+          <span class="text-xl font-bold">Obsidian Palace</span>
+        </a>
+
+        <!-- Desktop Navigation -->
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="/#features" class="text-palace-muted hover:text-palace-text transition-colors">Features</a>
+          <a href="pricing.html" class="text-palace-text font-medium">Pricing</a>
+          <a href="technical/API.md" class="text-palace-muted hover:text-palace-text transition-colors">Docs</a>
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="text-palace-muted hover:text-palace-text transition-colors" target="_blank" rel="noopener">GitHub</a>
+        </div>
+
+        <!-- Mobile menu button -->
+        <button class="md:hidden p-2 text-palace-muted hover:text-palace-text" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mobile Navigation -->
+      <div id="mobile-menu" class="hidden md:hidden pb-4">
+        <a href="/#features" class="block py-2 text-palace-muted hover:text-palace-text">Features</a>
+        <a href="pricing.html" class="block py-2 text-palace-text font-medium">Pricing</a>
+        <a href="technical/API.md" class="block py-2 text-palace-muted hover:text-palace-text">Docs</a>
+        <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="block py-2 text-palace-muted hover:text-palace-text" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="pt-32 pb-12 px-4">
+    <div class="max-w-4xl mx-auto text-center">
+      <h1 class="text-4xl sm:text-5xl font-bold mb-4">Simple, Fair Pricing</h1>
+      <p class="text-xl text-palace-muted max-w-2xl mx-auto">
+        Free for personal use. Affordable licenses for commercial projects.
+      </p>
+    </div>
+  </section>
+
+  <!-- Pricing Cards -->
+  <section class="py-12 px-4">
+    <div class="max-w-5xl mx-auto">
+      <div class="grid md:grid-cols-3 gap-8">
+        <!-- Community -->
+        <div class="rounded-xl border border-palace-border bg-palace-surface p-8">
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-palace-muted mb-2">Community</h3>
+            <div class="flex items-baseline">
+              <span class="text-4xl font-bold">Free</span>
+            </div>
+            <p class="text-sm text-palace-muted mt-2">AGPL-3.0 License</p>
+          </div>
+
+          <ul class="space-y-3 mb-8">
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>All features included</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Unlimited vaults</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Community support via GitHub</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Perfect for individuals &amp; hobbyists</span>
+            </li>
+          </ul>
+
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp#installation" class="block w-full py-3 px-4 text-center rounded-lg border border-palace-border hover:border-palace-accent transition-colors font-medium">
+            Get Started
+          </a>
+        </div>
+
+        <!-- Personal Pro -->
+        <div class="rounded-xl border-2 border-palace-accent bg-palace-surface p-8 relative">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-palace-accent text-white text-xs font-semibold rounded-full">
+            POPULAR
+          </div>
+
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-palace-muted mb-2">Personal Pro</h3>
+            <div class="flex items-baseline">
+              <span class="text-4xl font-bold">$29</span>
+              <span class="text-palace-muted ml-2">once</span>
+            </div>
+            <p class="text-sm text-palace-muted mt-2">Lifetime license</p>
+          </div>
+
+          <ul class="space-y-3 mb-8">
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>All Community features</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Use in proprietary projects</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Email support</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Perfect for indie devs &amp; freelancers</span>
+            </li>
+          </ul>
+
+          <button disabled class="block w-full py-3 px-4 text-center rounded-lg bg-palace-accent/50 text-white/70 font-medium cursor-not-allowed">
+            Coming Soon
+          </button>
+        </div>
+
+        <!-- Commercial -->
+        <div class="rounded-xl border border-palace-border bg-palace-surface p-8">
+          <div class="mb-6">
+            <h3 class="text-lg font-semibold text-palace-muted mb-2">Commercial</h3>
+            <div class="flex items-baseline">
+              <span class="text-4xl font-bold">$49</span>
+              <span class="text-palace-muted ml-2">/year</span>
+            </div>
+            <p class="text-sm text-palace-muted mt-2">Per organization</p>
+          </div>
+
+          <ul class="space-y-3 mb-8">
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>All Personal Pro features</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Team/company-wide usage</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Priority email support</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+              </svg>
+              <span>Invoice available</span>
+            </li>
+          </ul>
+
+          <button disabled class="block w-full py-3 px-4 text-center rounded-lg border border-palace-border text-palace-muted font-medium cursor-not-allowed">
+            Coming Soon
+          </button>
+        </div>
+      </div>
+
+      <!-- Payment notice -->
+      <div class="mt-8 p-4 rounded-lg bg-palace-surface border border-palace-border text-center">
+        <p class="text-palace-muted">
+          <svg class="w-5 h-5 inline-block mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Payment processing launching soon. <a href="https://github.com/sponsors/Probably-Computers" class="text-palace-accent hover:text-palace-accent-hover underline">Sponsor on GitHub</a> in the meantime.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ Section -->
+  <section class="py-20 px-4 bg-palace-surface">
+    <div class="max-w-3xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-12">Frequently Asked Questions</h2>
+
+      <div class="space-y-6">
+        <!-- FAQ 1 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <h3 class="font-semibold mb-2">What's the difference between AGPL-3.0 and a commercial license?</h3>
+          <p class="text-palace-muted">AGPL-3.0 is a copyleft license. If you modify the code and offer it as a service, you must open-source your modifications. A commercial license removes this requirement, allowing you to use Palace in proprietary software without open-sourcing.</p>
+        </div>
+
+        <!-- FAQ 2 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <h3 class="font-semibold mb-2">Can I use the free version for my company?</h3>
+          <p class="text-palace-muted">Yes, if you comply with AGPL-3.0 terms. This means any modifications must be open-sourced if you offer the software as a service. For internal-only use without modifications, the free version works fine. When in doubt, the Commercial license provides peace of mind.</p>
+        </div>
+
+        <!-- FAQ 3 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <h3 class="font-semibold mb-2">Is Personal Pro really lifetime?</h3>
+          <p class="text-palace-muted">Yes. Pay once, use forever. You'll receive all updates to the version you purchased. Major version upgrades may require a separate license, but this is unlikely given the project's scope.</p>
+        </div>
+
+        <!-- FAQ 4 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <h3 class="font-semibold mb-2">What's your refund policy?</h3>
+          <p class="text-palace-muted">14-day no-questions-asked refund policy. If it's not for you, just email us and we'll refund your purchase.</p>
+        </div>
+
+        <!-- FAQ 5 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <h3 class="font-semibold mb-2">Do I need a license for each team member?</h3>
+          <p class="text-palace-muted">No. The Commercial license covers your entire organization. All employees can use Palace under one annual license.</p>
+        </div>
+
+        <!-- FAQ 6 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <h3 class="font-semibold mb-2">What payment methods do you accept?</h3>
+          <p class="text-palace-muted">Once payment processing is live, we'll accept all major credit cards, PayPal, and other regional payment methods through Paddle. Paddle handles global tax compliance automatically.</p>
+        </div>
+      </div>
+
+      <div class="mt-12 text-center">
+        <p class="text-palace-muted mb-4">Have more questions?</p>
+        <a href="mailto:adam@probably.co.za" class="text-palace-accent hover:text-palace-accent-hover font-medium">Contact us &rarr;</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Commercial License Details -->
+  <section class="py-20 px-4">
+    <div class="max-w-3xl mx-auto text-center">
+      <h2 class="text-2xl font-bold mb-4">Need More Details?</h2>
+      <p class="text-palace-muted mb-6">
+        View the full commercial license terms and conditions.
+      </p>
+      <a href="https://github.com/Probably-Computers/obsidian-palace-mcp/blob/main/LICENSE-COMMERCIAL.md" class="inline-flex items-center gap-2 text-palace-accent hover:text-palace-accent-hover font-medium" target="_blank" rel="noopener">
+        Read LICENSE-COMMERCIAL.md
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+        </svg>
+      </a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="py-12 px-4 border-t border-palace-border">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <!-- Logo and copyright -->
+        <div class="flex items-center space-x-2">
+          <svg class="w-6 h-6 text-palace-accent" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 2L4 8v16l12 6 12-6V8L16 2zm0 4l8 4-8 4-8-4 8-4zM6 11.5l8 4v9l-8-4v-9zm20 0v9l-8 4v-9l8-4z"/>
+          </svg>
+          <span class="font-semibold">Obsidian Palace</span>
+        </div>
+
+        <!-- Links -->
+        <div class="flex flex-wrap items-center justify-center gap-6 text-sm text-palace-muted">
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="hover:text-palace-text transition-colors" target="_blank" rel="noopener">GitHub</a>
+          <a href="technical/API.md" class="hover:text-palace-text transition-colors">Documentation</a>
+          <a href="privacy.html" class="hover:text-palace-text transition-colors">Privacy</a>
+          <a href="terms.html" class="hover:text-palace-text transition-colors">Terms</a>
+          <a href="mailto:adam@probably.co.za" class="hover:text-palace-text transition-colors">Contact</a>
+        </div>
+
+        <!-- Copyright -->
+        <p class="text-sm text-palace-muted">
+          &copy; 2025 Probably Computers. AGPL-3.0 License.
+        </p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

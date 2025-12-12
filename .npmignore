@@ -12,12 +12,12 @@ tsconfig.json
 vitest.config.ts
 
 # Documentation (keep README and LICENSE)
-docs/phases/
-docs/templates/
-docs/PHASE_GUIDE.md
-docs/GIT_WORKFLOW_STANDARDS.md
-docs/obsidian-palace-mcp-spec.md
-docs/obsidian-palace-mcp-spec-v2.md
+docs/technical/phases/
+docs/technical/templates/
+docs/technical/PHASE_GUIDE.md
+docs/technical/GIT_WORKFLOW_STANDARDS.md
+docs/technical/obsidian-palace-mcp-spec.md
+docs/technical/obsidian-palace-mcp-spec-v2.md
 
 # Examples (users can get from repo)
 examples/

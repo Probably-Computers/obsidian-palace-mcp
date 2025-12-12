@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Service - Obsidian Palace</title>
+  <meta name="description" content="Terms of service for Obsidian Palace MCP Server.">
+
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            palace: {
+              bg: '#0a0a0b',
+              surface: '#1a1a1d',
+              border: '#2a2a2d',
+              text: '#fafafa',
+              muted: '#888888',
+              accent: '#7c3aed',
+              'accent-hover': '#a78bfa',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background-color: #0a0a0b; }
+  </style>
+</head>
+<body class="font-sans text-palace-text antialiased">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-palace-bg/80 backdrop-blur-md border-b border-palace-border">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo -->
+        <a href="/" class="flex items-center space-x-2">
+          <svg class="w-8 h-8 text-palace-accent" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 2L4 8v16l12 6 12-6V8L16 2zm0 4l8 4-8 4-8-4 8-4zM6 11.5l8 4v9l-8-4v-9zm20 0v9l-8 4v-9l8-4z"/>
+          </svg>
+          <span class="text-xl font-bold">Obsidian Palace</span>
+        </a>
+
+        <!-- Desktop Navigation -->
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="/#features" class="text-palace-muted hover:text-palace-text transition-colors">Features</a>
+          <a href="pricing.html" class="text-palace-muted hover:text-palace-text transition-colors">Pricing</a>
+          <a href="technical/API.md" class="text-palace-muted hover:text-palace-text transition-colors">Docs</a>
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="text-palace-muted hover:text-palace-text transition-colors" target="_blank" rel="noopener">GitHub</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Content -->
+  <main class="pt-32 pb-20 px-4">
+    <div class="max-w-3xl mx-auto">
+      <h1 class="text-4xl font-bold mb-4">Terms of Service</h1>
+      <p class="text-palace-muted mb-8">Last updated: December 12, 2025</p>
+
+      <div class="prose prose-invert max-w-none space-y-8">
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">1. Agreement to Terms</h2>
+          <p class="text-palace-muted leading-relaxed">
+            By accessing or using Obsidian Palace MCP Server ("Palace", "the Software"), you agree to be bound by these Terms of Service. If you do not agree to these terms, do not use the Software.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">2. License Types</h2>
+
+          <h3 class="text-xl font-medium mt-6 mb-3">2.1 AGPL-3.0 License (Free)</h3>
+          <p class="text-palace-muted leading-relaxed">
+            Palace is released under the GNU Affero General Public License version 3.0 (AGPL-3.0). Under this license, you may:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li>Use the Software for any purpose</li>
+            <li>Study and modify the source code</li>
+            <li>Distribute copies of the Software</li>
+            <li>Distribute your modifications</li>
+          </ul>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            However, if you modify the Software and offer it as a network service (SaaS), you must make your modified source code available to users of that service under AGPL-3.0.
+          </p>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            The full AGPL-3.0 license text is available at: <a href="https://github.com/Probably-Computers/obsidian-palace-mcp/blob/main/LICENSE" class="text-palace-accent hover:text-palace-accent-hover underline" target="_blank" rel="noopener">LICENSE</a>
+          </p>
+
+          <h3 class="text-xl font-medium mt-6 mb-3">2.2 Commercial License</h3>
+          <p class="text-palace-muted leading-relaxed">
+            Commercial licenses are available for users who wish to use Palace in proprietary software without the AGPL-3.0 copyleft requirements. Commercial license terms are detailed in: <a href="https://github.com/Probably-Computers/obsidian-palace-mcp/blob/main/LICENSE-COMMERCIAL.md" class="text-palace-accent hover:text-palace-accent-hover underline" target="_blank" rel="noopener">LICENSE-COMMERCIAL.md</a>
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">3. Purchases and Payments</h2>
+
+          <h3 class="text-xl font-medium mt-6 mb-3">3.1 Payment Processing</h3>
+          <p class="text-palace-muted leading-relaxed">
+            All payments are processed by Paddle, who acts as our Merchant of Record. By making a purchase, you also agree to Paddle's terms of service.
+          </p>
+
+          <h3 class="text-xl font-medium mt-6 mb-3">3.2 Pricing</h3>
+          <p class="text-palace-muted leading-relaxed">
+            Prices are listed on our <a href="pricing.html" class="text-palace-accent hover:text-palace-accent-hover underline">Pricing page</a> and may change at any time. Price changes do not affect existing licenses.
+          </p>
+
+          <h3 class="text-xl font-medium mt-6 mb-3">3.3 Taxes</h3>
+          <p class="text-palace-muted leading-relaxed">
+            Paddle handles all applicable taxes (VAT, GST, sales tax) based on your location. The price shown at checkout includes any applicable taxes.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">4. Refund Policy</h2>
+          <p class="text-palace-muted leading-relaxed">
+            We offer a <strong class="text-palace-text">14-day no-questions-asked refund policy</strong> on all commercial license purchases.
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li>Request a refund within 14 days of purchase</li>
+            <li>Email <a href="mailto:adam@probably.co.za" class="text-palace-accent hover:text-palace-accent-hover">adam@probably.co.za</a> with your order number</li>
+            <li>Refunds are processed within 5-10 business days</li>
+            <li>Upon refund, your commercial license is revoked</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">5. Disclaimer of Warranties</h2>
+          <p class="text-palace-muted leading-relaxed">
+            THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+          </p>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            We do not warrant that:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li>The Software will meet your specific requirements</li>
+            <li>The Software will be uninterrupted, timely, secure, or error-free</li>
+            <li>The results from using the Software will be accurate or reliable</li>
+            <li>Any errors in the Software will be corrected</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">6. Limitation of Liability</h2>
+          <p class="text-palace-muted leading-relaxed">
+            IN NO EVENT SHALL PROBABLY COMPUTERS, ITS OFFICERS, DIRECTORS, EMPLOYEES, OR AGENTS BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING WITHOUT LIMITATION, LOSS OF PROFITS, DATA, USE, GOODWILL, OR OTHER INTANGIBLE LOSSES, RESULTING FROM:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li>Your access to or use of (or inability to access or use) the Software</li>
+            <li>Any conduct or content of any third party</li>
+            <li>Unauthorized access, use, or alteration of your data</li>
+          </ul>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            Our total liability for any claims under these terms shall not exceed the amount you paid us for the Software in the twelve (12) months prior to the claim.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">7. Your Responsibilities</h2>
+          <p class="text-palace-muted leading-relaxed">
+            You are responsible for:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li>Maintaining backups of your Obsidian vault data</li>
+            <li>Ensuring your use complies with applicable laws</li>
+            <li>Keeping your license keys confidential</li>
+            <li>Not using the Software for any unlawful purpose</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">8. Support</h2>
+          <p class="text-palace-muted leading-relaxed">
+            Support levels vary by license type:
+          </p>
+          <ul class="list-disc list-inside text-palace-muted mt-4 space-y-2">
+            <li><strong class="text-palace-text">AGPL-3.0 (Free)</strong>: Community support via GitHub Issues</li>
+            <li><strong class="text-palace-text">Personal Pro</strong>: Email support</li>
+            <li><strong class="text-palace-text">Commercial</strong>: Priority email support</li>
+          </ul>
+          <p class="text-palace-muted leading-relaxed mt-4">
+            We aim to respond to support requests within 5 business days for paid licenses.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">9. Changes to Terms</h2>
+          <p class="text-palace-muted leading-relaxed">
+            We reserve the right to modify these terms at any time. We will provide notice of significant changes via our GitHub repository. Your continued use of the Software after changes constitutes acceptance of the new terms.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">10. Governing Law</h2>
+          <p class="text-palace-muted leading-relaxed">
+            These terms are governed by the laws of South Africa. Any disputes arising from these terms shall be subject to the exclusive jurisdiction of the courts of South Africa.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">11. Severability</h2>
+          <p class="text-palace-muted leading-relaxed">
+            If any provision of these terms is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary, and the remaining provisions shall remain in full force and effect.
+          </p>
+        </section>
+
+        <section>
+          <h2 class="text-2xl font-semibold mb-4">12. Contact</h2>
+          <p class="text-palace-muted leading-relaxed">
+            For questions about these terms, contact us at:
+          </p>
+          <div class="mt-4 p-4 rounded-lg bg-palace-surface border border-palace-border">
+            <p class="text-palace-text font-medium">Probably Computers</p>
+            <p class="text-palace-muted mt-2">Email: <a href="mailto:adam@probably.co.za" class="text-palace-accent hover:text-palace-accent-hover">adam@probably.co.za</a></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="py-12 px-4 border-t border-palace-border">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center space-x-2">
+          <svg class="w-6 h-6 text-palace-accent" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 2L4 8v16l12 6 12-6V8L16 2zm0 4l8 4-8 4-8-4 8-4zM6 11.5l8 4v9l-8-4v-9zm20 0v9l-8 4v-9l8-4z"/>
+          </svg>
+          <span class="font-semibold">Obsidian Palace</span>
+        </div>
+        <div class="flex flex-wrap items-center justify-center gap-6 text-sm text-palace-muted">
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="hover:text-palace-text transition-colors" target="_blank" rel="noopener">GitHub</a>
+          <a href="technical/API.md" class="hover:text-palace-text transition-colors">Documentation</a>
+          <a href="privacy.html" class="hover:text-palace-text transition-colors">Privacy</a>
+          <a href="terms.html" class="text-palace-text font-medium">Terms</a>
+          <a href="mailto:adam@probably.co.za" class="hover:text-palace-text transition-colors">Contact</a>
+        </div>
+        <p class="text-sm text-palace-muted">
+          &copy; 2025 Probably Computers. AGPL-3.0 License.
+        </p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

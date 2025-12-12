@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Obsidian Palace - Turn Your Obsidian Vault Into an AI Memory Palace</title>
+  <meta name="description" content="An MCP server that enables AI assistants to use Obsidian as a persistent memory store. Store, retrieve, and connect knowledge with AI.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Obsidian Palace - AI Memory for Obsidian">
+  <meta property="og:description" content="Turn your Obsidian vault into an AI memory palace. Store, retrieve, and connect knowledge with any MCP-compatible AI assistant.">
+  <meta property="og:image" content="https://obsidianpalace.dev/assets/images/og-image.png">
+  <meta property="og:url" content="https://obsidianpalace.dev">
+  <meta property="og:type" content="website">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Obsidian Palace - AI Memory for Obsidian">
+  <meta name="twitter:description" content="Turn your Obsidian vault into an AI memory palace.">
+  <meta name="twitter:image" content="https://obsidianpalace.dev/assets/images/og-image.png">
+
+  <!-- Favicon -->
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            palace: {
+              bg: '#0a0a0b',
+              surface: '#1a1a1d',
+              border: '#2a2a2d',
+              text: '#fafafa',
+              muted: '#888888',
+              accent: '#7c3aed',
+              'accent-hover': '#a78bfa',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { background-color: #0a0a0b; }
+  </style>
+</head>
+<body class="font-sans text-palace-text antialiased">
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-palace-bg/80 backdrop-blur-md border-b border-palace-border">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo -->
+        <a href="/" class="flex items-center space-x-2">
+          <svg class="w-8 h-8 text-palace-accent" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 2L4 8v16l12 6 12-6V8L16 2zm0 4l8 4-8 4-8-4 8-4zM6 11.5l8 4v9l-8-4v-9zm20 0v9l-8 4v-9l8-4z"/>
+          </svg>
+          <span class="text-xl font-bold">Obsidian Palace</span>
+        </a>
+
+        <!-- Desktop Navigation -->
+        <div class="hidden md:flex items-center space-x-8">
+          <a href="#features" class="text-palace-muted hover:text-palace-text transition-colors">Features</a>
+          <a href="pricing.html" class="text-palace-muted hover:text-palace-text transition-colors">Pricing</a>
+          <a href="technical/API.md" class="text-palace-muted hover:text-palace-text transition-colors">Docs</a>
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="text-palace-muted hover:text-palace-text transition-colors" target="_blank" rel="noopener">GitHub</a>
+        </div>
+
+        <!-- Mobile menu button -->
+        <button class="md:hidden p-2 text-palace-muted hover:text-palace-text" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Mobile Navigation -->
+      <div id="mobile-menu" class="hidden md:hidden pb-4">
+        <a href="#features" class="block py-2 text-palace-muted hover:text-palace-text">Features</a>
+        <a href="pricing.html" class="block py-2 text-palace-muted hover:text-palace-text">Pricing</a>
+        <a href="technical/API.md" class="block py-2 text-palace-muted hover:text-palace-text">Docs</a>
+        <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="block py-2 text-palace-muted hover:text-palace-text" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="pt-32 pb-20 px-4">
+    <div class="max-w-4xl mx-auto text-center">
+      <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+        Turn Your Obsidian Vault Into an
+        <span class="text-palace-accent">AI Memory Palace</span>
+      </h1>
+      <p class="text-xl text-palace-muted mb-10 max-w-2xl mx-auto leading-relaxed">
+        An MCP server that enables AI assistants to persistently store, retrieve, and connect knowledge in your Obsidian vault. Your AI finally remembers.
+      </p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="https://github.com/Probably-Computers/obsidian-palace-mcp#installation" class="px-8 py-3 bg-palace-accent hover:bg-palace-accent-hover text-white font-semibold rounded-lg transition-colors">
+          Get Started
+        </a>
+        <a href="pricing.html" class="px-8 py-3 border border-palace-border hover:border-palace-accent text-palace-text rounded-lg transition-colors">
+          View Pricing
+        </a>
+      </div>
+      <p class="mt-6 text-sm text-palace-muted">
+        Free for personal use under AGPL-3.0
+      </p>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section id="features" class="py-20 px-4 bg-palace-surface">
+    <div class="max-w-6xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-4">Powerful Features</h2>
+      <p class="text-palace-muted text-center mb-12 max-w-2xl mx-auto">
+        Everything you need to give your AI a persistent, organized memory.
+      </p>
+
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <!-- Feature 1 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <div class="w-12 h-12 rounded-lg bg-palace-accent/10 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-palace-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Intent-Based Storage</h3>
+          <p class="text-palace-muted">AI expresses what to store, Palace determines where. Automatic organization based on your vault structure.</p>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <div class="w-12 h-12 rounded-lg bg-palace-accent/10 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-palace-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Multi-Vault Support</h3>
+          <p class="text-palace-muted">Work with multiple Obsidian vaults. Set read/write permissions per vault. Keep work and personal knowledge separate.</p>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <div class="w-12 h-12 rounded-lg bg-palace-accent/10 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-palace-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Auto-Linking</h3>
+          <p class="text-palace-muted">Automatically creates [[wiki-links]] between related notes. Your knowledge graph grows organically.</p>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <div class="w-12 h-12 rounded-lg bg-palace-accent/10 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-palace-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Full-Text Search + Dataview</h3>
+          <p class="text-palace-muted">Fast FTS5 search with BM25 ranking. Execute Dataview queries (DQL) directly from AI.</p>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <div class="w-12 h-12 rounded-lg bg-palace-accent/10 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-palace-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Atomic Notes</h3>
+          <p class="text-palace-muted">Large content automatically splits into hub + child notes. Keeps your vault clean and navigable.</p>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="p-6 rounded-xl bg-palace-bg border border-palace-border">
+          <div class="w-12 h-12 rounded-lg bg-palace-accent/10 flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-palace-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2">Works With Any MCP Client</h3>
+          <p class="text-palace-muted">Claude Desktop, ChatGPT, or any MCP-compatible AI. Not locked to any single provider.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="py-20 px-4">
+    <div class="max-w-4xl mx-auto">
+      <h2 class="text-3xl font-bold text-center mb-4">How It Works</h2>
+      <p class="text-palace-muted text-center mb-12">
+        Get started in minutes with four simple steps.
+      </p>
+
+      <div class="space-y-8">
+        <!-- Step 1 -->
+        <div class="flex items-start gap-6">
+          <div class="flex-shrink-0 w-12 h-12 rounded-full bg-palace-accent flex items-center justify-center font-bold text-lg">1</div>
+          <div>
+            <h3 class="text-xl font-semibold mb-2">Install via npm</h3>
+            <p class="text-palace-muted mb-3">One command to install globally:</p>
+            <code class="block bg-palace-surface px-4 py-2 rounded-lg text-sm font-mono border border-palace-border">npm install -g obsidian-palace-mcp</code>
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="flex items-start gap-6">
+          <div class="flex-shrink-0 w-12 h-12 rounded-full bg-palace-accent flex items-center justify-center font-bold text-lg">2</div>
+          <div>
+            <h3 class="text-xl font-semibold mb-2">Configure Your Vault</h3>
+            <p class="text-palace-muted">Point Palace to your Obsidian vault. Set up via environment variable or config file. Supports multiple vaults with different permissions.</p>
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="flex items-start gap-6">
+          <div class="flex-shrink-0 w-12 h-12 rounded-full bg-palace-accent flex items-center justify-center font-bold text-lg">3</div>
+          <div>
+            <h3 class="text-xl font-semibold mb-2">Connect to Your AI</h3>
+            <p class="text-palace-muted">Add Palace as an MCP server in Claude Desktop, ChatGPT, or any MCP-compatible client. The AI gains access to 20+ knowledge management tools.</p>
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="flex items-start gap-6">
+          <div class="flex-shrink-0 w-12 h-12 rounded-full bg-palace-accent flex items-center justify-center font-bold text-lg">4</div>
+          <div>
+            <h3 class="text-xl font-semibold mb-2">AI Remembers Everything</h3>
+            <p class="text-palace-muted">Your AI can now store research, commands, decisions, and learnings. It retrieves context from previous sessions. Knowledge compounds over time.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Demo/Screenshots Section -->
+  <section class="py-20 px-4 bg-palace-surface">
+    <div class="max-w-4xl mx-auto text-center">
+      <h2 class="text-3xl font-bold mb-4">See It In Action</h2>
+      <p class="text-palace-muted mb-8">
+        Watch how Obsidian Palace transforms AI conversations into persistent, searchable knowledge.
+      </p>
+
+      <!-- Placeholder for demo -->
+      <div class="relative aspect-video bg-palace-bg rounded-xl border border-palace-border flex items-center justify-center">
+        <div class="text-center p-8">
+          <svg class="w-16 h-16 text-palace-muted mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <p class="text-palace-muted text-lg">Demo video coming soon</p>
+          <p class="text-palace-muted text-sm mt-2">In the meantime, check out the <a href="https://github.com/Probably-Computers/obsidian-palace-mcp#readme" class="text-palace-accent hover:text-palace-accent-hover underline">README</a> for detailed documentation.</p>
+        </div>
+      </div>
+
+      <!-- Key capabilities -->
+      <div class="grid md:grid-cols-3 gap-6 mt-12 text-left">
+        <div class="p-4 rounded-lg bg-palace-bg border border-palace-border">
+          <h4 class="font-semibold mb-2">Store Knowledge</h4>
+          <p class="text-sm text-palace-muted">AI stores research findings, code snippets, and decisions in organized markdown notes.</p>
+        </div>
+        <div class="p-4 rounded-lg bg-palace-bg border border-palace-border">
+          <h4 class="font-semibold mb-2">Retrieve Context</h4>
+          <p class="text-sm text-palace-muted">AI searches your vault for relevant context before answering questions.</p>
+        </div>
+        <div class="p-4 rounded-lg bg-palace-bg border border-palace-border">
+          <h4 class="font-semibold mb-2">Build Connections</h4>
+          <p class="text-sm text-palace-muted">Automatic wiki-links create a knowledge graph that grows with every conversation.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-20 px-4">
+    <div class="max-w-3xl mx-auto text-center">
+      <h2 class="text-3xl font-bold mb-4">Ready to Give Your AI a Memory?</h2>
+      <p class="text-palace-muted mb-8">
+        Start building your AI memory palace today. Free for personal use.
+      </p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="https://github.com/Probably-Computers/obsidian-palace-mcp#installation" class="px-8 py-3 bg-palace-accent hover:bg-palace-accent-hover text-white font-semibold rounded-lg transition-colors">
+          Get Started Free
+        </a>
+        <a href="pricing.html" class="px-8 py-3 border border-palace-border hover:border-palace-accent text-palace-text rounded-lg transition-colors">
+          View Commercial Options
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="py-12 px-4 border-t border-palace-border">
+    <div class="max-w-6xl mx-auto">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <!-- Logo and copyright -->
+        <div class="flex items-center space-x-2">
+          <svg class="w-6 h-6 text-palace-accent" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 2L4 8v16l12 6 12-6V8L16 2zm0 4l8 4-8 4-8-4 8-4zM6 11.5l8 4v9l-8-4v-9zm20 0v9l-8 4v-9l8-4z"/>
+          </svg>
+          <span class="font-semibold">Obsidian Palace</span>
+        </div>
+
+        <!-- Links -->
+        <div class="flex flex-wrap items-center justify-center gap-6 text-sm text-palace-muted">
+          <a href="https://github.com/Probably-Computers/obsidian-palace-mcp" class="hover:text-palace-text transition-colors" target="_blank" rel="noopener">GitHub</a>
+          <a href="technical/API.md" class="hover:text-palace-text transition-colors">Documentation</a>
+          <a href="privacy.html" class="hover:text-palace-text transition-colors">Privacy</a>
+          <a href="terms.html" class="hover:text-palace-text transition-colors">Terms</a>
+          <a href="mailto:adam@probably.co.za" class="hover:text-palace-text transition-colors">Contact</a>
+        </div>
+
+        <!-- Copyright -->
+        <p class="text-sm text-palace-muted">
+          &copy; 2025 Probably Computers. AGPL-3.0 License.
+        </p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

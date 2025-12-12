@@ -17,12 +17,12 @@ Phase files are living documents that:
 ## Phase File Lifecycle
 
 ### Active Phases
-- Location: `docs/phases/`
+- Location: `docs/technical/phases/`
 - Status: Currently in progress or planned
 - Actively updated as work progresses
 
 ### Completed Phases
-- Location: `docs/phases/completed/`
+- Location: `docs/technical/phases/completed/`
 - Status: All acceptance criteria met and verified
 - Retained for historical reference and onboarding
 
@@ -211,7 +211,7 @@ Important decisions, context, or learnings captured during the phase.
 1. **Verify All Criteria**: Ensure all acceptance criteria are met
 2. **Update Status**: Change status to "Completed" and add completion date
 3. **Final Review**: Conduct a phase retrospective
-4. **Archive Properly**: Move file to `docs/phases/completed/`
+4. **Archive Properly**: Move file to `docs/technical/phases/completed/`
 5. **Update Links**: Ensure all cross-references are maintained
 
 ### Phase Naming Convention
@@ -305,7 +305,7 @@ Before marking a phase file as ready:
 
 ## Templates
 
-A blank phase template is available at `docs/templates/PHASE_TEMPLATE.md` for quick phase creation.
+A blank phase template is available at `docs/technical/templates/PHASE_TEMPLATE.md` for quick phase creation.
 
 ## Questions?
 

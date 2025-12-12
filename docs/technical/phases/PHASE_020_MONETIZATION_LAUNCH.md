@@ -12,7 +12,7 @@
 - Change license to AGPL-3.0 with dual-licensing for commercial use
 - Migrate repository from GitLab to GitHub (Probably-Computers organization)
 - Publish package to npm for easy installation
-- Establish revenue streams via LemonSqueezy and GitHub Sponsors
+- Establish revenue streams via Paddle and GitHub Sponsors
 - Target R1,700+/month (~$100 USD) in passive income
 
 ## Prerequisites
@@ -21,9 +21,9 @@
 - [ ] Full test suite passing
 - [ ] CLAUDE.md and README.md up to date
 - [ ] npm account created (npmjs.com)
-- [ ] LemonSqueezy account created
+- [ ] Paddle account created
 - [ ] GitHub organization access (Probably-Computers)
-- [ ] PayPal account for LemonSqueezy payouts
+- [ ] Website live for Paddle verification (see Phase 021)
 
 ## Scope
 
@@ -32,7 +32,7 @@
 - Commercial license documentation
 - GitHub repository migration
 - npm package publication
-- LemonSqueezy store setup
+- Paddle store setup
 - GitHub Sponsors configuration
 - Directory listings (Smithery.ai, mcp.so, awesome-mcp-servers)
 - Launch announcements
@@ -64,11 +64,12 @@
 
 ### Payment Platform
 
-**LemonSqueezy** (https://lemonsqueezy.com)
+**Paddle** (https://paddle.com)
 - 5% + $0.50 per transaction
 - Handles global VAT/tax compliance (Merchant of Record)
-- PayPal payout supported
+- Multiple payout methods supported
 - No monthly fees
+- **Note**: Requires website verification before merchant account approval (see Phase 021)
 
 ## Tasks
 
@@ -101,16 +102,17 @@
   - $29/month - Sponsor (above + listed as sponsor in repo)
 - [x] Add `.github/FUNDING.yml`
 
-### 020.3: LemonSqueezy Store Setup
+### 020.3: Paddle Store Setup
 
-- [ ] Create LemonSqueezy account (https://lemonsqueezy.com)
-- [ ] Connect PayPal for payouts
+- [ ] Create Paddle account (https://paddle.com)
+- [ ] Submit website for merchant verification (requires Phase 021 complete)
+- [ ] Configure payout method
 - [ ] Create products:
   - Personal Pro License ($29, one-time)
   - Commercial License ($49, yearly subscription)
 - [ ] Configure checkout with license key generation
-- [ ] Create store page with product descriptions
-- [ ] Test checkout flow with test mode
+- [ ] Create product pages with descriptions
+- [ ] Test checkout flow with sandbox mode
 
 ### 020.4: npm Publication
 
@@ -154,7 +156,7 @@
 
 ## Standards & References
 
-- [CLAUDE.md](../../CLAUDE.md) - Project guidelines
+- [CLAUDE.md](../../../CLAUDE.md) - Project guidelines
 - [GIT_WORKFLOW_STANDARDS.md](../GIT_WORKFLOW_STANDARDS.md) - Git practices
 - [obsidian-palace-mcp-spec.md](../obsidian-palace-mcp-spec.md) - Full specification
 - AGPL-3.0 License: https://www.gnu.org/licenses/agpl-3.0.en.html
@@ -199,7 +201,7 @@ Post-migration, update all references:
 - [ ] AGPL-3.0 license in place with LICENSE-COMMERCIAL.md
 - [ ] Repository live at github.com/Probably-Computers/obsidian-palace-mcp
 - [ ] Package published and installable via `npm install -g obsidian-palace-mcp`
-- [ ] LemonSqueezy store live with both products purchasable
+- [ ] Paddle store live with both products purchasable
 - [ ] GitHub Sponsors enabled and accepting contributions
 - [ ] Listed in at least 2 MCP directories
 - [ ] At least one public announcement posted
@@ -209,7 +211,8 @@ Post-migration, update all references:
 | Risk | Impact | Probability | Mitigation Strategy |
 |------|--------|-------------|---------------------|
 | npm name taken | High | Low | Check availability early; have alternatives ready |
-| LemonSqueezy payout issues | Medium | Low | Test with small transaction first |
+| Paddle verification delays | Medium | Medium | Ensure website meets all requirements (Phase 021) |
+| Paddle payout issues | Medium | Low | Test with small transaction first |
 | Low initial adoption | Medium | Medium | Focus on quality over marketing; let organic growth happen |
 | License confusion | Medium | Low | Clear LICENSE-COMMERCIAL.md with FAQ |
 | Negative community response to monetization | Medium | Low | Emphasize AGPL is still fully open source |
@@ -225,7 +228,7 @@ Post-migration, update all references:
 ### Metrics to Track
 - npm weekly downloads
 - GitHub stars
-- LemonSqueezy revenue
+- Paddle revenue
 - GitHub Sponsors revenue
 
 ### Future Monetization Options (If Traction Warrants)
@@ -241,6 +244,12 @@ Post-migration, update all references:
 - **Rationale**: AGPL copyleft prevents SaaS exploitation while remaining OSI-approved; creates natural commercial license demand
 - **Alternatives considered**: MIT (too permissive), GPL (doesn't cover network use), BSL (not OSI-approved)
 
+### 2025-12-12 - Payment Platform: LemonSqueezy → Paddle
+- **Context**: Originally planned LemonSqueezy, but Paddle better fits requirements
+- **Decision**: Use Paddle as payment processor
+- **Rationale**: Both are Merchant of Record with similar fees; Paddle has broader recognition
+- **Note**: Paddle requires website verification before merchant account approval, hence Phase 021 dependency
+
 ## Checklist Summary
 
 ### Must Have (Before Launch)
@@ -248,7 +257,8 @@ Post-migration, update all references:
 - [x] LICENSE-COMMERCIAL.md created
 - [x] GitHub repo created and code pushed
 - [ ] npm package published
-- [ ] LemonSqueezy store with products
+- [ ] Website live at obsidianpalace.dev (Phase 021)
+- [ ] Paddle store with products (requires website verification)
 - [x] README updated with license info and support links
 
 ### Should Have (Within 1 Week of Launch)
@@ -264,9 +274,14 @@ Post-migration, update all references:
 
 Phase 020 is complete when:
 1. Package is live on npm and installable via `npm install -g obsidian-palace-mcp`
-2. Commercial licenses are purchasable via LemonSqueezy
-3. GitHub Sponsors is accepting contributions
-4. Project is listed in at least 2 MCP directories
-5. At least one public announcement has been made
+2. Website live at obsidianpalace.dev (Phase 021 dependency)
+3. Commercial licenses are purchasable via Paddle
+4. GitHub Sponsors is accepting contributions
+5. Project is listed in at least 2 MCP directories
+6. At least one public announcement has been made
 
 Revenue goal: First license sale or sponsor within 30 days of launch.
+
+## Dependencies
+
+- **Phase 021 (Website Launch)**: Must be completed before Paddle can verify merchant account

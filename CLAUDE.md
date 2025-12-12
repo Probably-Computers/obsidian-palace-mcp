@@ -826,7 +826,7 @@ List all stub notes (placeholders) that need expansion:
 
 ## Git Workflow
 
-See [Git Workflow Standards](docs/GIT_WORKFLOW_STANDARDS.md) for complete guidelines.
+See [Git Workflow Standards](docs/technical/GIT_WORKFLOW_STANDARDS.md) for complete guidelines.
 
 **Quick Reference:**
 - Main branch: `main`
@@ -855,7 +855,7 @@ docs(readme): update installation instructions
 ## Documentation
 
 - [CLAUDE.md](CLAUDE.md) - This file, project guidelines
-- [docs/obsidian-palace-mcp-spec.md](docs/obsidian-palace-mcp-spec.md) - Full specification
-- [docs/GIT_WORKFLOW_STANDARDS.md](docs/GIT_WORKFLOW_STANDARDS.md) - Git practices
-- [docs/PHASE_GUIDE.md](docs/PHASE_GUIDE.md) - Phase management
-- [docs/phases/](docs/phases/) - Current and completed phases
+- [docs/technical/obsidian-palace-mcp-spec.md](docs/technical/obsidian-palace-mcp-spec.md) - Full specification
+- [docs/technical/GIT_WORKFLOW_STANDARDS.md](docs/technical/GIT_WORKFLOW_STANDARDS.md) - Git practices
+- [docs/technical/PHASE_GUIDE.md](docs/technical/PHASE_GUIDE.md) - Phase management
+- [docs/technical/phases/](docs/technical/phases/) - Current and completed phases
