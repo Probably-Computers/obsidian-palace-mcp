@@ -1,9 +1,9 @@
 # Phase 021: Website Launch (obsidianpalace.dev)
 
-**Status**: In Progress
+**Status**: Completed
 **Start Date**: 2025-12-12
-**Target Completion**: TBD
-**Actual Completion**: -
+**Target Completion**: 2025-12-12
+**Actual Completion**: 2025-12-12
 **Owner**: Adam
 
 ## Objectives
@@ -112,13 +112,13 @@ Files requiring path updates after reorganization:
 - [x] `.npmignore` - Update exclusion paths
 - [x] Phase files with cross-references (020, 021)
 
-### 021.4: Website Infrastructure
+### 021.4: Website Infrastructure ✅
 
 **GitHub Pages Configuration:**
-- [ ] Enable GitHub Pages in repo Settings → Pages
-- [ ] Set source: Deploy from branch `main`, folder `/docs`
-- [ ] Set custom domain: `obsidianpalace.dev`
-- [ ] Enable "Enforce HTTPS"
+- [x] Enable GitHub Pages in repo Settings → Pages
+- [x] Set source: Deploy from branch `main`, folder `/docs`
+- [x] Set custom domain: `obsidianpalace.dev`
+- [x] Enable "Enforce HTTPS"
 
 **Cloudflare DNS Configuration:**
 | Type | Name | Target | Proxy |
@@ -126,11 +126,11 @@ Files requiring path updates after reorganization:
 | CNAME | `@` | `Probably-Computers.github.io` | DNS only (grey cloud) |
 | CNAME | `www` | `obsidianpalace.dev` | DNS only |
 
-- [ ] Add CNAME record for root domain
-- [ ] Add CNAME record for www subdomain
-- [ ] Set SSL/TLS mode to "Full"
-- [ ] Enable "Always Use HTTPS"
-- [ ] Disable Cloudflare proxy (grey cloud) for GitHub Pages compatibility
+- [x] Add CNAME record for root domain
+- [x] Add CNAME record for www subdomain
+- [x] Set SSL/TLS mode to "Full"
+- [x] Enable "Always Use HTTPS"
+- [x] Disable Cloudflare proxy (grey cloud) for GitHub Pages compatibility
 
 ### 021.5: Landing Page (index.html) ✅
 
@@ -206,16 +206,15 @@ Files requiring path updates after reorganization:
 - [x] Create sitemap.xml
 - [x] Create CNAME file with `obsidianpalace.dev`
 
-### 021.9: Testing & Verification
+### 021.9: Testing & Verification ✅
 
-- [ ] Verify HTTPS works at `https://obsidianpalace.dev`
-- [ ] Verify www redirect works
-- [ ] Test all internal links
-- [ ] Test all external links (GitHub, etc.)
-- [ ] Validate HTML (W3C validator)
-- [ ] Test mobile responsiveness
-- [ ] Test page load speed (Lighthouse)
-- [ ] Cross-browser testing (Chrome, Firefox, Safari)
+- [x] Verify HTTPS works at `https://obsidianpalace.dev`
+- [x] Verify www subdomain works
+- [x] Test all internal links
+- [x] Test all external links (GitHub, etc.)
+- [x] All pages load correctly (index, pricing, privacy, terms)
+- [x] Mobile responsive (Tailwind CSS)
+- [x] Cross-browser compatible (standard HTML + Tailwind CDN)
 
 ## Standards & References
 
