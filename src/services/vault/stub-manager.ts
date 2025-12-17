@@ -3,9 +3,11 @@
  *
  * Manages stub notes - placeholders for technologies/concepts that are
  * mentioned but don't have full documentation yet.
+ *
+ * Phase 025: Added stop-word filtering and stub creation controls
  */
 
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { mkdir, writeFile, readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import type Database from 'better-sqlite3';
@@ -18,6 +20,63 @@ import { resolveStorage } from './resolver.js';
 import { logger } from '../../utils/logger.js';
 import { extractWikiLinks } from '../../utils/wikilinks.js';
 import { isLinkResolved } from '../graph/links.js';
+import { DEFAULT_STOP_WORDS } from '../autolink/scanner.js';
+
+/**
+ * Phase 025: Stub creation options
+ */
+export interface StubCreationOptions {
+  /** Additional stop words to prevent stub creation (merged with defaults) */
+  stopWords?: string[];
+  /** Minimum title length for stub creation (default: 2) */
+  minTitleLength?: number;
+  /** Maximum stubs to create per operation (default: 10) */
+  maxStubsPerOperation?: number;
+  /** Only create stubs in the same domain as source note (default: false) */
+  sameDomainOnly?: boolean;
+  /** Minimum confidence threshold for stub creation (default: 0.2) */
+  minConfidence?: number;
+}
+
+/**
+ * Default stub creation options
+ */
+export const DEFAULT_STUB_OPTIONS: Required<StubCreationOptions> = {
+  stopWords: [],
+  minTitleLength: 2,
+  maxStubsPerOperation: 10,
+  sameDomainOnly: false,
+  minConfidence: 0.2,
+};
+
+/**
+ * Check if a title should be filtered as a stop word
+ */
+function isStopWord(title: string, additionalStopWords: string[] = []): boolean {
+  const lowerTitle = title.toLowerCase();
+  const allStopWords = [...DEFAULT_STOP_WORDS, ...additionalStopWords];
+
+  for (const stopWord of allStopWords) {
+    // Check if it's a regex pattern (enclosed in /)
+    if (stopWord.startsWith('/') && stopWord.endsWith('/')) {
+      try {
+        const regexPattern = stopWord.slice(1, -1);
+        const regex = new RegExp(regexPattern, 'i');
+        if (regex.test(lowerTitle)) {
+          return true;
+        }
+      } catch {
+        // Invalid regex, treat as literal
+        if (lowerTitle === stopWord.slice(1, -1).toLowerCase()) {
+          return true;
+        }
+      }
+    } else if (lowerTitle === stopWord.toLowerCase()) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Create a stub note for a mentioned technology/concept
@@ -350,11 +409,14 @@ export function getStubsMentionedBy(db: Database.Database, notePath: string): No
 /**
  * Create stubs for all unresolved [[wiki-links]] in content
  *
+ * Phase 025: Added stub creation controls (stop words, limits, domain scoping)
+ *
  * @param content - The content to scan for links
  * @param sourcePath - The path of the note containing the links
  * @param db - Database to check for existing notes
  * @param vault - Vault to create stubs in
  * @param domain - Domain tags to apply to created stubs
+ * @param options - Stub creation options (Phase 025)
  * @returns Array of created stub paths
  */
 export async function createStubsForUnresolvedLinks(
@@ -362,14 +424,33 @@ export async function createStubsForUnresolvedLinks(
   sourcePath: string,
   db: Database.Database,
   vault: ResolvedVault,
-  domain: string[] = []
+  domain: string[] = [],
+  options: StubCreationOptions = {}
 ): Promise<string[]> {
   const createdStubs: string[] = [];
+
+  // Merge options with defaults
+  const opts = { ...DEFAULT_STUB_OPTIONS, ...options };
+
+  // Phase 025: Get vault-specific stop words from config
+  const vaultStopWords = vault.config.autolink?.stop_words ?? [];
+  const allStopWords = [...vaultStopWords, ...(opts.stopWords ?? [])];
+
+  // Get source domain for same-domain filtering
+  const sourceDomain = dirname(sourcePath).split('/')[0] ?? '';
 
   // Extract all wiki-links from content
   const links = extractWikiLinks(content);
 
   for (const link of links) {
+    // Phase 025: Check if we've hit the max stubs per operation limit
+    if (createdStubs.length >= opts.maxStubsPerOperation) {
+      logger.debug(
+        `Reached max stubs per operation limit (${opts.maxStubsPerOperation}), stopping`
+      );
+      break;
+    }
+
     const target = link.target;
 
     // Skip if link is already resolved (any note with this title exists)
@@ -377,14 +458,32 @@ export async function createStubsForUnresolvedLinks(
       continue;
     }
 
-    // Skip very short targets (likely invalid)
-    if (target.length < 2) {
+    // Phase 025: Skip if target is too short
+    if (target.length < opts.minTitleLength) {
+      logger.debug(`Skipping stub for "${target}": below min length (${opts.minTitleLength})`);
       continue;
     }
 
     // Skip if target looks like a path (contains /) - these are explicit paths
     if (target.includes('/')) {
       continue;
+    }
+
+    // Phase 025: Skip if target is a stop word
+    if (isStopWord(target, allStopWords)) {
+      logger.debug(`Skipping stub for "${target}": matches stop word`);
+      continue;
+    }
+
+    // Phase 025: Skip if same-domain-only and would create in different domain
+    if (opts.sameDomainOnly && domain.length > 0) {
+      const targetDomain = domain[0] ?? '';
+      if (targetDomain && targetDomain !== sourceDomain) {
+        logger.debug(
+          `Skipping stub for "${target}": different domain (${targetDomain} vs ${sourceDomain})`
+        );
+        continue;
+      }
     }
 
     // Check if we've already created a stub for this title in this run

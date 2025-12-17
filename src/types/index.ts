@@ -5,12 +5,32 @@
  * - Removed hardcoded knowledge types
  * - Domain/topic directly becomes folder path
  * - Only 3 capture types: source, knowledge, project
+ *
+ * Phase 025: Metadata Integrity
+ * - Added canonical note types and validation
  */
 
 import { CaptureType, SourceType } from './intent.js';
 
 // Re-export intent types for convenience
 export { CaptureType, SourceType } from './intent.js';
+
+// Re-export note type validation (Phase 025)
+export {
+  VALID_NOTE_TYPES,
+  BASE_NOTE_TYPES,
+  type NoteType,
+  type BaseNoteType,
+  type TypeValidationResult,
+  isValidNoteType,
+  isHubType,
+  getBaseType,
+  getHubType,
+  normalizeType,
+  validateType,
+  getValidTypes,
+  getTypesGrouped,
+} from './note-types.js';
 
 // Source of knowledge (unchanged)
 export type KnowledgeSource = 'claude' | 'user' | `web:${string}`;

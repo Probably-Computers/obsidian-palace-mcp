@@ -43,6 +43,15 @@ export {
   createChildNote,
 } from './hub-manager.js';
 
+// Children count validation (Phase 025)
+export {
+  getAccurateChildrenCount,
+  updateChildrenCount,
+  validateAllHubCounts,
+  findOrphanedChildren,
+  type ChildrenCountResult,
+} from './children-count.js';
+
 // Re-export types
 export type {
   ContentAnalysis,

@@ -73,9 +73,13 @@ src/
 │   │   ├── missing-identifier.ts # Identify missing context
 │   │   ├── question-generator.ts # Generate clarifying questions
 │   │   └── index.ts
-│   └── operations/            # Operation tracking
-│       ├── tracker.ts         # Track file operations
-│       ├── cleanup.ts         # Generate cleanup suggestions
+│   ├── operations/            # Operation tracking
+│   │   ├── tracker.ts         # Track file operations
+│   │   ├── cleanup.ts         # Generate cleanup suggestions
+│   │   └── index.ts
+│   └── metadata/              # Metadata integrity (Phase 025)
+│       ├── domain-analyzer.ts # Domain tag analysis
+│       ├── index-sync.ts      # Index synchronization verification
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── store.ts               # palace_store (intent-based storage)
@@ -97,6 +101,7 @@ src/
 │   ├── clarify.ts             # palace_clarify
 │   ├── stubs.ts               # palace_stubs
 │   ├── delete.ts              # palace_delete
+│   ├── repair.ts              # palace_repair (Phase 025)
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -311,6 +316,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_clarify | ✅ | Detect context and generate clarifying questions for incomplete storage intents |
 | palace_stubs | ✅ | List and manage stub notes that need expansion |
 | palace_delete | ✅ | Safe note deletion with backlink handling and operation tracking |
+| palace_repair | ✅ | Metadata repair (types, children_count, dates, domains) |
 
 ### palace_recall
 
@@ -1034,6 +1040,71 @@ Safely delete notes with backlink handling and operation tracking:
 - `backlinks_found`: Notes that link to deleted content
 - `backlinks_updated`: Notes modified to remove links
 - `operation_id`: For tracking/auditing
+
+### palace_repair
+
+Repair common metadata issues in vault notes (Phase 025):
+
+```typescript
+{
+  path?: string;              // Note or directory to repair (default: entire vault)
+  vault?: string;             // Vault alias
+  dry_run?: boolean;          // Preview changes without modifying (default: true)
+  repairs?: string[];         // Types of repairs (default: ['all'])
+}
+```
+
+**Repair Types:**
+- `types`: Fix invalid type values (e.g., `research_hub_hub` -> `research_hub`)
+- `children_count`: Recalculate hub children_count from actual children
+- `dates`: Fix invalid date formats in created/modified fields
+- `domains`: Normalize domain arrays (ensure array format, lowercase)
+- `required_fields`: Add missing required fields
+- `all`: Perform all repairs (default)
+
+**Output includes:**
+- `notes_processed`: Total notes checked
+- `notes_with_issues`: Notes with issues found
+- `total_issues`: Total issues detected
+- `notes_repaired`: Notes fixed (if dry_run: false)
+- `results`: Array of per-note repair results
+
+**Example:**
+```typescript
+// Preview repairs without making changes
+{ path: "research", repairs: ["types", "children_count"] }
+
+// Apply all repairs to entire vault
+{ dry_run: false, repairs: ["all"] }
+```
+
+## Valid Note Types (Phase 025)
+
+The Palace validates note types against a canonical list. Invalid types are automatically normalized.
+
+**Base Types:**
+- `research` - General research and documentation
+- `command` - CLI commands and scripts
+- `infrastructure` - Infrastructure and DevOps
+- `client` - Client-specific information
+- `project` - Project documentation
+- `pattern` - Design patterns and best practices
+- `troubleshooting` - Problem/solution documentation
+- `standard` - AI binding standards
+- `daily` - Daily session logs
+
+**Hub Types** (for split content):
+- `research_hub`, `command_hub`, `infrastructure_hub`, `client_hub`
+- `project_hub`, `pattern_hub`, `troubleshooting_hub`, `standard_hub`
+
+**Special Types:**
+- `stub` - Placeholder notes awaiting content
+- `hub` - Generic hub (rare)
+
+**Type Normalization:**
+- Double suffixes are removed: `research_hub_hub` -> `research_hub`
+- Common aliases mapped: `note` -> `research`, `tech` -> `infrastructure`
+- Invalid types default to `research`
 
 ## Operation Tracking
 

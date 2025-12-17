@@ -22,10 +22,12 @@ import { parseFrontmatter, stringifyFrontmatter } from '../../utils/frontmatter.
 import { stripWikiLinks } from '../../utils/markdown.js';
 import { titleToFilename } from '../../utils/slugify.js';
 import { logger } from '../../utils/logger.js';
+import { getHubType, normalizeType, getBaseType } from '../../types/note-types.js';
 
 /**
  * Create a new hub note
  * Phase 018: Hub filename is derived from title, not a constant
+ * Phase 022: Accept optional overview content to preserve intro during splits
  */
 export async function createHub(
   vaultPath: string,
@@ -35,6 +37,8 @@ export async function createHub(
   options: {
     domain?: string[];
     originalFrontmatter?: Record<string, unknown>;
+    /** Phase 022: Overview/intro content to preserve in hub */
+    overview?: string;
   } = {}
 ): Promise<HubOperationResult> {
   // Phase 018: Hub filename is the title, sanitized for filesystem
@@ -51,8 +55,11 @@ export async function createHub(
 
     // Build frontmatter
     const now = new Date().toISOString();
+    // Phase 025: Use getHubType to prevent double-suffixing (_hub_hub)
+    const originalType = (options.originalFrontmatter?.type as string) ?? 'research';
+    const hubType = getHubType(getBaseType(originalType));
     const frontmatter: HubFrontmatter = {
-      type: `${options.originalFrontmatter?.type ?? 'research'}_hub`,
+      type: hubType,
       title,
       status: 'active',
       children_count: children.length,
@@ -64,8 +71,8 @@ export async function createHub(
       },
     };
 
-    // Build content
-    const content = buildHubContent(title, children, hubDir);
+    // Build content - Phase 022: pass overview to preserve intro content
+    const content = buildHubContent(title, children, hubDir, options.overview);
     const fullContent = stringifyFrontmatter(frontmatter, content);
 
     await writeFile(hubPath, fullContent, 'utf-8');
@@ -95,10 +102,12 @@ export async function createHub(
 
 /**
  * Read hub information
+ * Phase 025: Now returns accurate children count by verifying files on disk
  */
 export async function getHubInfo(
   vaultPath: string,
-  hubPath: string
+  hubPath: string,
+  options: { validateChildren?: boolean } = {}
 ): Promise<HubInfo | null> {
   const fullPath = join(vaultPath, hubPath);
 
@@ -111,10 +120,28 @@ export async function getHubInfo(
     const { frontmatter, body } = parseFrontmatter(content);
 
     const title = (frontmatter as Record<string, unknown>).title as string ?? extractTitleFromBody(body);
-    const childrenCount = (frontmatter as Record<string, unknown>).children_count as number ?? 0;
+    const storedChildrenCount = (frontmatter as Record<string, unknown>).children_count as number ?? 0;
 
     // Extract children from content
     const children = extractChildrenFromContent(body, dirname(hubPath));
+
+    // Phase 025: Validate children count if requested (default: true for accuracy)
+    let childrenCount = storedChildrenCount;
+    if (options.validateChildren !== false) {
+      // Verify which children actually exist on disk
+      const existingChildren = children.filter((child) => {
+        const childFullPath = join(vaultPath, child.path);
+        return existsSync(childFullPath);
+      });
+      childrenCount = existingChildren.length;
+
+      // Log if there's a mismatch (but don't auto-repair here)
+      if (childrenCount !== storedChildrenCount && storedChildrenCount > 0) {
+        logger.debug(
+          `Hub ${hubPath} children_count mismatch: stored=${storedChildrenCount}, actual=${childrenCount}`
+        );
+      }
+    }
 
     return {
       path: hubPath,
@@ -303,19 +330,48 @@ export function getHubPath(dir: string, title: string): string {
 /**
  * Build hub note content
  * Phase 018: With title-style filenames, links use title directly
+ * Phase 022: Accept optional overview content to preserve intro during splits
  */
-function buildHubContent(title: string, children: HubChild[], _hubDir: string): string {
+function buildHubContent(
+  title: string,
+  children: HubChild[],
+  _hubDir: string,
+  overview?: string
+): string {
   const childLinks = children.map((child) => {
     // Phase 018: With title-style filenames, link directly to title
     const summary = child.summary ? ` - ${child.summary}` : '';
     return `- [[${child.title}]]${summary}`;
   });
 
+  // Phase 022: Use provided overview content if available, otherwise use placeholder
+  const overviewContent = overview?.trim() || 'Brief overview of this topic.';
+
+  // Check if overview already has content (non-empty after trimming)
+  // If it has content, we don't need the "Overview" header - use it directly
+  const hasSubstantialOverview = overview && overview.trim().length > 0;
+
+  if (hasSubstantialOverview) {
+    // Overview content was provided - use it directly without adding another header
+    return `# ${title}
+
+${overviewContent}
+
+## Knowledge Map
+
+${childLinks.join('\n')}
+
+## Related
+
+`;
+  }
+
+  // No overview provided - use the placeholder with header
   return `# ${title}
 
 ## Overview
 
-Brief overview of this topic.
+${overviewContent}
 
 ## Knowledge Map
 
@@ -457,8 +513,11 @@ export async function createChildNote(
 
     const now = new Date().toISOString();
     // Phase 018: No parent field - use inline links in content instead (Zettelkasten style)
+    // Phase 025: Normalize type to prevent corruption and ensure child has base type (not hub type)
+    const rawType = (options.originalFrontmatter?.type as string) ?? 'research';
+    const childType = normalizeType(getBaseType(rawType));
     const frontmatter: ChildFrontmatter = {
-      type: (options.originalFrontmatter?.type as string) ?? 'research',
+      type: childType,
       title,
       status: 'active',
       ...(options.domain ? { domain: options.domain } : {}),

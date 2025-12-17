@@ -1,9 +1,12 @@
 /**
  * YAML frontmatter handling
+ *
+ * Phase 025: Added type validation and normalization
  */
 
 import matter from 'gray-matter';
 import type { NoteFrontmatter } from '../types/index.js';
+import { normalizeType, isValidNoteType } from '../types/note-types.js';
 
 /**
  * Parse frontmatter from markdown content
@@ -35,6 +38,8 @@ export function stringifyFrontmatter(
 
 /**
  * Create default frontmatter for a new note
+ *
+ * Phase 025: Added type validation - invalid types are normalized
  */
 export function createDefaultFrontmatter(
   type: NoteFrontmatter['type'],
@@ -42,8 +47,10 @@ export function createDefaultFrontmatter(
   confidence = 0.5
 ): NoteFrontmatter {
   const now = new Date().toISOString();
+  // Phase 025: Normalize type to prevent invalid values
+  const normalizedType = type ? normalizeType(type) : 'research';
   return {
-    type,
+    type: normalizedType,
     created: now,
     modified: now,
     source,
@@ -57,6 +64,8 @@ export function createDefaultFrontmatter(
 
 /**
  * Merge frontmatter updates into existing frontmatter
+ *
+ * Phase 025: Added type validation - types are normalized on merge
  */
 export function mergeFrontmatter(
   existing: Partial<NoteFrontmatter>,
@@ -75,8 +84,12 @@ export function mergeFrontmatter(
     ...new Set([...(existing.aliases ?? []), ...(updates.aliases ?? [])]),
   ];
 
+  // Phase 025: Normalize type to prevent double-suffixing and invalid values
+  const rawType = updates.type ?? existing.type ?? 'research';
+  const normalizedType = normalizeType(rawType);
+
   const result: NoteFrontmatter = {
-    type: updates.type ?? existing.type ?? 'research',
+    type: normalizedType,
     created: existing.created ?? now,
     modified: now,
     verified: updates.verified ?? existing.verified ?? false,

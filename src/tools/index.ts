@@ -35,6 +35,7 @@ import {
 import { clarifyTool, clarifyHandler } from './clarify.js';
 import { stubsTool, stubsHandler } from './stubs.js';
 import { deleteTool, deleteHandler } from './delete.js';
+import { repairTool, repairHandler } from './repair.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -117,6 +118,10 @@ export function registerTools(): void {
   // Phase 023 tools - Note Lifecycle Management
   tools.set('palace_delete', deleteTool);
   handlers.set('palace_delete', deleteHandler);
+
+  // Phase 025 tools - Metadata Integrity
+  tools.set('palace_repair', repairTool);
+  handlers.set('palace_repair', repairHandler);
 }
 
 /**

@@ -73,4 +73,7 @@ export {
   findStubByTitle,
   getStubsMentionedBy,
   createStubsForUnresolvedLinks,
+  // Phase 025: Stub creation options
+  DEFAULT_STUB_OPTIONS,
+  type StubCreationOptions,
 } from './stub-manager.js';
