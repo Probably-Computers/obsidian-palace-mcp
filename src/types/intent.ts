@@ -220,8 +220,24 @@ export interface PalaceStoreOutput {
   // Warning if content exceeds atomic limits but auto_split is disabled
   atomic_warning?: string | undefined;
 
+  // Phase 023: Operation tracking
+  operation_id?: string | undefined;
+
+  // Phase 023: Cleanup suggestions after major operations
+  cleanup_suggestions?: CleanupSuggestions | undefined;
+
   // Summary message
   message: string;
+}
+
+/**
+ * Cleanup suggestions after major operations
+ */
+export interface CleanupSuggestions {
+  orphaned_files?: string[] | undefined; // Files that might need deletion
+  stale_children?: string[] | undefined; // Children from replaced content
+  broken_links?: string[] | undefined; // Files with broken links after operation
+  message?: string | undefined; // Summary of cleanup recommendations
 }
 
 // ============================================
@@ -349,6 +365,12 @@ export interface PalaceImproveOutput {
     children_deleted: string[];
     sections_added: string[];
   } | undefined;
+
+  // Phase 023: Operation tracking
+  operation_id?: string | undefined;
+
+  // Phase 023: Cleanup suggestions after major operations
+  cleanup_suggestions?: CleanupSuggestions | undefined;
 }
 
 // ============================================

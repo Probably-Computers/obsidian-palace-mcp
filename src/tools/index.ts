@@ -34,6 +34,7 @@ import {
 } from './standards.js';
 import { clarifyTool, clarifyHandler } from './clarify.js';
 import { stubsTool, stubsHandler } from './stubs.js';
+import { deleteTool, deleteHandler } from './delete.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -112,6 +113,10 @@ export function registerTools(): void {
   // Phase 019 tools - Stub management (added during pre-deployment testing)
   tools.set('palace_stubs', stubsTool);
   handlers.set('palace_stubs', stubsHandler);
+
+  // Phase 023 tools - Note Lifecycle Management
+  tools.set('palace_delete', deleteTool);
+  handlers.set('palace_delete', deleteHandler);
 }
 
 /**

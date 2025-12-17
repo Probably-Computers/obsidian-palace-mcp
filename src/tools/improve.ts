@@ -22,6 +22,7 @@ import { readNote } from '../services/vault/reader.js';
 import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../utils/vault-param.js';
 import { logger } from '../utils/logger.js';
 import { shouldSplit, splitContent, createHub, createChildNote, getHubInfo } from '../services/atomic/index.js';
+import { generateReplaceCleanupSuggestions } from '../services/operations/index.js';
 
 // Tool definition
 export const improveTool: Tool = {
@@ -313,6 +314,15 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
     }
 
     const vaultInfo = getVaultResultInfo(vault);
+
+    // Phase 023: Generate cleanup suggestions for replace mode
+    let cleanupSuggestions;
+    if (mode === 'replace') {
+      const wasHub = typeof existingFrontmatter.type === 'string' &&
+                     existingFrontmatter.type.endsWith('_hub');
+      cleanupSuggestions = generateReplaceCleanupSuggestions(db, path, wasHub);
+    }
+
     return {
       success: true,
       data: {
@@ -324,6 +334,7 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
         changes,
         version: currentVersion + 1,
         message: buildMessage(mode, changes),
+        ...(cleanupSuggestions && { cleanup_suggestions: cleanupSuggestions }),
       },
     };
   } catch (error) {

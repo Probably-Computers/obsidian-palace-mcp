@@ -68,10 +68,14 @@ src/
 │   │   ├── loader.ts          # Find and load standards
 │   │   ├── validator.ts       # Compliance checking
 │   │   └── index.ts
-│   └── ai-support/            # AI support tools
-│       ├── context-detector.ts  # Detect tech/project/client/scope
-│       ├── missing-identifier.ts # Identify missing context
-│       ├── question-generator.ts # Generate clarifying questions
+│   ├── ai-support/            # AI support tools
+│   │   ├── context-detector.ts  # Detect tech/project/client/scope
+│   │   ├── missing-identifier.ts # Identify missing context
+│   │   ├── question-generator.ts # Generate clarifying questions
+│   │   └── index.ts
+│   └── operations/            # Operation tracking
+│       ├── tracker.ts         # Track file operations
+│       ├── cleanup.ts         # Generate cleanup suggestions
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── store.ts               # palace_store (intent-based storage)
@@ -92,6 +96,7 @@ src/
 │   ├── vaults.ts              # palace_vaults
 │   ├── clarify.ts             # palace_clarify
 │   ├── stubs.ts               # palace_stubs
+│   ├── delete.ts              # palace_delete
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -294,6 +299,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_standards_validate | ✅ | Validate notes against applicable standards |
 | palace_clarify | ✅ | Detect context and generate clarifying questions for incomplete storage intents |
 | palace_stubs | ✅ | List and manage stub notes that need expansion |
+| palace_delete | ✅ | Safe note deletion with backlink handling and operation tracking |
 
 ### palace_recall
 
@@ -349,15 +355,45 @@ Get incoming links (backlinks) and outgoing links for a note with multi-hop trav
 
 ### palace_orphans
 
-Find orphan notes - notes with missing link connections:
+Find orphan notes and optionally clean them up. Supports rich context for AI review.
 
 ```typescript
 {
-  type?: 'no_incoming' | 'no_outgoing' | 'isolated';  // Orphan type (default: isolated)
+  type?: 'no_incoming' | 'no_outgoing' | 'isolated' | 'stub_orphans' | 'child_orphans';
   path?: string;                             // Limit to directory
   limit?: number;                            // Max results (default: 50)
+  delete_orphans?: boolean;                  // Delete found orphans (default: false)
+  dry_run?: boolean;                         // Preview deletions (default: true)
+  include_suggestions?: boolean;             // Include cleanup suggestions (default: true)
+  include_context?: boolean;                 // Include rich context for AI review (default: false)
+  vault?: string;                            // Vault alias
 }
 ```
+
+**Orphan Types:**
+- `isolated`: Notes with no incoming or outgoing links (default)
+- `no_incoming`: Notes with no backlinks
+- `no_outgoing`: Notes with no outgoing links
+- `stub_orphans`: Stub notes that no one links to
+- `child_orphans`: Child notes whose hub no longer exists
+
+**Output includes:**
+- `orphans`: Array of orphan notes with metadata
+- `count`: Number of orphans found
+- `type`: Orphan type queried
+- `suggestions`: Cleanup recommendations (if `include_suggestions: true`)
+- `cleanup`: Deletion results (if `delete_orphans: true`)
+
+**Rich Context (if `include_context: true`):**
+- `orphans_with_context`: Array with per-orphan details:
+  - `content_preview`: First 500 characters of content
+  - `word_count`: Number of words in note
+  - `similar_notes`: Related notes that could be linked to
+  - `suggested_action`: `remove`, `link`, `expand`, or `merge`
+  - `action_reason`: Explanation of why this action is suggested
+- `action_summary`: Count of each suggested action type
+
+Use `include_context: true` when you want to review orphans and make decisions about each one.
 
 ### palace_related
 
@@ -926,6 +962,59 @@ List all stub notes (placeholders) that need expansion:
 - Find stubs that need content
 - Prioritize stubs by mention count (most referenced = most needed)
 - Focus on specific domain areas
+
+### palace_delete
+
+Safely delete notes with backlink handling and operation tracking:
+
+```typescript
+{
+  path: string;                              // Path to note or directory (required)
+  vault?: string;                            // Vault alias
+  dry_run?: boolean;                         // Preview without deleting (default: true)
+  confirm?: boolean;                         // Required for directory deletion
+  recursive?: boolean;                       // Delete directory contents recursively
+  handle_backlinks?: 'warn' | 'remove' | 'ignore';  // Backlink handling (default: warn)
+}
+```
+
+**Protection features:**
+- Protected paths (`.palace/`, `.obsidian/`) cannot be deleted
+- Directory deletion requires explicit `confirm: true`
+- Dry-run mode by default - must explicitly set `dry_run: false` to delete
+
+**Backlink handling:**
+- `warn`: Report notes that link to the target (default)
+- `remove`: Remove [[links]] from source notes before deletion
+- `ignore`: Delete without modifying linking notes
+
+**Output includes:**
+- `deleted`: Array of deleted file paths
+- `backlinks_found`: Notes that link to deleted content
+- `backlinks_updated`: Notes modified to remove links
+- `operation_id`: For tracking/auditing
+
+## Operation Tracking
+
+All write operations (store, improve, delete) are tracked with operation IDs for auditing:
+
+```typescript
+interface Operation {
+  id: string;               // Unique operation ID
+  type: 'store' | 'improve' | 'delete' | 'split';
+  vault: string;            // Vault alias
+  timestamp: string;        // ISO timestamp
+  filesCreated: string[];   // Paths of created files
+  filesModified: string[];  // Paths of modified files
+  filesDeleted: string[];   // Paths of deleted files
+  metadata?: object;        // Operation-specific metadata
+}
+```
+
+**Use cases:**
+- Audit trail for vault changes
+- Undo context (know what was created/modified)
+- Cleanup suggestions (identify orphaned files after operations)
 
 ## Testing
 

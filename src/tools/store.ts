@@ -52,6 +52,11 @@ import {
   createHub,
   createChildNote,
 } from '../services/atomic/index.js';
+import {
+  startOperation,
+  trackFileCreated,
+  trackFileModified,
+} from '../services/operations/index.js';
 
 // Tool definition with new topic-based schema
 export const storeTool: Tool = {
@@ -258,6 +263,13 @@ export async function storeHandler(
     const manager = getIndexManager();
     const db = await manager.getIndex(vault.alias);
 
+    // Phase 023: Start operation tracking
+    const operation = startOperation('store', vault.alias, {
+      title,
+      intent: intent.capture_type,
+      domain: intent.domain,
+    });
+
     // Check if a stub exists for this title and should be expanded
     const existingStub = findStubByTitle(db, title);
     if (existingStub) {
@@ -268,6 +280,9 @@ export async function storeHandler(
           vault,
           source ?? { origin: 'ai:research', confidence: 0.5 }
         );
+
+        // Phase 023: Track stub expansion as modification
+        trackFileModified(operation.id, existingStub.path);
 
         // Re-index the expanded note
         const updatedNote = await readNote(existingStub.path, {
@@ -296,6 +311,7 @@ export async function storeHandler(
             is_new: false,
             level: existingStub.path.split('/').length - 1,
           },
+          operation_id: operation.id,
           message: `Expanded stub: ${existingStub.path}`,
         },
       };
@@ -391,7 +407,8 @@ export async function storeHandler(
           create_stubs,
           retroactive_link,
           linksAdded,
-          hubSections
+          hubSections,
+          operation.id // Phase 023: Pass operation ID for tracking
         );
 
         return splitResult;
@@ -448,6 +465,9 @@ export async function storeHandler(
       await mkdir(finalResolution.parentDir, { recursive: true });
       await writeFile(finalResolution.fullPath, noteContent, 'utf-8');
 
+      // Phase 023: Track file creation
+      trackFileCreated(operation.id, finalResolution.relativePath);
+
       // Index the new note
       const savedNote = await readNote(finalResolution.relativePath, {
         vaultPath: vault.path,
@@ -468,6 +488,11 @@ export async function storeHandler(
             intent.domain
           );
           stubsCreated.push(...linkStubs);
+
+          // Phase 023: Track stub creations
+          for (const stubPath of linkStubs) {
+            trackFileCreated(operation.id, stubPath);
+          }
 
           // Index the new link stubs
           for (const stubPath of linkStubs) {
@@ -509,6 +534,11 @@ export async function storeHandler(
           vault
         );
         linksFromExisting.push(...result.notesUpdated);
+
+        // Phase 023: Track retroactive link modifications
+        for (const updatedPath of result.notesUpdated) {
+          trackFileModified(operation.id, updatedPath);
+        }
       }
     }
 
@@ -543,6 +573,8 @@ export async function storeHandler(
             : undefined,
         // Phase 022: Include warning if content exceeds limits but auto_split is disabled
         atomic_warning: atomicWarning,
+        // Phase 023: Operation tracking
+        operation_id: operation.id,
         message: buildSuccessMessage(
           finalResolution.relativePath,
           linksAdded,
@@ -647,7 +679,8 @@ async function handleAtomicSplit(
   createStubs: boolean,
   retroactiveLink: boolean,
   linksAdded: number,
-  hubSections?: string[] // Phase 022: Sections that stay in hub
+  hubSections?: string[], // Phase 022: Sections that stay in hub
+  operationId?: string // Phase 023: Operation tracking
 ): Promise<ToolResult<PalaceStoreOutput>> {
   const linksFromExisting: string[] = [];
 
@@ -657,7 +690,7 @@ async function handleAtomicSplit(
   // Split the content
   // Phase 018: hubFilename removed - derived from title automatically
   // Phase 022: Pass hubSections to splitter
-  const splitResult = splitContent(content, {
+  const splitOptions = {
     targetDir,
     title,
     originalFrontmatter: {
@@ -667,8 +700,9 @@ async function handleAtomicSplit(
       confidence: source?.confidence ?? 0.5,
     },
     domain: intent.domain,
-    hubSections, // Phase 022: Sections that stay in hub
-  });
+    ...(hubSections && { hubSections }), // Phase 022: Sections that stay in hub (only if defined)
+  };
+  const splitResult = splitContent(content, splitOptions);
 
   const createdPaths: string[] = [];
   const stubsCreated: string[] = [];
@@ -722,6 +756,11 @@ async function handleAtomicSplit(
     if (hubResult.success) {
       createdPaths.push(hubResult.path);
 
+      // Phase 023: Track hub creation
+      if (operationId) {
+        trackFileCreated(operationId, hubResult.path);
+      }
+
       // Index the hub
       const hubNote = await readNote(hubResult.path, {
         vaultPath: vault.path,
@@ -751,6 +790,11 @@ async function handleAtomicSplit(
       if (childResult.success) {
         createdPaths.push(childResult.path);
 
+        // Phase 023: Track child creation
+        if (operationId) {
+          trackFileCreated(operationId, childResult.path);
+        }
+
         // Index the child
         const childNote = await readNote(childResult.path, {
           vaultPath: vault.path,
@@ -774,6 +818,13 @@ async function handleAtomicSplit(
             intent.domain
           );
           stubsCreated.push(...linkStubs);
+
+          // Phase 023: Track stub creations
+          if (operationId) {
+            for (const stubPath of linkStubs) {
+              trackFileCreated(operationId, stubPath);
+            }
+          }
 
           for (const stubPath of linkStubs) {
             const stubNote = await readNote(stubPath, {
@@ -808,6 +859,13 @@ async function handleAtomicSplit(
             vault
           );
           linksFromExisting.push(...result.notesUpdated);
+
+          // Phase 023: Track retroactive link modifications
+          if (operationId) {
+            for (const updatedPath of result.notesUpdated) {
+              trackFileModified(operationId, updatedPath);
+            }
+          }
         }
       } catch (retroError) {
         logger.warn('Retroactive linking failed', retroError);
@@ -846,6 +904,8 @@ async function handleAtomicSplit(
         linksAdded > 0 || linksFromExisting.length > 0
           ? { to_existing: [], from_existing: linksFromExisting }
           : undefined,
+      // Phase 023: Operation tracking
+      operation_id: operationId,
       message: buildSuccessMessage(
         splitResult.hub.relativePath,
         linksAdded,
