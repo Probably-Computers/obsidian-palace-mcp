@@ -21,13 +21,13 @@ import { indexNote, removeFromIndex } from '../services/index/sync.js';
 import { readNote } from '../services/vault/reader.js';
 import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../utils/vault-param.js';
 import { logger } from '../utils/logger.js';
-import { shouldSplit, splitContent, createHub, createChildNote } from '../services/atomic/index.js';
+import { shouldSplit, splitContent, createHub, createChildNote, getHubInfo } from '../services/atomic/index.js';
 
 // Tool definition
 export const improveTool: Tool = {
   name: 'palace_improve',
   description:
-    'Intelligently update existing notes with multiple modes: append, append_section (add new section), update_section (update specific section), merge, replace, or frontmatter only. Maintains version tracking and auto-links new content.',
+    'Intelligently update existing notes with multiple modes: append, append_section (add new section), update_section (update specific section), merge, replace, frontmatter only, or consolidate (merge children back into hub). Maintains version tracking and auto-links new content.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -37,13 +37,13 @@ export const improveTool: Tool = {
       },
       mode: {
         type: 'string',
-        enum: ['append', 'append_section', 'update_section', 'merge', 'replace', 'frontmatter'],
+        enum: ['append', 'append_section', 'update_section', 'merge', 'replace', 'frontmatter', 'consolidate'],
         description:
-          'Update mode: append (add to end), append_section (add new H2 section), update_section (update specific section), merge (intelligent merge), replace (full replacement), frontmatter (metadata only)',
+          'Update mode: append (add to end), append_section (add new H2 section), update_section (update specific section), merge (intelligent merge), replace (full replacement), frontmatter (metadata only), consolidate (merge children back into hub)',
       },
       content: {
         type: 'string',
-        description: 'New content to add/update (not needed for frontmatter mode)',
+        description: 'New content to add/update (not needed for frontmatter or consolidate mode)',
       },
       section: {
         type: 'string',
@@ -68,6 +68,10 @@ export const improveTool: Tool = {
       vault: {
         type: 'string',
         description: 'Vault alias (defaults to default vault)',
+      },
+      delete_children: {
+        type: 'boolean',
+        description: 'For consolidate mode: delete child files after merging (default: true)',
       },
     },
     required: ['path', 'mode'],
@@ -96,9 +100,11 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
     auto_split = true,
     author,
     vault: vaultParam,
+    delete_children = true, // Phase 022: Default to deleting children after consolidation
   } = parseResult.data;
 
   // Validate required fields for certain modes
+  // Note: consolidate and frontmatter modes don't require content
   if (['append', 'append_section', 'update_section', 'replace', 'merge'].includes(mode) && !content) {
     return {
       success: false,
@@ -191,6 +197,20 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
       case 'frontmatter':
         newBody = existingBody;
         break;
+
+      case 'consolidate': {
+        // Phase 022: Merge children back into hub
+        const consolidateResult = await handleConsolidate(
+          path,
+          fullPath,
+          existingFrontmatter as Record<string, unknown>,
+          existingBody,
+          vault,
+          delete_children,
+          author
+        );
+        return consolidateResult;
+      }
 
       default:
         return {
@@ -557,10 +577,32 @@ async function handleImproveSplit(
 
   const createdPaths: string[] = [];
 
+  // Phase 022: Extract intro/overview content from split result for hub preservation
+  // The hub.content has format: "# Title\n\n{intro}\n\n## Knowledge Map\n..."
+  // Extract the intro between title and Knowledge Map
+  const hubContentLines = splitResult.hub.content.split('\n');
+  const introLines: string[] = [];
+  let foundTitle = false;
+  for (const line of hubContentLines) {
+    if (line.startsWith('# ') && !foundTitle) {
+      foundTitle = true;
+      continue;
+    }
+    if (line.startsWith('## Knowledge Map')) {
+      break;
+    }
+    if (foundTitle) {
+      introLines.push(line);
+    }
+  }
+  const hubOverview = introLines.join('\n').trim();
+
   // Create the hub note
   // Phase 018: hubFilename removed - derived from title automatically
   const hubOptions: Parameters<typeof createHub>[4] = {
     originalFrontmatter: frontmatter,
+    // Phase 022: Pass overview to preserve intro content
+    overview: hubOverview,
   };
   if (domain.length > 0) {
     hubOptions.domain = domain;
@@ -661,6 +703,230 @@ async function handleImproveSplit(
       version: newVersion,
       message: buildMessage(mode, changes, atomicSplitResult),
       split_result: atomicSplitResult,
+    },
+  };
+}
+
+/**
+ * Phase 022: Handle consolidation of hub children back into a single note
+ *
+ * This operation:
+ * 1. Reads a hub note and its children
+ * 2. Merges child content back into the hub as H2 sections
+ * 3. Updates frontmatter (removes _hub suffix, updates metadata)
+ * 4. Optionally deletes child files
+ */
+async function handleConsolidate(
+  relativePath: string,
+  fullPath: string,
+  existingFrontmatter: Record<string, unknown>,
+  existingBody: string,
+  vault: ReturnType<typeof resolveVaultParam>,
+  deleteChildren: boolean,
+  author?: string
+): Promise<ToolResult<PalaceImproveOutput>> {
+  const manager = getIndexManager();
+  const db = await manager.getIndex(vault.alias);
+
+  // Check if this is a hub note
+  const noteType = (existingFrontmatter.type as string) ?? '';
+  const isHub = noteType.endsWith('_hub');
+
+  if (!isHub) {
+    return {
+      success: false,
+      error: `Cannot consolidate: ${relativePath} is not a hub note (type: ${noteType || 'unknown'})`,
+      code: 'NOT_A_HUB',
+    };
+  }
+
+  // Get hub info to find children
+  const hubInfo = await getHubInfo(vault.path, relativePath);
+
+  if (!hubInfo) {
+    return {
+      success: false,
+      error: `Failed to read hub info for: ${relativePath}`,
+      code: 'HUB_READ_ERROR',
+    };
+  }
+
+  if (hubInfo.children.length === 0) {
+    return {
+      success: false,
+      error: `Hub has no children to consolidate: ${relativePath}`,
+      code: 'NO_CHILDREN',
+    };
+  }
+
+  // Track changes
+  const changes: PalaceImproveOutput['changes'] = {};
+  const childrenMerged: string[] = [];
+  const childrenDeleted: string[] = [];
+  const sectionsAdded: string[] = [];
+
+  // Extract the intro/overview content from the hub (everything before ## Knowledge Map)
+  const hubLines = existingBody.split('\n');
+  const introLines: string[] = [];
+  let inKnowledgeMap = false;
+
+  for (const line of hubLines) {
+    if (line.startsWith('## Knowledge Map')) {
+      inKnowledgeMap = true;
+      continue;
+    }
+    if (inKnowledgeMap && line.startsWith('## ')) {
+      // After Knowledge Map, skip any other sections like ## Related
+      continue;
+    }
+    if (!inKnowledgeMap) {
+      introLines.push(line);
+    }
+  }
+
+  // Start building the consolidated content
+  let consolidatedBody = introLines.join('\n').trim();
+  let linesAdded = 0;
+
+  // Read and merge each child's content
+  for (const child of hubInfo.children) {
+    try {
+      // Try to find the child file
+      // The child.path might be just the title, so we need to resolve it
+      let childPath = child.path;
+
+      // If path doesn't include extension, add .md
+      if (!childPath.endsWith('.md')) {
+        childPath = `${childPath}.md`;
+      }
+
+      // If path doesn't include directory, use the hub's directory
+      if (!childPath.includes('/')) {
+        childPath = join(dirname(relativePath), childPath);
+      }
+
+      const childFullPath = join(vault.path, childPath);
+
+      if (!existsSync(childFullPath)) {
+        logger.warn(`Child file not found: ${childPath}`);
+        continue;
+      }
+
+      // Read the child content
+      const childContent = await readFile(childFullPath, 'utf-8');
+      const { body: childBody } = parseFrontmatter(childContent);
+
+      // Convert child's H1 to H2 and add to consolidated body
+      const childLines = childBody.split('\n');
+      const processedChildLines: string[] = [];
+
+      for (const line of childLines) {
+        if (line.startsWith('# ') && !line.startsWith('## ')) {
+          // Convert H1 to H2
+          processedChildLines.push(`## ${line.slice(2)}`);
+        } else {
+          processedChildLines.push(line);
+        }
+      }
+
+      const childSection = processedChildLines.join('\n').trim();
+      consolidatedBody += `\n\n${childSection}`;
+      linesAdded += processedChildLines.length;
+
+      childrenMerged.push(childPath);
+      sectionsAdded.push(child.title);
+
+      // Delete the child file if requested
+      if (deleteChildren) {
+        try {
+          removeFromIndex(db, childPath);
+          await unlink(childFullPath);
+          childrenDeleted.push(childPath);
+          logger.info(`Deleted child file: ${childPath}`);
+        } catch (deleteError) {
+          logger.warn(`Failed to delete child file: ${childPath}`, deleteError);
+        }
+      }
+    } catch (childError) {
+      logger.warn(`Failed to process child: ${child.path}`, childError);
+    }
+  }
+
+  if (childrenMerged.length === 0) {
+    return {
+      success: false,
+      error: 'No children could be merged - all child files were missing or unreadable',
+      code: 'CONSOLIDATION_FAILED',
+    };
+  }
+
+  // Update frontmatter
+  const now = new Date().toISOString();
+  const newFrontmatter = { ...existingFrontmatter };
+
+  // Remove _hub suffix from type
+  newFrontmatter.type = noteType.replace(/_hub$/, '');
+
+  // Remove children_count as it's no longer a hub
+  delete newFrontmatter.children_count;
+
+  // Update timestamps
+  newFrontmatter.modified = now;
+
+  // Increment version
+  const palace = (newFrontmatter.palace as Record<string, unknown>) || {};
+  const currentVersion = (palace.version as number) || 1;
+  newFrontmatter.palace = {
+    ...palace,
+    version: currentVersion + 1,
+  };
+
+  // Add author if provided
+  if (author) {
+    const existingAuthors = (newFrontmatter.authors as string[]) || [];
+    if (!existingAuthors.includes(author)) {
+      newFrontmatter.authors = [...existingAuthors, author];
+    }
+  }
+
+  // Build final content
+  const finalContent = stringifyFrontmatter(newFrontmatter, consolidatedBody.trim());
+
+  // Write the consolidated file
+  await writeFile(fullPath, finalContent, 'utf-8');
+
+  // Re-index the note
+  const updatedNote = await readNote(relativePath, {
+    vaultPath: vault.path,
+    ignoreConfig: vault.config.ignore,
+  });
+  if (updatedNote) {
+    indexNote(db, updatedNote);
+  }
+
+  // Update changes tracking
+  changes.lines_added = linesAdded;
+  changes.children_consolidated = childrenMerged.length;
+  changes.children_deleted = childrenDeleted;
+  changes.frontmatter_updated = ['type', 'modified'];
+
+  const vaultInfo = getVaultResultInfo(vault);
+  return {
+    success: true,
+    data: {
+      success: true,
+      vault: vaultInfo.vault,
+      vaultPath: vaultInfo.vault_path,
+      path: relativePath,
+      mode: 'consolidate',
+      changes,
+      version: currentVersion + 1,
+      message: `Consolidated ${childrenMerged.length} children into hub | ${childrenDeleted.length} files deleted | Type changed from ${noteType} to ${newFrontmatter.type}`,
+      consolidation_result: {
+        children_merged: childrenMerged,
+        children_deleted: childrenDeleted,
+        sections_added: sectionsAdded,
+      },
     },
   };
 }

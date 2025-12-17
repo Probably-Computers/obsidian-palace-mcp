@@ -16,12 +16,16 @@ import { analyzeContent, isCodeHeavy } from './analyzer.js';
 /**
  * Default limits for atomic notes
  * Phase 018: Removed hub_filename - hub names are now derived from title
+ * Phase 022: Added min_section_lines and max_children for configurable thresholds
  */
 const DEFAULT_LIMITS: AtomicConfig = {
   max_lines: 200,
   max_sections: 6,
   section_max_lines: 50,
   auto_split: true,
+  // Phase 022: New configurable thresholds
+  min_section_lines: 5, // Minimum lines for section to be considered for splitting
+  max_children: 10, // Maximum children to create
 };
 
 /**

@@ -488,6 +488,14 @@ Intent-based knowledge storage. AI expresses WHAT to store, Palace determines WH
     retroactive_link?: boolean; // Update existing notes with links (default: true)
     autolink?: boolean;    // Auto-link to existing notes (default: true)
     dry_run?: boolean;     // Preview without saving (default: false)
+    auto_split?: boolean;  // Enable auto-split when exceeding limits (default: true)
+    split_thresholds?: {   // Per-operation threshold overrides
+      max_lines?: number;
+      max_sections?: number;
+      section_max_lines?: number;
+      min_section_lines?: number;
+      max_children?: number;
+    };
   };
   source?: {
     origin: string;        // e.g., 'ai:research', 'human', 'web:url'
@@ -532,12 +540,13 @@ Intelligently update existing notes with multiple modes:
 {
   path: string;            // Path to note (required)
   mode: 'append' | 'append_section' | 'update_section' |
-        'merge' | 'replace' | 'frontmatter';
-  content?: string;        // New content (not needed for frontmatter mode)
+        'merge' | 'replace' | 'frontmatter' | 'consolidate';
+  content?: string;        // New content (not needed for frontmatter/consolidate mode)
   section?: string;        // Section name for update_section mode
   frontmatter?: object;    // Frontmatter fields to update
   autolink?: boolean;      // Auto-link new content (default: true)
   auto_split?: boolean;    // Auto-split if exceeds atomic limits (default: true)
+  delete_children?: boolean; // For consolidate: delete child files (default: true)
   vault?: string;          // Vault alias
 }
 ```
@@ -551,6 +560,9 @@ Intelligently update existing notes with multiple modes:
 - `merge`: Intelligently merge (avoid duplicate sections)
 - `replace`: Full content replacement
 - `frontmatter`: Update only metadata
+- `consolidate`: Merge children back into hub (Phase 022)
+
+**Consolidation Mode (Phase 022):** Use `mode: 'consolidate'` on a hub note to merge all its children back into a single file. The hub's type changes from `*_hub` to the original type, and children are merged as H2 sections in the order they appear in the Knowledge Map. Set `delete_children: false` to keep child files after consolidation.
 
 ## Atomic Note System
 
@@ -564,6 +576,8 @@ The Palace enforces atomic notes with automatic splitting when content exceeds c
 | H2 sections | 6 | `atomic.max_sections` |
 | Section lines | 50 | `atomic.section_max_lines` |
 | Hub lines | 150 | N/A |
+| Min section lines | 5 | `atomic.min_section_lines` (Phase 022) |
+| Max children | 10 | `atomic.max_children` (Phase 022) |
 
 ### Obsidian-Native Filenames (Phase 018)
 
@@ -642,14 +656,109 @@ To store large content without splitting:
 {
   // ... other options
   options: {
-    force_atomic: true  // Skips atomic splitting
+    auto_split: false  // Disable automatic splitting (Phase 022)
   }
 }
 ```
 
-### Atomic Warning on Improve
+**Note:** The `force_atomic: true` option is deprecated; use `auto_split: false` instead.
 
-When `palace_improve` adds content that causes a note to exceed atomic limits, a warning is returned but the note is still updated. Consider using `palace_store` with hub structure for very large content.
+### Atomic Warning (Phase 022)
+
+When `auto_split` is disabled but content exceeds atomic limits, a warning is included in the response:
+
+```json
+{
+  "atomic_warning": "Content exceeds atomic limits (250 lines, 8 sections). Set auto_split: true to auto-split."
+}
+```
+
+This allows you to store large content as a single file while being informed that the content would benefit from splitting.
+
+### Content-Aware Splitting (Phase 022)
+
+The splitter is aware of markdown code blocks:
+- H2 headers inside code blocks are ignored (not treated as section boundaries)
+- This prevents accidental splitting of documentation that contains code examples with markdown headers
+
+### Section-Level Split Control (Phase 022)
+
+Use HTML comment annotations to control which sections stay in the hub:
+
+```markdown
+## Quick Reference
+<!-- palace:keep -->
+This section stays in hub even when content is split.
+
+## Detailed Implementation
+<!-- palace:split -->
+This section can be extracted to a child note.
+```
+
+**Annotations:**
+- `<!-- palace:keep -->` - Section stays in hub, never extracted to child note
+- `<!-- palace:split -->` - Section can be extracted (default behavior, explicit hint)
+
+**Template Content Detection:**
+Sections are automatically kept in hub if they appear to contain template/example content:
+- Section titles containing "Example", "Template", "Sample", "Demo", "Placeholder"
+- Content within `<!-- template -->` or `<!-- example -->` markers
+- Sections that are primarily blockquotes (>70% blockquote lines)
+
+**hub_sections Configuration:**
+Configure sections that always stay in hub via vault config or per-operation:
+
+```yaml
+# In .palace.yaml
+atomic:
+  hub_sections:
+    - "Quick Reference"
+    - "Summary"
+    - "Overview"
+```
+
+Or per-operation via `split_thresholds`:
+```typescript
+{
+  options: {
+    split_thresholds: {
+      hub_sections: ['Quick Reference', 'Summary']
+    }
+  }
+}
+```
+
+### Split Troubleshooting
+
+**Problem: Content was split when it shouldn't have been**
+- Use `auto_split: false` in options to prevent splitting entirely
+- For fine-grained control, use `split_thresholds` to adjust limits per-operation
+- Add `<!-- palace:keep -->` annotation to sections that should stay in hub
+
+**Problem: Specific sections keep getting split when they shouldn't**
+- Add `<!-- palace:keep -->` annotation after the section header
+- Configure `hub_sections` in vault config or split_thresholds to always keep certain section titles in hub
+
+**Problem: Template/example content is being split**
+- Name sections with "Example", "Template", "Sample" to auto-detect as template content
+- Use `<!-- template -->` markers around example content
+- Template sections are automatically kept in hub
+
+**Problem: Too many small child notes created**
+- Increase `min_section_lines` threshold (default: 5) to skip tiny sections
+- Set `max_children` to limit fragmentation (default: 10)
+
+**Problem: Hub note lost its intro content after split**
+- This was fixed in Phase 022. Hub intro content (before first H2) is now preserved.
+- If you have an existing corrupted hub, use `mode: 'consolidate'` to merge children back, then re-store with proper content.
+
+**Problem: Need to merge children back into a single file**
+- Use `palace_improve` with `mode: 'consolidate'` on the hub note
+- Set `delete_children: false` to keep child files as backup
+
+**Problem: Code block content was incorrectly split**
+- Phase 022 added code-block awareness. If you're seeing this issue, ensure you're on the latest version.
+- The splitter now detects fenced code blocks (``` or ~~~) and skips any H2 headers inside them.
 
 ## Standards System
 

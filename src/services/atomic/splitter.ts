@@ -20,10 +20,39 @@ import type {
   ChildFrontmatter,
   LinkUpdate,
 } from '../../types/atomic.js';
-import { analyzeContent } from './analyzer.js';
+import { analyzeContent, buildCodeBlockLineSet } from './analyzer.js';
 import { shouldSplit } from './decision.js';
 import { titleToFilename } from '../../utils/slugify.js';
 import { stripWikiLinks } from '../../utils/markdown.js';
+
+/**
+ * Phase 022: Check if a section should stay in hub (not be split out)
+ * A section stays in hub if:
+ * - It has <!-- palace:keep --> annotation
+ * - It contains template/example content
+ * - Its title matches a hub_sections pattern (case-insensitive)
+ */
+function shouldKeepInHub(section: SectionInfo, hubSections: string[] = []): boolean {
+  // Check for keep annotation
+  if (section.annotation === 'keep') {
+    return true;
+  }
+
+  // Check for template content
+  if (section.isTemplateContent) {
+    return true;
+  }
+
+  // Check against hub_sections config (case-insensitive match)
+  const sectionTitleLower = section.title.toLowerCase();
+  for (const hubSection of hubSections) {
+    if (sectionTitleLower.includes(hubSection.toLowerCase())) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 /**
  * Split content based on the recommended strategy
@@ -53,6 +82,7 @@ export function splitContent(
 /**
  * Split content by H2 sections
  * Phase 018: Uses title-style filenames for hub and children
+ * Phase 022: Code-block aware intro extraction, respects annotations and hub_sections
  */
 export function splitBySections(
   content: string,
@@ -60,42 +90,72 @@ export function splitBySections(
   options: SplitOptions
 ): SplitResult {
   const lines = stripFrontmatter(content).split('\n');
-  const { title, targetDir } = options;
+  const { title, targetDir, hubSections = [] } = options;
 
   // Clean the title for use in filenames
   const cleanTitle = stripWikiLinks(title);
   const hubFilename = titleToFilename(cleanTitle);
 
-  // Extract introduction (content before first H2)
+  // Build set of lines inside code blocks (Phase 022)
+  const codeBlockLines = buildCodeBlockLineSet(lines);
+
+  // Extract introduction (content before first real H2, not in code blocks)
   const introLines: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
-    if (line.startsWith('## ') && !line.startsWith('### ')) {
+
+    // Check if this is a real H2 (not in a code block)
+    if (!codeBlockLines.has(i) && line.startsWith('## ') && !line.startsWith('### ')) {
       break;
     }
-    // Skip the H1 title if present
-    if (!line.startsWith('# ') || i > 0) {
-      introLines.push(line);
+    // Skip the H1 title if present at line 0
+    if (line.startsWith('# ') && !line.startsWith('## ') && i === 0) {
+      continue;
+    }
+    introLines.push(line);
+  }
+
+  // Phase 022: Separate sections into "keep in hub" and "extract to children"
+  const sectionsToKeep: SectionInfo[] = [];
+  const sectionsToExtract: SectionInfo[] = [];
+
+  for (const section of analysis.sections) {
+    if (shouldKeepInHub(section, hubSections)) {
+      sectionsToKeep.push(section);
+    } else {
+      sectionsToExtract.push(section);
     }
   }
 
-  // Build hub content
+  // Build hub content with kept sections included
+  const keptSectionsContent = sectionsToKeep.map(section => {
+    const sectionLines = lines.slice(section.startLine, section.endLine + 1);
+    return sectionLines.join('\n');
+  }).join('\n\n');
+
+  // Combine intro and kept sections for hub
+  const hubIntroContent = introLines.join('\n').trim();
+  const fullHubContent = keptSectionsContent
+    ? `${hubIntroContent}\n\n${keptSectionsContent}`
+    : hubIntroContent;
+
+  // Build hub content (pass only extracted sections for the Knowledge Map)
   const hub = buildHubContent(
     cleanTitle,
-    introLines.join('\n').trim(),
-    analysis.sections,
+    fullHubContent,
+    sectionsToExtract,
     targetDir,
     hubFilename,
     options
   );
 
-  // Build children from sections
+  // Build children from sections to extract
   const children: ChildContent[] = [];
   const linksUpdated: LinkUpdate[] = [];
   const hubPath = join(targetDir, hubFilename);
 
-  for (const section of analysis.sections) {
+  for (const section of sectionsToExtract) {
     const sectionLines = lines.slice(section.startLine, section.endLine + 1);
     const sectionContent = sectionLines.join('\n');
 
@@ -132,6 +192,7 @@ export function splitBySections(
 /**
  * Split by extracting large sections only
  * Phase 018: Uses title-style filenames for hub and children
+ * Phase 022: Respects annotations and hub_sections
  */
 export function splitByLargeSections(
   content: string,
@@ -139,19 +200,19 @@ export function splitByLargeSections(
   options: SplitOptions
 ): SplitResult {
   const lines = stripFrontmatter(content).split('\n');
-  const { title, targetDir } = options;
+  const { title, targetDir, hubSections = [] } = options;
 
   // Clean the title for use in filenames
   const cleanTitle = stripWikiLinks(title);
   const hubFilename = titleToFilename(cleanTitle);
 
-  // Find sections to extract (only large ones)
+  // Find sections to extract (only large ones that aren't marked to keep)
   const largeSectionTitles = new Set(analysis.largeSections);
   const sectionsToExtract = analysis.sections.filter((s) =>
-    largeSectionTitles.has(s.title)
+    largeSectionTitles.has(s.title) && !shouldKeepInHub(s, hubSections)
   );
   const sectionsToKeep = analysis.sections.filter(
-    (s) => !largeSectionTitles.has(s.title)
+    (s) => !largeSectionTitles.has(s.title) || shouldKeepInHub(s, hubSections)
   );
 
   // Build retained content

@@ -6,7 +6,7 @@
  */
 
 import type { AtomicConfig } from '../../types/index.js';
-import type { ContentAnalysis, SectionInfo, SubConcept } from '../../types/atomic.js';
+import type { ContentAnalysis, SectionInfo, SubConcept, PalaceAnnotation } from '../../types/atomic.js';
 import { stripWikiLinks } from '../../utils/markdown.js';
 
 /**
@@ -122,38 +122,171 @@ function countWords(content: string): number {
 }
 
 /**
+ * Build a set of line numbers that are inside code blocks
+ * This is used to skip headers inside code blocks during analysis
+ */
+function buildCodeBlockLineSet(lines: string[]): Set<number> {
+  const codeBlockLines = new Set<number>();
+  let inCodeBlock = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+
+    // Check for fenced code block markers (``` or ~~~)
+    if (line.startsWith('```') || line.startsWith('~~~')) {
+      codeBlockLines.add(i);
+      inCodeBlock = !inCodeBlock;
+      continue;
+    }
+
+    if (inCodeBlock) {
+      codeBlockLines.add(i);
+    }
+  }
+
+  return codeBlockLines;
+}
+
+/**
+ * Phase 022: Detect palace annotation in content following a section header
+ * Looks for <!-- palace:keep --> or <!-- palace:split --> comments
+ */
+function detectAnnotation(lines: string[], sectionStartLine: number): PalaceAnnotation {
+  // Check the next few lines after the section header for annotations
+  for (let i = sectionStartLine + 1; i < Math.min(sectionStartLine + 5, lines.length); i++) {
+    const line = lines[i]?.trim() ?? '';
+
+    // Skip empty lines
+    if (line === '') continue;
+
+    // Check for palace annotations
+    if (line.includes('<!-- palace:keep -->')) {
+      return 'keep';
+    }
+    if (line.includes('<!-- palace:split -->')) {
+      return 'split';
+    }
+
+    // Stop searching if we hit actual content (non-empty, non-annotation line)
+    if (!line.startsWith('<!--')) {
+      break;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Phase 022: Detect if a section contains template/example content
+ * Template content patterns:
+ * - Section titles containing "Example", "Template", "Sample"
+ * - Content within <!-- template --> markers
+ * - Sections that are primarily blockquotes (example content)
+ */
+function isTemplateSection(sectionTitle: string, lines: string[], startLine: number, endLine: number): boolean {
+  // Check title for template indicators
+  const templateTitlePatterns = [
+    /example/i,
+    /template/i,
+    /sample/i,
+    /placeholder/i,
+    /demo/i,
+  ];
+
+  if (templateTitlePatterns.some(pattern => pattern.test(sectionTitle))) {
+    return true;
+  }
+
+  // Check content for template markers
+  for (let i = startLine; i <= endLine && i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    if (line.includes('<!-- template') || line.includes('<!-- example')) {
+      return true;
+    }
+  }
+
+  // Check if content is primarily blockquotes (often used for examples)
+  let blockquoteLines = 0;
+  let totalContentLines = 0;
+
+  for (let i = startLine + 1; i <= endLine && i < lines.length; i++) {
+    const line = lines[i]?.trim() ?? '';
+    if (line.length > 0) {
+      totalContentLines++;
+      if (line.startsWith('>')) {
+        blockquoteLines++;
+      }
+    }
+  }
+
+  // If more than 70% is blockquotes, consider it template content
+  if (totalContentLines > 3 && blockquoteLines / totalContentLines > 0.7) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Extract H2 sections from content
+ * Phase 022: Now code-block aware - ignores H2 headers inside code blocks
+ * Phase 022: Now detects annotations and template content
  */
 function extractSections(lines: string[]): SectionInfo[] {
   const sections: SectionInfo[] = [];
   let currentSection: SectionInfo | null = null;
 
+  // Build set of lines inside code blocks to skip
+  const codeBlockLines = buildCodeBlockLineSet(lines);
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
 
+    // Skip lines inside code blocks - they're not real headers
+    if (codeBlockLines.has(i)) {
+      continue;
+    }
+
     if (line.startsWith('## ') && !line.startsWith('### ')) {
-      // End previous section
+      // End previous section and detect template content
       if (currentSection) {
         currentSection.endLine = i - 1;
         currentSection.lineCount = currentSection.endLine - currentSection.startLine + 1;
+        // Phase 022: Detect template content for the completed section
+        currentSection.isTemplateContent = isTemplateSection(
+          currentSection.title,
+          lines,
+          currentSection.startLine,
+          currentSection.endLine
+        );
         sections.push(currentSection);
       }
 
       // Start new section (strip wiki-links from title)
+      const title = stripWikiLinks(line.replace(/^##\s+/, '').trim());
       currentSection = {
-        title: stripWikiLinks(line.replace(/^##\s+/, '').trim()),
+        title,
         startLine: i,
         endLine: lines.length - 1,
         lineCount: 0,
         level: 2,
+        // Phase 022: Detect annotation for this section
+        annotation: detectAnnotation(lines, i),
       };
     }
   }
 
-  // Close last section
+  // Close last section and detect template content
   if (currentSection) {
     currentSection.endLine = lines.length - 1;
     currentSection.lineCount = currentSection.endLine - currentSection.startLine + 1;
+    // Phase 022: Detect template content for the last section
+    currentSection.isTemplateContent = isTemplateSection(
+      currentSection.title,
+      lines,
+      currentSection.startLine,
+      currentSection.endLine
+    );
     sections.push(currentSection);
   }
 
@@ -162,15 +295,24 @@ function extractSections(lines: string[]): SectionInfo[] {
 
 /**
  * Detect sub-concepts within sections (H3+ headings with content)
+ * Phase 022: Now code-block aware - ignores H3+ headers inside code blocks
  */
 function detectSubConcepts(lines: string[], sections: SectionInfo[]): SubConcept[] {
   const subConcepts: SubConcept[] = [];
   const minContentLines = 5; // Minimum lines to be considered a sub-concept
 
+  // Build set of lines inside code blocks to skip
+  const codeBlockLines = buildCodeBlockLineSet(lines);
+
   let currentSubConcept: SubConcept | null = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? '';
+
+    // Skip lines inside code blocks - they're not real headers
+    if (codeBlockLines.has(i)) {
+      continue;
+    }
 
     // Check for H3+ headings
     const headingMatch = line.match(/^(#{3,6})\s+(.+)$/);
@@ -267,6 +409,12 @@ function extractCodeBlocks(lines: string[]): CodeBlockInfo[] {
 
   return codeBlocks;
 }
+
+/**
+ * Export the code block line set builder for use in splitter
+ * Phase 022: Needed for code-block aware splitting
+ */
+export { buildCodeBlockLineSet };
 
 /**
  * Check if content is primarily code

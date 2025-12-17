@@ -260,11 +260,17 @@ export interface VaultIgnoreConfig {
 
 // Atomic note configuration
 // Phase 018: Removed hub_filename - hub names are now derived from title
+// Phase 022: Added min_section_lines, max_children, and hub_sections
 export interface AtomicConfig {
   max_lines: number;
   max_sections: number;
   section_max_lines?: number | undefined;
   auto_split: boolean;
+  // Phase 022: New configurable thresholds
+  min_section_lines?: number | undefined; // Minimum lines for section to be split (default: 5)
+  max_children?: number | undefined; // Maximum children to create (default: 10)
+  // Phase 022: Sections that should stay in hub during splits (case-insensitive match)
+  hub_sections?: string[] | undefined; // e.g., ['Quick Reference', 'Summary', 'Overview']
 }
 
 // Stub configuration

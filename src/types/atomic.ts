@@ -5,6 +5,12 @@
 import type { AtomicConfig } from './index.js';
 
 /**
+ * Palace annotation for controlling split behavior
+ * Phase 022: Annotations in HTML comments
+ */
+export type PalaceAnnotation = 'keep' | 'split' | null;
+
+/**
  * Section information extracted from content
  */
 export interface SectionInfo {
@@ -13,6 +19,10 @@ export interface SectionInfo {
   endLine: number;
   lineCount: number;
   level: number;
+  /** Phase 022: Palace annotation for this section */
+  annotation?: PalaceAnnotation;
+  /** Phase 022: Whether this section contains template/example content */
+  isTemplateContent?: boolean;
 }
 
 /**
@@ -186,6 +196,7 @@ export interface HubChild {
 /**
  * Options for splitting content
  * Phase 018: hubFilename removed - derived from title automatically
+ * Phase 022: Added hub_sections for sections that stay in hub
  */
 export interface SplitOptions {
   /** Target directory for hub and children */
@@ -200,6 +211,8 @@ export interface SplitOptions {
   domain?: string[];
   /** Knowledge layer */
   layer?: string;
+  /** Phase 022: Section titles that should stay in hub (case-insensitive match) */
+  hubSections?: string[];
 }
 
 /**

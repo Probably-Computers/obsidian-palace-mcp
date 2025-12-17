@@ -172,15 +172,31 @@ export const storeTool: Tool = {
             description:
               'Automatically insert wiki-links for mentions of existing notes (default: true)',
           },
+          auto_split: {
+            type: 'boolean',
+            description:
+              'Enable auto-split when content exceeds atomic limits (default: true). Set to false to store as single file.',
+          },
           force_atomic: {
             type: 'boolean',
             description:
-              'Skip atomic splitting even if content exceeds limits (default: false)',
+              'DEPRECATED: Use auto_split: false instead. Skip atomic splitting (default: false)',
           },
           confirm_new_domain: {
             type: 'boolean',
             description:
               'Warn if creating a new top-level domain (default: true)',
+          },
+          split_thresholds: {
+            type: 'object',
+            description: 'Phase 022: Per-operation split threshold overrides',
+            properties: {
+              max_lines: { type: 'number', description: 'Override max lines limit' },
+              max_sections: { type: 'number', description: 'Override max sections limit' },
+              section_max_lines: { type: 'number', description: 'Override max lines per section' },
+              min_section_lines: { type: 'number', description: 'Override minimum section lines' },
+              max_children: { type: 'number', description: 'Override max children limit' },
+            },
           },
         },
       },
@@ -227,8 +243,12 @@ export async function storeHandler(
   const retroactive_link = options?.retroactive_link ?? true;
   const dry_run = options?.dry_run ?? false;
   const autolink = options?.autolink ?? true;
-  const force_atomic = options?.force_atomic ?? false;
+  // Phase 022: Support both auto_split (preferred) and force_atomic (deprecated) for backwards compatibility
+  // auto_split: true means split, force_atomic: true means don't split (inverted)
+  const auto_split = options?.auto_split ?? (options?.force_atomic !== undefined ? !options.force_atomic : true);
   const confirm_new_domain = options?.confirm_new_domain ?? true;
+  // Phase 022: Per-operation split threshold overrides
+  const split_thresholds = options?.split_thresholds;
 
   try {
     // Resolve and validate vault
@@ -331,15 +351,33 @@ export async function storeHandler(
     }
 
     // Check if content should be split (atomic note system)
+    // Phase 022: Use auto_split option directly (respects both auto_split and deprecated force_atomic)
     const atomicConfig = vault.config.atomic;
-    const shouldAutoSplit = atomicConfig.auto_split && !force_atomic;
+    const shouldAutoSplit = atomicConfig.auto_split && auto_split;
+
+    // Phase 022: Merge per-operation threshold overrides with vault config
+    // Filter out undefined values to avoid overwriting required properties
+    const effectiveAtomicConfig = split_thresholds
+      ? {
+          ...atomicConfig,
+          ...Object.fromEntries(
+            Object.entries(split_thresholds).filter(([, v]) => v !== undefined)
+          ),
+        }
+      : atomicConfig;
+
+    // Phase 022: Track if content exceeds limits for warning
+    let atomicWarning: string | undefined;
 
     if (shouldAutoSplit) {
-      const splitDecision = shouldSplit(processedContent, atomicConfig);
+      const splitDecision = shouldSplit(processedContent, effectiveAtomicConfig);
 
       if (splitDecision.shouldSplit) {
         // Content exceeds atomic limits - split into hub + children
         logger.info(`Content exceeds atomic limits: ${splitDecision.reason}`);
+
+        // Phase 022: Get hub_sections from split_thresholds or vault config
+        const hubSections = split_thresholds?.hub_sections ?? effectiveAtomicConfig.hub_sections;
 
         const splitResult = await handleAtomicSplit(
           title,
@@ -352,10 +390,18 @@ export async function storeHandler(
           dry_run,
           create_stubs,
           retroactive_link,
-          linksAdded
+          linksAdded,
+          hubSections
         );
 
         return splitResult;
+      }
+    } else {
+      // Phase 022: Check if content would have been split and warn user
+      const splitDecision = shouldSplit(processedContent, effectiveAtomicConfig);
+      if (splitDecision.shouldSplit) {
+        atomicWarning = `Content exceeds atomic limits (${splitDecision.metrics.lineCount} lines, ${splitDecision.metrics.sectionCount} sections). Set auto_split: true to auto-split.`;
+        logger.info(`Atomic warning: ${atomicWarning}`);
       }
     }
 
@@ -495,6 +541,8 @@ export async function storeHandler(
                 from_existing: linksFromExisting,
               }
             : undefined,
+        // Phase 022: Include warning if content exceeds limits but auto_split is disabled
+        atomic_warning: atomicWarning,
         message: buildSuccessMessage(
           finalResolution.relativePath,
           linksAdded,
@@ -577,6 +625,7 @@ function buildSuccessMessage(
 
 /**
  * Handle atomic splitting of large content
+ * Phase 022: Added hubSections parameter for sections that stay in hub
  */
 async function handleAtomicSplit(
   title: string,
@@ -597,7 +646,8 @@ async function handleAtomicSplit(
   dryRun: boolean,
   createStubs: boolean,
   retroactiveLink: boolean,
-  linksAdded: number
+  linksAdded: number,
+  hubSections?: string[] // Phase 022: Sections that stay in hub
 ): Promise<ToolResult<PalaceStoreOutput>> {
   const linksFromExisting: string[] = [];
 
@@ -606,6 +656,7 @@ async function handleAtomicSplit(
 
   // Split the content
   // Phase 018: hubFilename removed - derived from title automatically
+  // Phase 022: Pass hubSections to splitter
   const splitResult = splitContent(content, {
     targetDir,
     title,
@@ -616,12 +667,33 @@ async function handleAtomicSplit(
       confidence: source?.confidence ?? 0.5,
     },
     domain: intent.domain,
+    hubSections, // Phase 022: Sections that stay in hub
   });
 
   const createdPaths: string[] = [];
   const stubsCreated: string[] = [];
 
   if (!dryRun) {
+    // Phase 022: Extract intro/overview content from split result for hub preservation
+    // The hub.content has format: "# Title\n\n{intro}\n\n## Knowledge Map\n..."
+    // Extract the intro between title and Knowledge Map
+    const hubContentLines = splitResult.hub.content.split('\n');
+    const introLines: string[] = [];
+    let foundTitle = false;
+    for (const line of hubContentLines) {
+      if (line.startsWith('# ') && !foundTitle) {
+        foundTitle = true;
+        continue;
+      }
+      if (line.startsWith('## Knowledge Map')) {
+        break;
+      }
+      if (foundTitle) {
+        introLines.push(line);
+      }
+    }
+    const hubOverview = introLines.join('\n').trim();
+
     // Create hub note
     const hubResult = await createHub(
       vault.path,
@@ -642,6 +714,8 @@ async function handleAtomicSplit(
         originalFrontmatter: {
           capture_type: intent.capture_type,
         },
+        // Phase 022: Pass overview to preserve intro content
+        overview: hubOverview,
       }
     );
 

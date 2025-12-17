@@ -131,8 +131,18 @@ export interface StorageOptions {
   retroactive_link?: boolean; // Update existing notes (default: true)
   dry_run?: boolean; // Preview without saving
   autolink?: boolean; // Auto-link content (default: true)
-  force_atomic?: boolean; // Skip atomic splitting (default: false)
+  auto_split?: boolean; // Auto-split if exceeds atomic limits (default: true)
+  force_atomic?: boolean; // DEPRECATED: Use auto_split: false instead (default: false)
   confirm_new_domain?: boolean; // Require confirmation for new top-level domains (default: true)
+  // Phase 022: Per-operation split threshold overrides
+  split_thresholds?: {
+    max_lines?: number; // Override max lines limit
+    max_sections?: number; // Override max sections limit
+    section_max_lines?: number; // Override max lines per section
+    min_section_lines?: number; // Override minimum section lines
+    max_children?: number; // Override max children limit
+    hub_sections?: string[]; // Sections that stay in hub (case-insensitive match)
+  };
 }
 
 // ============================================
@@ -206,6 +216,9 @@ export interface PalaceStoreOutput {
 
   // If content was split into hub + children
   split_result?: AtomicSplitResult | undefined;
+
+  // Warning if content exceeds atomic limits but auto_split is disabled
+  atomic_warning?: string | undefined;
 
   // Summary message
   message: string;
@@ -286,7 +299,8 @@ export type ImprovementMode =
   | 'update_section' // Update specific section
   | 'merge' // Intelligently merge
   | 'replace' // Full replacement
-  | 'frontmatter'; // Update frontmatter only
+  | 'frontmatter' // Update frontmatter only
+  | 'consolidate'; // Phase 022: Merge children back into hub
 
 /**
  * Input for palace_improve
@@ -301,6 +315,8 @@ export interface PalaceImproveInput {
   auto_split?: boolean; // Auto-split if exceeds atomic limits (default: true)
   author?: string; // Author of this update
   vault?: string;
+  // Phase 022: Consolidation options
+  delete_children?: boolean; // Delete child files after consolidation (default: true)
 }
 
 /**
@@ -319,11 +335,20 @@ export interface PalaceImproveOutput {
     frontmatter_updated?: string[];
     links_added?: number;
     atomic_warning?: string;
+    // Phase 022: Consolidation changes
+    children_consolidated?: number;
+    children_deleted?: string[];
   };
   version: number; // New palace.version
   message: string;
   // If content was auto-split into hub + children
   split_result?: AtomicSplitResult | undefined;
+  // Phase 022: If content was consolidated from children
+  consolidation_result?: {
+    children_merged: string[];
+    children_deleted: string[];
+    sections_added: string[];
+  } | undefined;
 }
 
 // ============================================
@@ -446,8 +471,18 @@ export const storageOptionsSchema = z.object({
   retroactive_link: z.boolean().optional().default(true),
   dry_run: z.boolean().optional().default(false),
   autolink: z.boolean().optional().default(true),
-  force_atomic: z.boolean().optional().default(false),
+  auto_split: z.boolean().optional().default(true),
+  force_atomic: z.boolean().optional().default(false), // DEPRECATED: Use auto_split: false
   confirm_new_domain: z.boolean().optional().default(true),
+  // Phase 022: Per-operation split threshold overrides
+  split_thresholds: z.object({
+    max_lines: z.number().optional(),
+    max_sections: z.number().optional(),
+    section_max_lines: z.number().optional(),
+    min_section_lines: z.number().optional(),
+    max_children: z.number().optional(),
+    hub_sections: z.array(z.string()).optional(),
+  }).optional(),
 });
 
 export const palaceStoreInputSchema = z.object({
@@ -465,6 +500,7 @@ export const improvementModeSchema = z.enum([
   'merge',
   'replace',
   'frontmatter',
+  'consolidate', // Phase 022: Merge children back into hub
 ]);
 
 export const palaceImproveInputSchema = z.object({
@@ -477,6 +513,8 @@ export const palaceImproveInputSchema = z.object({
   auto_split: z.boolean().optional().default(true),
   author: z.string().optional(),
   vault: z.string().optional(),
+  // Phase 022: Consolidation options
+  delete_children: z.boolean().optional().default(true),
 });
 
 export const palaceCheckInputSchema = z.object({

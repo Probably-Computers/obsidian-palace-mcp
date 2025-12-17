@@ -32,11 +32,17 @@ const ignoreConfigSchema = z.object({
 
 // Zod schema for atomic config
 // Phase 018: Removed hub_filename - hub names are now derived from title
+// Phase 022: Added min_section_lines, max_children, and hub_sections
 const atomicConfigSchema = z.object({
   max_lines: z.number().default(200),
   max_sections: z.number().default(6),
   section_max_lines: z.number().optional(),
   auto_split: z.boolean().default(true),
+  // Phase 022: New configurable thresholds
+  min_section_lines: z.number().optional(), // Minimum lines for section to be split (default: 5)
+  max_children: z.number().optional(), // Maximum children to create (default: 10)
+  // Phase 022: Sections that stay in hub during splits
+  hub_sections: z.array(z.string()).optional(), // e.g., ['Quick Reference', 'Summary']
 });
 
 // Zod schema for stub config

@@ -317,3 +317,275 @@ describe('Hub Manager', () => {
     expect(getHubPath('folder', 'My Hub')).toBe('folder/My Hub.md');
   });
 });
+
+// Phase 022: Content-Aware Split Detection Tests
+describe('Phase 022: Content-Aware Split Detection', () => {
+  describe('Code block awareness', () => {
+    it('should ignore H2 headers inside code blocks', () => {
+      const content = `# Documentation
+
+## Introduction
+
+Some intro text.
+
+\`\`\`markdown
+## This Header Inside Code Block Should Not Create A Section
+
+Example content in code block
+\`\`\`
+
+## Real Section
+
+This is a real section.`;
+      const analysis = analyzeContent(content);
+      // Should only detect 2 real sections, not the one inside code block
+      expect(analysis.sectionCount).toBe(2);
+      expect(analysis.sections.map(s => s.title)).toEqual(['Introduction', 'Real Section']);
+    });
+
+    it('should handle tilde code blocks', () => {
+      const content = `# Doc
+
+## First
+
+~~~markdown
+## Fake Header
+~~~
+
+## Second`;
+      const analysis = analyzeContent(content);
+      expect(analysis.sectionCount).toBe(2);
+    });
+  });
+
+  describe('Annotation detection', () => {
+    it('should detect palace:keep annotation', () => {
+      const content = `# Title
+
+## Quick Reference
+<!-- palace:keep -->
+This should stay in hub.
+
+## Details
+This can be split out.`;
+      const analysis = analyzeContent(content);
+      expect(analysis.sections.length).toBe(2);
+      expect(analysis.sections[0]?.annotation).toBe('keep');
+      expect(analysis.sections[1]?.annotation).toBeNull();
+    });
+
+    it('should detect palace:split annotation', () => {
+      const content = `# Title
+
+## Overview
+
+General info.
+
+## Deep Dive
+<!-- palace:split -->
+This should definitely be split.`;
+      const analysis = analyzeContent(content);
+      expect(analysis.sections[1]?.annotation).toBe('split');
+    });
+
+    it('should handle annotation with empty lines before it', () => {
+      const content = `# Title
+
+## Section
+
+<!-- palace:keep -->
+
+Content after annotation.`;
+      const analysis = analyzeContent(content);
+      expect(analysis.sections[0]?.annotation).toBe('keep');
+    });
+  });
+
+  describe('Template content detection', () => {
+    it('should detect sections with Example in title', () => {
+      const content = `# PR Template
+
+## Description
+
+Fill in description.
+
+## Example Usage
+
+> Example: Your PR description goes here`;
+      const analysis = analyzeContent(content);
+      expect(analysis.sections.find(s => s.title === 'Example Usage')?.isTemplateContent).toBe(true);
+    });
+
+    it('should detect sections with Template in title', () => {
+      const content = `# Standard
+
+## Requirements
+
+List requirements.
+
+## Template Response
+
+> Your response format...`;
+      const analysis = analyzeContent(content);
+      expect(analysis.sections.find(s => s.title === 'Template Response')?.isTemplateContent).toBe(true);
+    });
+
+    it('should detect sections that are primarily blockquotes', () => {
+      const content = `# Guide
+
+## Format
+
+> Line 1
+> Line 2
+> Line 3
+> Line 4
+> Line 5`;
+      const analysis = analyzeContent(content);
+      // More than 70% blockquotes with more than 3 content lines
+      expect(analysis.sections[0]?.isTemplateContent).toBe(true);
+    });
+
+    it('should detect template markers in content', () => {
+      const content = `# Doc
+
+## Section
+
+<!-- template-start -->
+Example template content here
+<!-- template-end -->`;
+      const analysis = analyzeContent(content);
+      expect(analysis.sections[0]?.isTemplateContent).toBe(true);
+    });
+  });
+});
+
+describe('Phase 022: Content Splitter Integration', () => {
+  it('should keep sections with palace:keep annotation in hub', async () => {
+    const { splitBySections } = await import('../../../src/services/atomic/splitter.js');
+
+    const content = `# My Document
+
+Intro content.
+
+## Quick Reference
+<!-- palace:keep -->
+This stays in hub.
+
+## Details
+
+Details that can be split.
+
+## More Details
+
+More content.`;
+
+    const analysis = analyzeContent(content);
+    const result = splitBySections(content, analysis, {
+      targetDir: 'test',
+      title: 'My Document',
+    });
+
+    // Quick Reference should be in hub, not as a child
+    expect(result.children.length).toBe(2); // Only Details and More Details
+    expect(result.children.map(c => c.title)).toContain('Details');
+    expect(result.children.map(c => c.title)).toContain('More Details');
+    expect(result.children.map(c => c.title)).not.toContain('Quick Reference');
+
+    // Hub content should include Quick Reference section
+    expect(result.hub.content).toContain('## Quick Reference');
+  });
+
+  it('should keep template sections in hub', async () => {
+    const { splitBySections } = await import('../../../src/services/atomic/splitter.js');
+
+    const content = `# Template Doc
+
+## Overview
+
+Overview content here.
+
+## Example Format
+
+> Sample format line 1
+> Sample format line 2
+> Sample format line 3
+> Sample format line 4
+> Sample format line 5
+
+## Implementation
+
+Implementation details.`;
+
+    const analysis = analyzeContent(content);
+    const result = splitBySections(content, analysis, {
+      targetDir: 'test',
+      title: 'Template Doc',
+    });
+
+    // Example Format (template content) should stay in hub
+    expect(result.children.map(c => c.title)).not.toContain('Example Format');
+    expect(result.hub.content).toContain('## Example Format');
+  });
+
+  it('should respect hub_sections configuration', async () => {
+    const { splitBySections } = await import('../../../src/services/atomic/splitter.js');
+
+    const content = `# Standard
+
+## Summary
+
+Brief summary.
+
+## Requirements
+
+Detailed requirements.
+
+## Implementation
+
+Implementation guide.`;
+
+    const analysis = analyzeContent(content);
+    const result = splitBySections(content, analysis, {
+      targetDir: 'test',
+      title: 'Standard',
+      hubSections: ['Summary'], // Keep Summary in hub
+    });
+
+    // Summary should stay in hub
+    expect(result.children.map(c => c.title)).not.toContain('Summary');
+    expect(result.hub.content).toContain('## Summary');
+
+    // Requirements and Implementation should be children
+    expect(result.children.map(c => c.title)).toContain('Requirements');
+    expect(result.children.map(c => c.title)).toContain('Implementation');
+  });
+
+  it('should handle multiple hub_sections patterns', async () => {
+    const { splitBySections } = await import('../../../src/services/atomic/splitter.js');
+
+    const content = `# Doc
+
+## Quick Reference
+
+Quick ref content.
+
+## Overview
+
+Overview content.
+
+## Details
+
+Details here.`;
+
+    const analysis = analyzeContent(content);
+    const result = splitBySections(content, analysis, {
+      targetDir: 'test',
+      title: 'Doc',
+      hubSections: ['Quick Reference', 'Overview'],
+    });
+
+    // Both should stay in hub
+    expect(result.children.length).toBe(1);
+    expect(result.children[0]?.title).toBe('Details');
+  });
+});
