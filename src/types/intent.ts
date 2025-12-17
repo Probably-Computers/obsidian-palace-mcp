@@ -143,6 +143,8 @@ export interface StorageOptions {
     max_children?: number; // Override max children limit
     hub_sections?: string[]; // Sections that stay in hub (case-insensitive match)
   };
+  // Phase 026: Portable storage mode
+  portable?: boolean; // Store as portable single file (no splitting, no stubs, plain text links)
 }
 
 // ============================================
@@ -505,6 +507,8 @@ export const storageOptionsSchema = z.object({
     max_children: z.number().optional(),
     hub_sections: z.array(z.string()).optional(),
   }).optional(),
+  // Phase 026: Portable storage mode
+  portable: z.boolean().optional().default(false),
 });
 
 export const palaceStoreInputSchema = z.object({

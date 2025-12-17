@@ -317,6 +317,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_stubs | ✅ | List and manage stub notes that need expansion |
 | palace_delete | ✅ | Safe note deletion with backlink handling and operation tracking |
 | palace_repair | ✅ | Metadata repair (types, children_count, dates, domains) |
+| palace_export | ✅ | Export notes in various formats (markdown, clean markdown, HTML) |
 
 ### palace_recall
 
@@ -572,6 +573,7 @@ Intent-based knowledge storage. AI expresses WHAT to store, Palace determines WH
     autolink?: boolean;    // Auto-link to existing notes (default: true)
     dry_run?: boolean;     // Preview without saving (default: false)
     auto_split?: boolean;  // Enable auto-split when exceeding limits (default: true)
+    portable?: boolean;    // Portable mode: single file, no stubs, plain text links (default: false)
     split_thresholds?: {   // Per-operation threshold overrides
       max_lines?: number;
       max_sections?: number;
@@ -1076,6 +1078,61 @@ Repair common metadata issues in vault notes (Phase 025):
 
 // Apply all repairs to entire vault
 { dry_run: false, repairs: ["all"] }
+```
+
+### palace_export
+
+Export notes in various formats (Phase 026). Supports single notes, hub + children consolidated, or directories:
+
+```typescript
+{
+  path: string;                    // Note path or directory to export (required)
+  vault?: string;                  // Vault alias
+  format?: 'markdown' | 'clean_markdown' | 'resolved_markdown' | 'html';  // Export format (default: markdown)
+  include_children?: boolean;      // Include hub children (default: true)
+  include_frontmatter?: boolean;   // Include frontmatter in output (default: false)
+  frontmatter_as_header?: boolean; // Convert frontmatter to readable header (default: false)
+  link_style?: 'keep' | 'plain_text' | 'relative' | 'remove';  // Override link processing
+  output_path?: string;            // Write to file instead of returning
+  allow_outside_vault?: boolean;   // Allow writing outside vault (default: false)
+}
+```
+
+**Export Formats:**
+- `markdown`: Original markdown with wiki-links intact
+- `clean_markdown`: Wiki-links converted to plain text
+- `resolved_markdown`: Wiki-links converted to relative markdown links
+- `html`: Rendered HTML with optional styling
+
+**Link Styles:**
+- `keep`: Leave [[wiki-links]] as is (default for markdown)
+- `plain_text`: Convert [[Note]] to Note, [[Note|alias]] to alias (default for clean_markdown)
+- `relative`: Convert [[Note]] to [Note](./Note.md) (default for resolved_markdown)
+- `remove`: Remove wiki-links entirely
+
+**Features:**
+- Automatically consolidates hub notes with children into single document
+- Handles nested hub structures recursively
+- Frontmatter can be included as YAML or converted to readable header
+- Can write to file inside or outside vault
+
+**Output includes:**
+- `content`: Exported content string
+- `format`: Format used
+- `sources`: Files that were combined
+- `outputPath`: Path if written to file
+- `warnings`: Any warnings encountered
+
+**Example:**
+```typescript
+// Export hub with all children as clean markdown
+{ path: "kubernetes/Kubernetes.md", format: "clean_markdown" }
+
+// Export as HTML to file
+{ path: "docs/guide.md", format: "html", output_path: "exports/guide.html" }
+
+// Export with frontmatter as readable header
+{ path: "research/topic.md", include_frontmatter: true, frontmatter_as_header: true }
 ```
 
 ## Valid Note Types (Phase 025)

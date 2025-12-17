@@ -36,6 +36,7 @@ import { clarifyTool, clarifyHandler } from './clarify.js';
 import { stubsTool, stubsHandler } from './stubs.js';
 import { deleteTool, deleteHandler } from './delete.js';
 import { repairTool, repairHandler } from './repair.js';
+import { exportTool, exportHandler } from './export.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -122,6 +123,10 @@ export function registerTools(): void {
   // Phase 025 tools - Metadata Integrity
   tools.set('palace_repair', repairTool);
   handlers.set('palace_repair', repairHandler);
+
+  // Phase 026 tools - Export & Portability
+  tools.set('palace_export', exportTool);
+  handlers.set('palace_export', exportHandler);
 }
 
 /**

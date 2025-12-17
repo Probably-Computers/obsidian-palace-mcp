@@ -36,6 +36,7 @@ import {
   scanForMatches,
   autolinkContent,
 } from '../services/autolink/index.js';
+import { processWikiLinks } from '../utils/markdown.js';
 import { getIndexManager } from '../services/index/index.js';
 import { getIndexedPaths, indexNote } from '../services/index/sync.js';
 import { readNote } from '../services/vault/reader.js';
@@ -203,6 +204,11 @@ export const storeTool: Tool = {
               max_children: { type: 'number', description: 'Override max children limit' },
             },
           },
+          portable: {
+            type: 'boolean',
+            description:
+              'Phase 026: Portable mode - store as single file with no splitting, no stubs, and wiki-links converted to plain text. Use for content meant to be shared outside the vault.',
+          },
         },
       },
       source: {
@@ -244,13 +250,16 @@ export async function storeHandler(
   const { title, content, intent, options, source } = parseResult.data;
 
   const vaultParam = options?.vault;
-  const create_stubs = options?.create_stubs ?? true;
-  const retroactive_link = options?.retroactive_link ?? true;
+  const portable = options?.portable ?? false;
+  // Phase 026: Portable mode overrides several options
+  const create_stubs = portable ? false : (options?.create_stubs ?? true);
+  const retroactive_link = portable ? false : (options?.retroactive_link ?? true);
   const dry_run = options?.dry_run ?? false;
-  const autolink = options?.autolink ?? true;
+  const autolink = portable ? false : (options?.autolink ?? true);
   // Phase 022: Support both auto_split (preferred) and force_atomic (deprecated) for backwards compatibility
   // auto_split: true means split, force_atomic: true means don't split (inverted)
-  const auto_split = options?.auto_split ?? (options?.force_atomic !== undefined ? !options.force_atomic : true);
+  // Phase 026: Portable mode disables splitting
+  const auto_split = portable ? false : (options?.auto_split ?? (options?.force_atomic !== undefined ? !options.force_atomic : true));
   const confirm_new_domain = options?.confirm_new_domain ?? true;
   // Phase 022: Per-operation split threshold overrides
   const split_thresholds = options?.split_thresholds;
@@ -364,6 +373,11 @@ export async function storeHandler(
       } catch (linkError) {
         logger.warn('Auto-linking failed, proceeding without', linkError);
       }
+    }
+
+    // Phase 026: Convert wiki-links to plain text for portable mode
+    if (portable) {
+      processedContent = processWikiLinks(processedContent, 'plain_text');
     }
 
     // Check if content should be split (atomic note system)
