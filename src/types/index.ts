@@ -286,6 +286,20 @@ export interface GraphConfig {
   retroactive_linking: boolean;
 }
 
+// Autolink configuration (Phase 024)
+export type LinkMode = 'all' | 'first_per_section' | 'first_per_note';
+export type DomainScope = 'any' | 'same_domain' | string[];
+
+export interface AutolinkConfig {
+  link_mode: LinkMode;
+  stop_words?: string[] | undefined; // Additional stop words (merged with defaults)
+  stop_words_override?: string[] | undefined; // Complete replacement of stop words
+  domain_scope: DomainScope;
+  min_title_length: number;
+  max_links_per_paragraph?: number | undefined; // Limit link density
+  min_word_distance?: number | undefined; // Minimum words between links
+}
+
 // Per-vault info section
 export interface VaultInfo {
   name: string;
@@ -301,6 +315,7 @@ export interface VaultConfig {
   atomic: AtomicConfig;
   stubs: StubConfig;
   graph: GraphConfig;
+  autolink: AutolinkConfig; // Phase 024
 }
 
 // Resolved vault with both global and per-vault config

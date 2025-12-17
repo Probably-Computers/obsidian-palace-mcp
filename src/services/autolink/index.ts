@@ -7,9 +7,18 @@ export {
   buildTitleIndex,
   buildLinkableIndex,
   scanForMatches,
+  filterByLinkMode,
+  filterByStopWords,
+  filterByDomainScope,
+  filterByLinkDensity,
+  analyzeLinkDensity,
   DEFAULT_MIN_TITLE_LENGTH,
+  DEFAULT_STOP_WORDS,
   type LinkableTitle,
   type AutolinkMatch,
+  type LinkMode,
+  type LinkDensityOptions,
+  type LinkDensityWarning,
 } from './scanner.js';
 
 // Linker exports

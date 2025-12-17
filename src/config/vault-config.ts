@@ -58,6 +58,21 @@ const graphConfigSchema = z.object({
   retroactive_linking: z.boolean().default(true),
 });
 
+// Zod schema for autolink config (Phase 024)
+const autolinkConfigSchema = z.object({
+  link_mode: z.enum(['all', 'first_per_section', 'first_per_note']).default('first_per_section'),
+  stop_words: z.array(z.string()).optional(), // Additional stop words (merged with defaults)
+  stop_words_override: z.array(z.string()).optional(), // Complete replacement of stop words
+  domain_scope: z.union([
+    z.literal('any'),
+    z.literal('same_domain'),
+    z.array(z.string()), // Specific domains to allow
+  ]).default('any'),
+  min_title_length: z.number().min(1).max(50).default(3),
+  max_links_per_paragraph: z.number().optional(), // Limit link density
+  min_word_distance: z.number().optional(), // Minimum words between links
+});
+
 // Zod schema for vault info
 const vaultInfoSchema = z.object({
   name: z.string(),
@@ -65,7 +80,7 @@ const vaultInfoSchema = z.object({
   mode: z.enum(['rw', 'ro']).optional(),
 });
 
-// Zod schema for complete vault config (Phase 017)
+// Zod schema for complete vault config (Phase 017, updated Phase 024)
 const vaultConfigSchema = z.object({
   vault: vaultInfoSchema,
   structure: vaultStructureSchema.default({}),
@@ -73,6 +88,7 @@ const vaultConfigSchema = z.object({
   atomic: atomicConfigSchema.default({}),
   stubs: stubConfigSchema.default({}),
   graph: graphConfigSchema.default({}),
+  autolink: autolinkConfigSchema.default({}), // Phase 024
 });
 
 /**
@@ -114,6 +130,11 @@ export function createDefaultVaultConfig(
       require_technology_links: false,
       warn_orphan_depth: 1,
       retroactive_linking: true,
+    },
+    autolink: {
+      link_mode: 'first_per_section',
+      domain_scope: 'any',
+      min_title_length: 3,
     },
   };
 }
@@ -193,6 +214,15 @@ export function loadVaultConfig(
         retroactive_linking:
           parsed.graph.retroactive_linking ?? defaults.graph.retroactive_linking,
       },
+      autolink: {
+        link_mode: parsed.autolink?.link_mode ?? defaults.autolink.link_mode,
+        stop_words: parsed.autolink?.stop_words,
+        stop_words_override: parsed.autolink?.stop_words_override,
+        domain_scope: parsed.autolink?.domain_scope ?? defaults.autolink.domain_scope,
+        min_title_length: parsed.autolink?.min_title_length ?? defaults.autolink.min_title_length,
+        max_links_per_paragraph: parsed.autolink?.max_links_per_paragraph,
+        min_word_distance: parsed.autolink?.min_word_distance,
+      },
     };
 
     return mergedConfig;
@@ -230,6 +260,7 @@ export const schemas = {
   atomicConfig: atomicConfigSchema,
   stubConfig: stubConfigSchema,
   graphConfig: graphConfigSchema,
+  autolinkConfig: autolinkConfigSchema,
   vaultInfo: vaultInfoSchema,
   vaultConfig: vaultConfigSchema,
 };

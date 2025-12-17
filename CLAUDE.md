@@ -236,6 +236,17 @@ graph:
   require_technology_links: true
   warn_orphan_depth: 1
   retroactive_linking: true
+
+# Phase 024: Autolink configuration
+autolink:
+  link_mode: first_per_section  # all, first_per_section, first_per_note
+  stop_words:                    # Additional stop words (merged with defaults)
+    - MyCompanyName
+    - CustomTerm
+  domain_scope: any              # any, same_domain, or [domain1, domain2]
+  min_title_length: 3
+  max_links_per_paragraph: 5     # Limit links per paragraph
+  min_word_distance: 3           # Minimum words between links
 ```
 
 ### Ignore Mechanism
@@ -415,9 +426,15 @@ Automatically insert wiki-links in notes by finding mentions of existing note ti
 {
   path?: string;              // Note path or directory (default: entire vault)
   dry_run?: boolean;          // Preview only, no changes (default: true)
-  min_title_length?: number;  // Minimum title length to match (default: 3)
+  min_title_length?: number;  // Minimum title length to match (uses vault config default)
   exclude_paths?: string[];   // Paths to skip
   include_aliases?: boolean;  // Include note aliases in matching (default: true)
+  // Phase 024: New options
+  link_mode?: 'all' | 'first_per_section' | 'first_per_note';  // How many times to link each term (default: first_per_section)
+  stop_words?: string[];      // Terms to never link (merged with defaults)
+  domain_scope?: 'any' | 'same_domain' | string[];  // Limit linking to specific domains
+  max_links_per_paragraph?: number;  // Limit link density per paragraph
+  min_word_distance?: number;  // Minimum words between links
 }
 ```
 
@@ -427,6 +444,30 @@ Automatically insert wiki-links in notes by finding mentions of existing note ti
 - Preserves original case using display text: `[[Docker|DOCKER]]`
 - Skips code blocks, inline code, existing links, URLs, headings, and frontmatter
 - Built into `palace_store` and `palace_improve` (controlled via `autolink` parameter)
+
+**Link Mode (Phase 024):**
+- `all`: Link every occurrence of matching terms
+- `first_per_section`: Link only first occurrence per H2 section (default, reduces visual clutter)
+- `first_per_note`: Link only first occurrence in entire note
+
+**Stop Words (Phase 024):**
+Default stop words include generic terms like: overview, documentation, configuration, deployment, development, implementation, architecture, performance, security, testing, references, related, etc. These can be extended via vault config or per-call.
+
+Stop words support both plain strings and regex patterns. Regex patterns are enclosed in forward slashes:
+- `overview` - Match exact term (case-insensitive)
+- `/^Test/` - Match any term starting with "Test"
+- `/draft.*v\d+/i` - Match patterns like "draft-v1", "DraftV2"
+
+**Link Density Warnings (Phase 024):**
+Use `warn_density: true` to get warnings when link density is high. Warnings include:
+- `high_density` - More than 10% of words would be linked
+- `paragraph_overload` - A paragraph has more than 5 links
+- `clustered_links` - Average distance between links is less than 10 words
+
+**Domain Scoping (Phase 024):**
+- `any`: Link to notes in any domain (default)
+- `same_domain`: Only link to notes in the same top-level folder
+- `['tech', 'infra']`: Only link to notes in specified domains
 
 ### palace_dataview
 
