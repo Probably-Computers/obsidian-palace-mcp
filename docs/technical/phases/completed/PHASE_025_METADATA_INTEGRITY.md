@@ -94,7 +94,9 @@
 ### 025.8: Testing & Validation
 - [x] Unit tests for type validation (25 tests)
 - [x] Unit tests for frontmatter schema (18 tests)
-- [x] All 523 tests passing
+- [x] Unit tests for children-count (13 tests)
+- [x] Integration tests for palace_repair (19 tests)
+- [x] All 555 tests passing
 - [x] Type normalization tested with real-world cases
 
 ### 025.9: Documentation
@@ -227,7 +229,7 @@ const repairSchema = z.object({
 - Tests for children_count accuracy
 
 ### Quality Checks
-- [x] All existing tests still pass (480 original + 43 new = 523)
+- [x] All existing tests still pass (480 original + 75 new = 555)
 - [x] Validation doesn't break valid notes
 - [x] Repair operations are idempotent
 - [x] Performance acceptable for large vaults
@@ -240,7 +242,7 @@ const repairSchema = z.object({
 - [x] Stubs not created for stop-words
 - [x] `palace_repair` tool available and documented
 - [x] Frontmatter validation catches common issues
-- [x] All tests passing (523 tests)
+- [x] All tests passing (555 tests)
 - [x] Documentation updated
 
 ## Risks & Mitigation
