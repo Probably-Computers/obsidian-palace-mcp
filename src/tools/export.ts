@@ -193,10 +193,14 @@ export async function exportHandler(
       includeChildren: include_children,
       includeFrontmatter: include_frontmatter,
       frontmatterAsHeader: frontmatter_as_header,
-      linkStyle: link_style as LinkStyle | undefined,
-      outputPath: output_path,
       allowOutsideVault: allow_outside_vault,
     };
+    if (link_style) {
+      exportOptions.linkStyle = link_style as LinkStyle;
+    }
+    if (output_path) {
+      exportOptions.outputPath = output_path;
+    }
 
     // Export
     const result = isDirectory
@@ -223,19 +227,23 @@ export async function exportHandler(
       message += ` (${result.warnings.length} warning${result.warnings.length > 1 ? 's' : ''})`;
     }
 
+    const outputData: PalaceExportOutput = {
+      success: true,
+      vault: vaultInfo.vault,
+      vaultPath: vaultInfo.vault_path,
+      content: result.content,
+      format: result.format,
+      sources: result.sources,
+      warnings: result.warnings,
+      message,
+    };
+    if (result.outputPath) {
+      outputData.outputPath = result.outputPath;
+    }
+
     return {
       success: true,
-      data: {
-        success: true,
-        vault: vaultInfo.vault,
-        vaultPath: vaultInfo.vault_path,
-        content: result.content,
-        format: result.format,
-        sources: result.sources,
-        outputPath: result.outputPath,
-        warnings: result.warnings,
-        message,
-      },
+      data: outputData,
     };
   } catch (error) {
     logger.error('Export error', error);

@@ -77,9 +77,17 @@ src/
 │   │   ├── tracker.ts         # Track file operations
 │   │   ├── cleanup.ts         # Generate cleanup suggestions
 │   │   └── index.ts
-│   └── metadata/              # Metadata integrity (Phase 025)
-│       ├── domain-analyzer.ts # Domain tag analysis
-│       ├── index-sync.ts      # Index synchronization verification
+│   ├── metadata/              # Metadata integrity (Phase 025)
+│   │   ├── domain-analyzer.ts # Domain tag analysis
+│   │   ├── index-sync.ts      # Index synchronization verification
+│   │   └── index.ts
+│   ├── export/                # Export service (Phase 026)
+│   │   ├── exporter.ts        # Export rendering
+│   │   ├── consolidator.ts    # Hub consolidation
+│   │   └── index.ts
+│   └── batch/                 # Batch operations (Phase 027)
+│       ├── selector.ts        # Note selection logic
+│       ├── operations.ts      # Batch operation implementations
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── store.ts               # palace_store (intent-based storage)
@@ -102,6 +110,8 @@ src/
 │   ├── stubs.ts               # palace_stubs
 │   ├── delete.ts              # palace_delete
 │   ├── repair.ts              # palace_repair (Phase 025)
+│   ├── export.ts              # palace_export (Phase 026)
+│   ├── batch.ts               # palace_batch (Phase 027)
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -318,6 +328,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_delete | ✅ | Safe note deletion with backlink handling and operation tracking |
 | palace_repair | ✅ | Metadata repair (types, children_count, dates, domains) |
 | palace_export | ✅ | Export notes in various formats (markdown, clean markdown, HTML) |
+| palace_batch | ✅ | Batch operations for multiple notes (tags, frontmatter, move, rename, delete) |
 
 ### palace_recall
 
@@ -1133,6 +1144,108 @@ Export notes in various formats (Phase 026). Supports single notes, hub + childr
 
 // Export with frontmatter as readable header
 { path: "research/topic.md", include_frontmatter: true, frontmatter_as_header: true }
+```
+
+### palace_batch
+
+Batch operations for multiple notes at once (Phase 027):
+
+```typescript
+{
+  vault?: string;              // Vault alias
+  select: {                    // Selection criteria (required)
+    glob?: string;             // Glob pattern (e.g., "**/*.md", "projects/**/Related.md")
+    type?: string;             // Filter by note type
+    tags?: string[];           // Filter by tags (AND logic)
+    domain?: string[];         // Filter by domain path prefix
+    path_prefix?: string;      // Filter by path prefix
+    exclude?: string[];        // Patterns to exclude
+  };
+  operation: {                 // Operation to perform (required)
+    type: 'update_frontmatter' | 'add_tags' | 'remove_tags' | 'move' | 'rename' | 'delete';
+    // ... operation-specific fields
+  };
+  dry_run?: boolean;           // Preview without changes (default: true)
+  confirm?: boolean;           // Required for delete operations
+  limit?: number;              // Maximum notes to process
+}
+```
+
+**Selection Methods:**
+- `glob`: Match files by pattern (e.g., `"**/*.md"`, `"projects/**/Related.md"`)
+- `type`: Filter by note type
+- `tags`: Filter by tags (AND logic - must have all tags)
+- `domain`: Filter by domain path prefix
+- `path_prefix`: Filter by path prefix
+- `exclude`: Patterns to exclude from selection
+
+**Operations:**
+
+1. **update_frontmatter**: Modify frontmatter fields
+```typescript
+{ type: 'update_frontmatter', updates: { verified: true, confidence: 0.9 }, merge: true }
+```
+
+2. **add_tags**: Add tags to selected notes
+```typescript
+{ type: 'add_tags', tags: ['new-tag', 'another-tag'] }
+```
+
+3. **remove_tags**: Remove tags from selected notes
+```typescript
+{ type: 'remove_tags', tags: ['old-tag'] }
+```
+
+4. **move**: Move notes to a new directory
+```typescript
+{ type: 'move', destination: 'archive/', update_backlinks: true }
+```
+
+5. **rename**: Rename notes using regex pattern replacement
+```typescript
+{ type: 'rename', match: '^(.+)/Overview\\.md$', pattern: '$1/Research Overview.md', update_backlinks: true }
+```
+
+6. **delete**: Delete selected notes (requires `confirm: true` when `dry_run: false`)
+```typescript
+{ type: 'delete', handle_backlinks: 'warn' }  // warn, remove, or ignore
+```
+
+**Safety Features:**
+- `dry_run` defaults to `true` - set to `false` to actually make changes
+- Delete operations require explicit `confirm: true`
+- Protected paths (`.palace/`, `.obsidian/`, `.git/`) cannot be modified
+
+**Output includes:**
+- `selected_count`: Number of notes matching selection
+- `processed_count`: Number of notes actually processed
+- `affected_files`: Array of files with action taken
+- `errors`: Any errors encountered
+- `warnings`: Warnings including dry_run reminder
+
+**Example:**
+```typescript
+// Add tags to all notes in research folder (dry run)
+{
+  select: { glob: 'research/**/*.md' },
+  operation: { type: 'add_tags', tags: ['reviewed'] },
+  dry_run: true
+}
+
+// Move all stubs to archive (actually execute)
+{
+  select: { type: 'stub' },
+  operation: { type: 'move', destination: 'archive/stubs', update_backlinks: false },
+  dry_run: false
+}
+
+// Delete orphaned notes (with confirmation)
+{
+  select: { glob: 'temp/**/*.md' },
+  operation: { type: 'delete', handle_backlinks: 'ignore' },
+  dry_run: false,
+  confirm: true
+}
 ```
 
 ## Valid Note Types (Phase 025)

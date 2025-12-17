@@ -66,6 +66,7 @@ export function createDefaultFrontmatter(
  * Merge frontmatter updates into existing frontmatter
  *
  * Phase 025: Added type validation - types are normalized on merge
+ * Phase 027: Fixed array handling - explicit arrays replace rather than merge
  */
 export function mergeFrontmatter(
   existing: Partial<NoteFrontmatter>,
@@ -73,16 +74,18 @@ export function mergeFrontmatter(
 ): NoteFrontmatter {
   const now = new Date().toISOString();
 
-  // Merge arrays intelligently
-  const tags = [
-    ...new Set([...(existing.tags ?? []), ...(updates.tags ?? [])]),
-  ];
-  const related = [
-    ...new Set([...(existing.related ?? []), ...(updates.related ?? [])]),
-  ];
-  const aliases = [
-    ...new Set([...(existing.aliases ?? []), ...(updates.aliases ?? [])]),
-  ];
+  // Handle arrays: if explicitly provided in updates, use as replacement
+  // Otherwise, keep existing values (default to empty array)
+  // This allows operations like removeTags to set exact tag list
+  const tags = updates.tags !== undefined
+    ? [...updates.tags]
+    : [...(existing.tags ?? [])];
+  const related = updates.related !== undefined
+    ? [...updates.related]
+    : [...(existing.related ?? [])];
+  const aliases = updates.aliases !== undefined
+    ? [...updates.aliases]
+    : [...(existing.aliases ?? [])];
 
   // Phase 025: Normalize type to prevent double-suffixing and invalid values
   const rawType = updates.type ?? existing.type ?? 'research';

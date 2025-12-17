@@ -37,6 +37,7 @@ import { stubsTool, stubsHandler } from './stubs.js';
 import { deleteTool, deleteHandler } from './delete.js';
 import { repairTool, repairHandler } from './repair.js';
 import { exportTool, exportHandler } from './export.js';
+import { batchTool, batchHandler } from './batch.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -127,6 +128,10 @@ export function registerTools(): void {
   // Phase 026 tools - Export & Portability
   tools.set('palace_export', exportTool);
   handlers.set('palace_export', exportHandler);
+
+  // Phase 027 tools - Batch Operations
+  tools.set('palace_batch', batchTool);
+  handlers.set('palace_batch', batchHandler);
 }
 
 /**

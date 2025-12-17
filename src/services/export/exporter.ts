@@ -165,24 +165,30 @@ export async function exportNote(
       );
 
       if (!outputResult.success) {
-        return {
+        const result: ExportResult = {
           success: false,
           content: output,
           format: options.format,
           sources,
           warnings,
-          error: outputResult.error,
         };
+        if (outputResult.error) {
+          result.error = outputResult.error;
+        }
+        return result;
       }
 
-      return {
+      const result: ExportResult = {
         success: true,
         content: output,
         format: options.format,
         sources,
-        outputPath: outputResult.path,
         warnings,
       };
+      if (outputResult.path) {
+        result.outputPath = outputResult.path;
+      }
+      return result;
     }
 
     return {
@@ -273,11 +279,20 @@ export async function exportDirectory(
     const contents: string[] = [];
 
     for (const filePath of files) {
-      const result = await exportNote(vaultPath, filePath, {
-        ...options,
-        outputPath: undefined, // Don't write individual files
+      // Build options without outputPath for individual files
+      const fileOptions: ExportOptions = {
+        format: options.format,
         includeChildren: false, // Don't consolidate children
-      });
+        includeFrontmatter: options.includeFrontmatter,
+        frontmatterAsHeader: options.frontmatterAsHeader,
+      };
+      if (options.linkStyle) {
+        fileOptions.linkStyle = options.linkStyle;
+      }
+      if (options.allowOutsideVault !== undefined) {
+        fileOptions.allowOutsideVault = options.allowOutsideVault;
+      }
+      const result = await exportNote(vaultPath, filePath, fileOptions);
 
       if (result.success) {
         contents.push(result.content);
@@ -299,24 +314,30 @@ export async function exportDirectory(
       );
 
       if (!outputResult.success) {
-        return {
+        const result: ExportResult = {
           success: false,
           content: combinedContent,
           format: options.format,
           sources,
           warnings,
-          error: outputResult.error,
         };
+        if (outputResult.error) {
+          result.error = outputResult.error;
+        }
+        return result;
       }
 
-      return {
+      const result: ExportResult = {
         success: true,
         content: combinedContent,
         format: options.format,
         sources,
-        outputPath: outputResult.path,
         warnings,
       };
+      if (outputResult.path) {
+        result.outputPath = outputResult.path;
+      }
+      return result;
     }
 
     return {
