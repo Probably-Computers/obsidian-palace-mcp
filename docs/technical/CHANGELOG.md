@@ -5,6 +5,68 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-02-15
+
+### Added
+
+#### Smart Split System (Phase 022)
+- **Content-aware splitting**: Respects code blocks and template content
+- **Hub content preservation**: Prevents content destruction during splits
+- **`auto_split: false` option**: Prevent splitting entirely
+- **Consolidate mode**: Merge children back into hub via `palace_improve` with `mode: 'consolidate'`
+- **Section-level control**: `<!-- palace:keep -->` / `<!-- palace:split -->` annotations
+- **Per-operation `split_thresholds`**: Override atomic limits per call
+- **Atomic warning**: Warns when content exceeds limits but splitting is disabled
+
+#### Note Lifecycle Management (Phase 023)
+- **`palace_delete` tool**: Safe note and directory deletion with backlink handling
+- **Operation tracking**: All write operations tracked with operation IDs for auditing
+- **Enhanced `palace_orphans`**: Rich context for AI review with content previews, similarity suggestions, and cleanup recommendations
+- **New orphan types**: `stub_orphans` and `child_orphans` detection
+- **Protected paths**: `.palace/` and `.obsidian/` directories cannot be deleted
+
+#### Autolink Improvements (Phase 024)
+- **Link modes**: `all`, `first_per_section` (default), `first_per_note` to control link density
+- **Stop words**: Configurable list with regex pattern support to prevent linking common terms
+- **Domain-scoped linking**: Limit linking to `same_domain`, `any`, or specific domains
+- **Link density controls**: `max_links_per_paragraph` and `min_word_distance` options
+- **Heading protection**: Never insert links within markdown headings
+- **Bug fixes**: Resolved double-linking, nested bracket corruption, and title corruption
+
+#### Metadata Integrity (Phase 025)
+- **`palace_repair` tool**: Fix common metadata issues across vault notes
+- **Type validation**: Validates against canonical type list with automatic normalization
+- **Repair types**: `types`, `children_count`, `dates`, `domains`, `required_fields`
+- **Accurate `children_count`**: Recalculated from actual children on read/query
+- **Frontmatter schema validation**: Enforced on write operations
+
+#### Export & Portability (Phase 026)
+- **`palace_export` tool**: Export notes in multiple formats (markdown, clean_markdown, resolved_markdown, html)
+- **Hub consolidation**: Automatically combines hub + children into single export
+- **Link processing styles**: keep, plain_text, relative, remove
+- **Portable mode**: `portable: true` option for `palace_store` (single file, no stubs, plain text links)
+- **File output**: Write exports to file inside or outside vault
+
+#### Batch Operations (Phase 027)
+- **`palace_batch` tool**: Perform operations across multiple notes at once
+- **Selection methods**: glob patterns, type, tags, domain, path prefix, with exclusions
+- **Operations**: `update_frontmatter`, `add_tags`, `remove_tags`, `move`, `rename`, `delete`
+- **Backlink updates**: Move and rename operations can update backlinks automatically
+- **Safety**: Dry-run by default, delete requires explicit confirmation
+
+#### Version History (Phase 028)
+- **`palace_history` tool**: View per-note version history with LCS-based diffs
+- **`palace_revert` tool**: Restore notes to previous versions (all, frontmatter only, or content only)
+- **`palace_undo` tool**: Undo recent operations by operation ID
+- **Version capture**: Automatic versioning before all write operations
+- **Configurable retention**: Max versions per note, max age, auto-cleanup, exclude patterns
+
+### Changed
+- Default autolink behavior now uses `first_per_section` mode (less aggressive than previous `all`)
+- `force_atomic` option deprecated in favor of `auto_split: false`
+
+---
+
 ## [2.0.0] - 2025-12-08
 
 ### Major Release: Intent-Based Storage & Multi-Vault Support
