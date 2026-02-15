@@ -320,6 +320,15 @@ export interface AutolinkConfig {
   min_word_distance?: number | undefined; // Minimum words between links
 }
 
+// History configuration (Phase 028)
+export interface HistoryConfig {
+  enabled: boolean;
+  max_versions_per_note: number;
+  max_age_days: number;
+  auto_cleanup: boolean;
+  exclude_patterns: string[];
+}
+
 // Per-vault info section
 export interface VaultInfo {
   name: string;
@@ -336,6 +345,7 @@ export interface VaultConfig {
   stubs: StubConfig;
   graph: GraphConfig;
   autolink: AutolinkConfig; // Phase 024
+  history: HistoryConfig; // Phase 028
 }
 
 // Resolved vault with both global and per-vault config

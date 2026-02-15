@@ -85,9 +85,13 @@ src/
 │   │   ├── exporter.ts        # Export rendering
 │   │   ├── consolidator.ts    # Hub consolidation
 │   │   └── index.ts
-│   └── batch/                 # Batch operations (Phase 027)
-│       ├── selector.ts        # Note selection logic
-│       ├── operations.ts      # Batch operation implementations
+│   ├── batch/                 # Batch operations (Phase 027)
+│   │   ├── selector.ts        # Note selection logic
+│   │   ├── operations.ts      # Batch operation implementations
+│   │   └── index.ts
+│   └── history/               # Version history (Phase 028)
+│       ├── storage.ts         # Version storage and retrieval
+│       ├── diff.ts            # Diff generation (LCS-based)
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── store.ts               # palace_store (intent-based storage)
@@ -112,6 +116,9 @@ src/
 │   ├── repair.ts              # palace_repair (Phase 025)
 │   ├── export.ts              # palace_export (Phase 026)
 │   ├── batch.ts               # palace_batch (Phase 027)
+│   ├── history.ts             # palace_history (Phase 028)
+│   ├── revert.ts              # palace_revert (Phase 028)
+│   ├── undo.ts                # palace_undo (Phase 028)
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -329,6 +336,9 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_repair | ✅ | Metadata repair (types, children_count, dates, domains) |
 | palace_export | ✅ | Export notes in various formats (markdown, clean markdown, HTML) |
 | palace_batch | ✅ | Batch operations for multiple notes (tags, frontmatter, move, rename, delete) |
+| palace_history | ✅ | View version history for notes with diff support |
+| palace_revert | ✅ | Restore notes to previous versions |
+| palace_undo | ✅ | Undo recent operations by operation ID |
 
 ### palace_recall
 
@@ -1247,6 +1257,135 @@ Batch operations for multiple notes at once (Phase 027):
   confirm: true
 }
 ```
+
+### palace_history
+
+View version history for a note with optional diffs:
+
+```typescript
+{
+  path: string;                // Note path (required)
+  vault?: string;              // Vault alias
+  limit?: number;              // Max versions to return (default: 10)
+  show_diff?: boolean;         // Include diffs between versions (default: false)
+  from_version?: number;       // Start from this version
+  to_version?: number;         // End at this version
+  compare?: {                  // Compare two specific versions
+    from: number;
+    to: number;
+  };
+}
+```
+
+**Output includes:**
+- `path`: Note path
+- `current_version`: Latest version number
+- `versions`: Array of version entries with timestamp, operation, mode, changes
+- `total_versions`: Total versions available
+- `compare`: Diff result when comparing specific versions
+
+**Example:**
+```typescript
+// View last 5 versions with diffs
+{ path: "research/kubernetes.md", limit: 5, show_diff: true }
+
+// Compare version 3 to version 1
+{ path: "research/kubernetes.md", compare: { from: 1, to: 3 } }
+```
+
+### palace_revert
+
+Restore a note to a previous version:
+
+```typescript
+{
+  path: string;                              // Note path (required)
+  to_version: number;                        // Version to restore (required)
+  vault?: string;                            // Vault alias
+  revert_scope?: 'all' | 'frontmatter' | 'content';  // What to revert (default: all)
+  dry_run?: boolean;                         // Preview changes (default: true)
+  create_backup?: boolean;                   // Save current before revert (default: true)
+}
+```
+
+**Output includes:**
+- `reverted_from`: Previous version number
+- `reverted_to`: Target version number
+- `backup_version`: New version created for backup (if create_backup: true)
+- `changes_reverted`: What was reverted (frontmatter, content)
+- `preview`: Frontmatter comparison (in dry_run mode)
+
+**Example:**
+```typescript
+// Preview reverting to version 5
+{ path: "notes/doc.md", to_version: 5, dry_run: true }
+
+// Revert only content, keep current frontmatter
+{ path: "notes/doc.md", to_version: 5, revert_scope: "content", dry_run: false }
+```
+
+### palace_undo
+
+Undo recent operations by operation ID:
+
+```typescript
+{
+  operation_id?: string;       // Specific operation to undo
+  vault?: string;              // Vault alias
+  list?: boolean;              // List recent undoable operations (default: false)
+  limit?: number;              // Max operations to list (default: 10)
+  dry_run?: boolean;           // Preview changes (default: true)
+}
+```
+
+**Undoable Operations:**
+- `store`: Deletes created files
+- `split`: Deletes children, restores hub from history
+- `improve`: Restores modified files from history
+- `delete`: Restores deleted files from history
+
+**Output (list mode):**
+- `operations`: Array of recent operations with ID, type, timestamp, file counts, undoable status
+
+**Output (undo mode):**
+- `operation_id`: ID of undone operation
+- `operation_type`: Type of operation undone
+- `files_deleted`: Files removed during undo
+- `files_restored`: Files restored from history
+- `files_failed`: Files that couldn't be processed
+- `warnings`: Any issues encountered
+
+**Example:**
+```typescript
+// List recent undoable operations
+{ list: true, limit: 5 }
+
+// Preview undoing a specific operation
+{ operation_id: "op_abc123", dry_run: true }
+
+// Actually undo
+{ operation_id: "op_abc123", dry_run: false }
+```
+
+## Version History Configuration
+
+Configure version history in `.palace.yaml`:
+
+```yaml
+history:
+  enabled: true                    # Enable version tracking (default: true)
+  max_versions_per_note: 50        # Max versions to keep (default: 50)
+  max_age_days: 90                 # Max age before cleanup (default: 90)
+  auto_cleanup: true               # Automatic retention (default: true)
+  exclude_patterns:                # Patterns to skip
+    - "daily/**"                   # Don't version daily notes
+```
+
+**How Versions Work:**
+- Versions are saved before modifications (store, improve, split, delete)
+- Stored in `.palace/history/{note-hash}/` as full copies
+- Filename format: `v{NNN}_{ISO-timestamp}.md`
+- Includes original frontmatter plus version metadata
 
 ## Valid Note Types (Phase 025)
 

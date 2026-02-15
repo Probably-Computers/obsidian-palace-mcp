@@ -1,9 +1,12 @@
 /**
  * Vault file writing operations
+ *
+ * Phase 028: Added version capture before modifications
  */
 
-import { writeFile, mkdir, unlink } from 'fs/promises';
+import { writeFile, mkdir, unlink, readFile } from 'fs/promises';
 import { join, dirname } from 'path';
+import { existsSync } from 'fs';
 import { getConfig } from '../../config/index.js';
 import {
   stringifyFrontmatter,
@@ -13,13 +16,31 @@ import {
 import { titleToFilename } from '../../utils/slugify.js';
 import { logger } from '../../utils/logger.js';
 import { readNote, noteExists, type ReadOptions } from './reader.js';
+import { saveVersion, type HistoryConfig } from '../history/storage.js';
 import type { Note, NoteFrontmatter } from '../../types/index.js';
+import type { OperationType } from '../operations/tracker.js';
 
 /**
  * Options for write operations
  */
 export interface WriteOptions extends ReadOptions {
   // Extends ReadOptions to include vaultPath
+}
+
+/**
+ * Options for version capture (Phase 028)
+ */
+export interface VersionCaptureOptions {
+  /** Path to .palace directory */
+  palaceDir?: string;
+  /** Operation type for version metadata */
+  operation?: OperationType | 'batch' | 'unknown';
+  /** Operation mode (e.g., 'append', 'replace') */
+  mode?: string;
+  /** History configuration */
+  historyConfig?: Partial<HistoryConfig>;
+  /** Skip version capture */
+  skipVersion?: boolean;
 }
 
 /**
@@ -97,12 +118,15 @@ export async function createNote(
 
 /**
  * Update an existing note
+ *
+ * Phase 028: Added version capture before modification
  */
 export async function updateNote(
   notePath: string,
   content: string,
   frontmatterUpdates: Partial<NoteFrontmatter> = {},
-  writeOptions?: WriteOptions
+  writeOptions?: WriteOptions,
+  versionOptions?: VersionCaptureOptions
 ): Promise<Note> {
   const vaultPath = getVaultPath(writeOptions);
   const fullPath = join(vaultPath, notePath);
@@ -111,6 +135,23 @@ export async function updateNote(
   const existing = await readNote(notePath, writeOptions);
   if (!existing) {
     throw new Error(`Note not found: ${notePath}`);
+  }
+
+  // Phase 028: Save version before modifying
+  if (versionOptions?.palaceDir && !versionOptions.skipVersion) {
+    try {
+      await saveVersion(
+        versionOptions.palaceDir,
+        notePath,
+        existing.raw,
+        versionOptions.operation ?? 'improve',
+        versionOptions.mode,
+        versionOptions.historyConfig
+      );
+    } catch (error) {
+      // Log but don't fail the operation if version capture fails
+      logger.warn(`Failed to save version for ${notePath}:`, error);
+    }
   }
 
   // Merge frontmatter (will update modified timestamp)
@@ -135,11 +176,14 @@ export async function updateNote(
 
 /**
  * Append content to an existing note
+ *
+ * Phase 028: Passes through version options
  */
 export async function appendToNote(
   notePath: string,
   content: string,
-  writeOptions?: WriteOptions
+  writeOptions?: WriteOptions,
+  versionOptions?: VersionCaptureOptions
 ): Promise<Note> {
   const existing = await readNote(notePath, writeOptions);
   if (!existing) {
@@ -147,34 +191,73 @@ export async function appendToNote(
   }
 
   const newContent = `${existing.content}\n\n${content}`;
-  return updateNote(notePath, newContent, {}, writeOptions);
+  return updateNote(
+    notePath,
+    newContent,
+    {},
+    writeOptions,
+    versionOptions ? { ...versionOptions, mode: 'append' } : undefined
+  );
 }
 
 /**
  * Update only the frontmatter of a note
+ *
+ * Phase 028: Passes through version options
  */
 export async function updateFrontmatter(
   notePath: string,
   updates: Partial<NoteFrontmatter>,
-  writeOptions?: WriteOptions
+  writeOptions?: WriteOptions,
+  versionOptions?: VersionCaptureOptions
 ): Promise<Note> {
   const existing = await readNote(notePath, writeOptions);
   if (!existing) {
     throw new Error(`Note not found: ${notePath}`);
   }
 
-  return updateNote(notePath, existing.content, updates, writeOptions);
+  return updateNote(
+    notePath,
+    existing.content,
+    updates,
+    writeOptions,
+    versionOptions ? { ...versionOptions, mode: 'frontmatter' } : undefined
+  );
 }
 
 /**
  * Delete a note
+ *
+ * Phase 028: Optionally saves version before deletion for undo capability
  */
 export async function deleteNote(
   notePath: string,
-  writeOptions?: WriteOptions
+  writeOptions?: WriteOptions,
+  versionOptions?: VersionCaptureOptions
 ): Promise<void> {
   const vaultPath = getVaultPath(writeOptions);
   const fullPath = join(vaultPath, notePath);
+
+  // Phase 028: Save version before deletion for undo capability
+  if (versionOptions?.palaceDir && !versionOptions.skipVersion) {
+    try {
+      // Read the file content before deletion
+      if (existsSync(fullPath)) {
+        const content = await readFile(fullPath, 'utf-8');
+        await saveVersion(
+          versionOptions.palaceDir,
+          notePath,
+          content,
+          'delete',
+          undefined,
+          versionOptions.historyConfig
+        );
+      }
+    } catch (error) {
+      // Log but don't fail the operation if version capture fails
+      logger.warn(`Failed to save version before deletion for ${notePath}:`, error);
+    }
+  }
 
   try {
     await unlink(fullPath);

@@ -73,6 +73,15 @@ const autolinkConfigSchema = z.object({
   min_word_distance: z.number().optional(), // Minimum words between links
 });
 
+// Zod schema for history config (Phase 028)
+const historyConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  max_versions_per_note: z.number().min(1).max(1000).default(50),
+  max_age_days: z.number().min(1).max(3650).default(90),
+  auto_cleanup: z.boolean().default(true),
+  exclude_patterns: z.array(z.string()).default(['daily/**']),
+});
+
 // Zod schema for vault info
 const vaultInfoSchema = z.object({
   name: z.string(),
@@ -80,7 +89,7 @@ const vaultInfoSchema = z.object({
   mode: z.enum(['rw', 'ro']).optional(),
 });
 
-// Zod schema for complete vault config (Phase 017, updated Phase 024)
+// Zod schema for complete vault config (Phase 017, updated Phase 024, Phase 028)
 const vaultConfigSchema = z.object({
   vault: vaultInfoSchema,
   structure: vaultStructureSchema.default({}),
@@ -89,6 +98,7 @@ const vaultConfigSchema = z.object({
   stubs: stubConfigSchema.default({}),
   graph: graphConfigSchema.default({}),
   autolink: autolinkConfigSchema.default({}), // Phase 024
+  history: historyConfigSchema.default({}), // Phase 028
 });
 
 /**
@@ -135,6 +145,13 @@ export function createDefaultVaultConfig(
       link_mode: 'first_per_section',
       domain_scope: 'any',
       min_title_length: 3,
+    },
+    history: {
+      enabled: true,
+      max_versions_per_note: 50,
+      max_age_days: 90,
+      auto_cleanup: true,
+      exclude_patterns: ['daily/**'],
     },
   };
 }
@@ -223,6 +240,13 @@ export function loadVaultConfig(
         max_links_per_paragraph: parsed.autolink?.max_links_per_paragraph,
         min_word_distance: parsed.autolink?.min_word_distance,
       },
+      history: {
+        enabled: parsed.history?.enabled ?? defaults.history.enabled,
+        max_versions_per_note: parsed.history?.max_versions_per_note ?? defaults.history.max_versions_per_note,
+        max_age_days: parsed.history?.max_age_days ?? defaults.history.max_age_days,
+        auto_cleanup: parsed.history?.auto_cleanup ?? defaults.history.auto_cleanup,
+        exclude_patterns: parsed.history?.exclude_patterns ?? defaults.history.exclude_patterns,
+      },
     };
 
     return mergedConfig;
@@ -260,6 +284,7 @@ export const schemas = {
   atomicConfig: atomicConfigSchema,
   stubConfig: stubConfigSchema,
   graphConfig: graphConfigSchema,
+  historyConfig: historyConfigSchema,
   autolinkConfig: autolinkConfigSchema,
   vaultInfo: vaultInfoSchema,
   vaultConfig: vaultConfigSchema,

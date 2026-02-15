@@ -38,6 +38,9 @@ import { deleteTool, deleteHandler } from './delete.js';
 import { repairTool, repairHandler } from './repair.js';
 import { exportTool, exportHandler } from './export.js';
 import { batchTool, batchHandler } from './batch.js';
+import { historyTool, historyHandler } from './history.js';
+import { revertTool, revertHandler } from './revert.js';
+import { undoTool, undoHandler } from './undo.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -132,6 +135,16 @@ export function registerTools(): void {
   // Phase 027 tools - Batch Operations
   tools.set('palace_batch', batchTool);
   handlers.set('palace_batch', batchHandler);
+
+  // Phase 028 tools - Version History
+  tools.set('palace_history', historyTool);
+  handlers.set('palace_history', historyHandler);
+
+  tools.set('palace_revert', revertTool);
+  handlers.set('palace_revert', revertHandler);
+
+  tools.set('palace_undo', undoTool);
+  handlers.set('palace_undo', undoHandler);
 }
 
 /**

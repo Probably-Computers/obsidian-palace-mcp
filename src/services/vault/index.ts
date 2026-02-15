@@ -19,6 +19,7 @@ export {
   updateFrontmatter,
   deleteNote,
   type WriteOptions,
+  type VersionCaptureOptions,
 } from './writer.js';
 
 export {
