@@ -244,6 +244,63 @@ When reporting issues, please include:
 5. Environment (Node version, OS)
 6. Relevant error messages or logs
 
+## Publishing to npm (Maintainers)
+
+### Prerequisites
+
+- npm account with publish access to `obsidian-palace-mcp`
+- Granular access token (required due to 2FA)
+
+### Creating a Granular Access Token
+
+npm requires 2FA for publishing. Since biometric-only 2FA doesn't work with CLI, use a granular access token:
+
+1. Go to https://www.npmjs.com/settings/YOUR_USERNAME/tokens
+2. Click "Generate New Token" → "Granular Access Token"
+3. Configure:
+   - Name: `palace-publish` (or similar)
+   - Expiration: 7 days (or as needed)
+   - Packages: Select `obsidian-palace-mcp`
+   - Permissions: "Read and write"
+   - Organizations: None needed
+   - **Enable "Bypass 2FA for automation"**
+4. Copy the generated token
+
+### Publishing Process
+
+1. Ensure all tests pass:
+   ```bash
+   npm run test:fast
+   npm run build
+   ```
+
+2. Update version in `package.json` if needed:
+   ```bash
+   npm version patch  # or minor/major
+   ```
+
+3. Set the auth token:
+   ```bash
+   npm config set //registry.npmjs.org/:_authToken YOUR_TOKEN
+   ```
+
+4. Publish:
+   ```bash
+   npm publish --access public
+   ```
+
+5. Verify:
+   ```bash
+   npm view obsidian-palace-mcp
+   ```
+
+6. Clean up token from config (optional but recommended):
+   ```bash
+   npm config delete //registry.npmjs.org/:_authToken
+   ```
+
+**Note:** Granular tokens expire (default 7 days). Create a new token for each release session.
+
 ## Questions?
 
 Open an issue or reach out to the maintainers.

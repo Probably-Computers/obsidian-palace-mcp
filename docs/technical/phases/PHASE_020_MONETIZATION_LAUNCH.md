@@ -125,9 +125,11 @@
 - [x] Create `.npmignore` to exclude unnecessary files
 
 **Publishing:**
-- [ ] Login to npm: `npm login`
-- [ ] Publish: `npm publish --access public`
-- [ ] Verify: `npm view obsidian-palace-mcp`
+- [x] Login to npm: `npm login`
+- [x] Publish: `npm publish --access public`
+- [x] Verify: `npm view obsidian-palace-mcp`
+
+**Note:** npm requires 2FA for publishing. Since biometric-only 2FA doesn't work with CLI, use a granular access token with "Bypass 2FA for automation" enabled. See `docs/technical/CONTRIBUTING.md` for detailed instructions. Tokens expire after 7 days by default.
 
 ### 020.5: Documentation Polish
 
@@ -194,14 +196,14 @@ Post-migration, update all references:
 - [x] All links in README are valid
 - [x] License files are correctly formatted
 - [x] package.json metadata is complete
-- [ ] Installation instructions tested on clean environment
+- [x] Installation instructions tested on clean environment (npm published 2025-12-15)
 
 ## Acceptance Criteria
 
-- [ ] AGPL-3.0 license in place with LICENSE-COMMERCIAL.md
-- [ ] Repository live at github.com/Probably-Computers/obsidian-palace-mcp
-- [ ] Package published and installable via `npm install -g obsidian-palace-mcp`
-- [ ] Paddle store live with both products purchasable
+- [x] AGPL-3.0 license in place with LICENSE-COMMERCIAL.md
+- [x] Repository live at github.com/Probably-Computers/obsidian-palace-mcp
+- [x] Package published and installable via `npm install -g obsidian-palace-mcp` (published 2025-12-15)
+- [ ] Paddle store live with both products purchasable (awaiting merchant verification)
 - [ ] GitHub Sponsors enabled and accepting contributions
 - [ ] Listed in at least 2 MCP directories
 - [ ] At least one public announcement posted
@@ -250,15 +252,20 @@ Post-migration, update all references:
 - **Rationale**: Both are Merchant of Record with similar fees; Paddle has broader recognition
 - **Note**: Paddle requires website verification before merchant account approval, hence Phase 021 dependency
 
+### 2025-12-15 - npm Package Published
+- **Context**: Needed to secure package name while awaiting Paddle merchant verification
+- **Decision**: Published v2.0.0 to npm with AGPL-3.0 license (Community/free tier available)
+- **Note**: npm requires 2FA for publishing; used granular access token with "Bypass 2FA" since biometric-only 2FA doesn't work with CLI. Tokens expire after 7 days. See `docs/technical/CONTRIBUTING.md` for publishing instructions.
+
 ## Checklist Summary
 
 ### Must Have (Before Launch)
 - [x] AGPL-3.0 license in place
 - [x] LICENSE-COMMERCIAL.md created
 - [x] GitHub repo created and code pushed
-- [ ] npm package published
-- [ ] Website live at obsidianpalace.dev (Phase 021)
-- [ ] Paddle store with products (requires website verification)
+- [x] npm package published (2025-12-15, v2.0.0)
+- [x] Website live at obsidianpalace.dev (Phase 021 complete)
+- [ ] Paddle store with products (awaiting merchant verification)
 - [x] README updated with license info and support links
 
 ### Should Have (Within 1 Week of Launch)
