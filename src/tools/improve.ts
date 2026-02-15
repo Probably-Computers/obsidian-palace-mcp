@@ -23,6 +23,7 @@ import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../ut
 import { logger } from '../utils/logger.js';
 import { shouldSplit, splitContent, createHub, createChildNote, getHubInfo } from '../services/atomic/index.js';
 import { generateReplaceCleanupSuggestions } from '../services/operations/index.js';
+import { saveVersion } from '../services/history/storage.js';
 
 // Tool definition
 export const improveTool: Tool = {
@@ -298,6 +299,21 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
 
     // Build final content
     const finalContent = stringifyFrontmatter(newFrontmatter, newBody.trim());
+
+    // Phase 028: Save version before modifying
+    const palaceDir = join(vault.path, '.palace');
+    try {
+      await saveVersion(
+        palaceDir,
+        path,
+        existingContent,
+        'improve',
+        mode,
+        vault.config.history
+      );
+    } catch (versionError) {
+      logger.warn(`Failed to save version for ${path}:`, versionError);
+    }
 
     // Write the updated file
     await writeFile(fullPath, finalContent, 'utf-8');

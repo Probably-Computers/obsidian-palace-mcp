@@ -19,6 +19,7 @@ import { removeFromIndex } from '../services/index/sync.js';
 import { getIncomingLinks } from '../services/graph/links.js';
 import { deleteNote as deleteNoteFile } from '../services/vault/writer.js';
 import { readNote, noteExists, listNotes } from '../services/vault/reader.js';
+import { saveVersion } from '../services/history/storage.js';
 import { logger } from '../utils/logger.js';
 import {
   startOperation,
@@ -262,6 +263,14 @@ async function handleNoteDeletion(
 
   // Perform deletion
   if (!dryRun) {
+    // Phase 028: Save version before deletion for undo capability
+    try {
+      const palaceDir = join(vaultPath, '.palace');
+      await saveVersion(palaceDir, notePath, note.raw, 'delete');
+    } catch (versionError) {
+      logger.warn(`Failed to save version before deletion for ${notePath}:`, versionError);
+    }
+
     try {
       await deleteNoteFile(notePath, { vaultPath });
       removeFromIndex(db, notePath);
