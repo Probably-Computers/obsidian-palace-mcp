@@ -21,6 +21,7 @@ export const VALID_NOTE_TYPES = [
   'troubleshooting',
   'standard',
   'daily',
+  'time_entry',
   // Hub types (for split content)
   'research_hub',
   'command_hub',
@@ -50,6 +51,7 @@ export const BASE_NOTE_TYPES = [
   'troubleshooting',
   'standard',
   'daily',
+  'time_entry',
 ] as const;
 
 export type BaseNoteType = (typeof BASE_NOTE_TYPES)[number];
@@ -82,6 +84,8 @@ const TYPE_CORRECTIONS: Record<string, NoteType> = {
   documentation: 'research',
   log: 'daily',
   journal: 'daily',
+  time: 'time_entry',
+  timeentry: 'time_entry',
 };
 
 /**

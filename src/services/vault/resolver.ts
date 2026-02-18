@@ -85,6 +85,7 @@ function getStructure(vaultStructure?: VaultStructure): Required<VaultStructure>
     clients: vaultStructure?.clients || DEFAULT_STRUCTURE.clients || 'clients/',
     daily: vaultStructure?.daily || DEFAULT_STRUCTURE.daily || 'daily/',
     standards: vaultStructure?.standards || DEFAULT_STRUCTURE.standards || 'standards/',
+    time: vaultStructure?.time || 'time/',
   };
 }
 

@@ -21,6 +21,8 @@ import {
   sessionStartHandler,
   sessionLogTool,
   sessionLogHandler,
+  sessionEndTool,
+  sessionEndHandler,
 } from './session.js';
 import { vaultsTool, vaultsHandler } from './vaults.js';
 import { storeTool, storeHandler } from './store.js';
@@ -42,6 +44,8 @@ import { historyTool, historyHandler } from './history.js';
 import { revertTool, revertHandler } from './revert.js';
 import { undoTool, undoHandler } from './undo.js';
 import { migrateTool, migrateHandler } from './migrate.js';
+import { timeLogTool, timeLogHandler } from './time-log.js';
+import { timeSummaryTool, timeSummaryHandler } from './time-summary.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -150,6 +154,16 @@ export function registerTools(): void {
   // Phase 029 tools - Vault Migration
   tools.set('palace_migrate', migrateTool);
   handlers.set('palace_migrate', migrateHandler);
+
+  // Phase 030 tools - Time Tracking
+  tools.set('palace_session_end', sessionEndTool);
+  handlers.set('palace_session_end', sessionEndHandler);
+
+  tools.set('palace_time_log', timeLogTool);
+  handlers.set('palace_time_log', timeLogHandler);
+
+  tools.set('palace_time_summary', timeSummaryTool);
+  handlers.set('palace_time_summary', timeSummaryHandler);
 }
 
 /**

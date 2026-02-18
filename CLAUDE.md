@@ -93,9 +93,13 @@ src/
 │   │   ├── storage.ts         # Version storage and retrieval
 │   │   ├── diff.ts            # Diff generation (LCS-based)
 │   │   └── index.ts
-│   └── migrate/               # Vault migration (Phase 029)
-│       ├── inspector.ts       # Vault health inspection
-│       ├── executor.ts        # Migration execution
+│   ├── migrate/               # Vault migration (Phase 029)
+│   │   ├── inspector.ts       # Vault health inspection
+│   │   ├── executor.ts        # Migration execution
+│   │   └── index.ts
+│   └── time/                  # Time tracking (Phase 030)
+│       ├── storage.ts         # Time entry creation and duration parsing
+│       ├── aggregator.ts      # Time aggregation and reporting
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── store.ts               # palace_store (intent-based storage)
@@ -124,6 +128,8 @@ src/
 │   ├── revert.ts              # palace_revert (Phase 028)
 │   ├── undo.ts                # palace_undo (Phase 028)
 │   ├── migrate.ts             # palace_migrate (Phase 029)
+│   ├── time-log.ts            # palace_time_log (Phase 030)
+│   ├── time-summary.ts        # palace_time_summary (Phase 030)
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -345,6 +351,9 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_revert | ✅ | Restore notes to previous versions |
 | palace_undo | ✅ | Undo recent operations by operation ID |
 | palace_migrate | ✅ | Vault health inspection and migration of legacy data |
+| palace_session_end | ✅ | End session with duration tracking and optional time entry |
+| palace_time_log | ✅ | Log time entries against projects with flexible duration input |
+| palace_time_summary | ✅ | Aggregate and report on time entries with filtering/grouping |
 
 ### palace_recall
 
@@ -1405,6 +1414,104 @@ Inspect vault health and apply migration fixes (Phase 029):
 - `fixes`: Applied fixes (when dry_run: false)
 - `operation_id`: For tracking/undo
 
+### palace_session_end
+
+End the current session, calculate duration, and optionally create a time entry:
+
+```typescript
+{
+  project?: string;    // If set, creates a time entry for this session
+  client?: string;     // Client for time entry
+  category?: string;   // Time category (development, research, meetings, review, documentation, design, admin, business_dev, professional_dev, other)
+  billable?: boolean;  // Default true
+}
+```
+
+**Output includes:**
+- `sessionId`: Session that was ended
+- `topic`: Session topic
+- `duration_minutes`: Calculated duration
+- `duration_formatted`: Human-readable duration (e.g., "2h 30m")
+- `entries_count`: Number of log entries in the session
+- `time_entry_path`: Path to created time entry (if project was specified)
+
+**Workflow:**
+1. `palace_session_start` → begin work
+2. `palace_session_log` → track progress
+3. `palace_session_end` → close session, optionally log time
+
+### palace_time_log
+
+Log time spent on a project. Creates a time entry note:
+
+```typescript
+{
+  project: string;         // Required
+  duration: string | number; // Required — "2h 30m", "120", "2.5h"
+  description: string;     // Required
+  client?: string;
+  category?: string;       // development, research, meetings, review, documentation, design, admin, business_dev, professional_dev, other
+  billable?: boolean;      // Default true
+  date?: string;           // YYYY-MM-DD, defaults to today (enables backdating)
+  work_items?: string[];   // Wiki-link targets
+  session_id?: string;     // Link to session
+  start_time?: string;     // ISO 8601 (optional)
+  end_time?: string;       // ISO 8601 (optional)
+  vault?: string;
+}
+```
+
+**Duration formats:**
+- Minutes: `120` or `"120"`
+- Hours: `"2h"`, `"2.5h"`
+- Hours + minutes: `"2h 30m"`
+- Minutes only: `"30m"`
+
+**Output includes:**
+- `path`: Path to created time entry note
+- `duration_minutes`: Parsed duration in minutes
+- `duration_formatted`: Human-readable duration
+- `date`: Date the entry is logged for
+
+**Time entry notes** are stored at `time/YYYY/MM/{date} - {project} - {category}.md` with `type: time_entry` frontmatter.
+
+### palace_time_summary
+
+Aggregate and report on logged time entries:
+
+```typescript
+{
+  project?: string;         // Filter by project
+  client?: string;          // Filter by client
+  category?: string;        // Filter by category
+  billable?: boolean;       // Filter by billable status
+  date_from?: string;       // Start date (YYYY-MM-DD)
+  date_to?: string;         // End date (YYYY-MM-DD)
+  group_by?: 'project' | 'client' | 'date' | 'category';  // Default: project
+  include_entries?: boolean; // Include individual entries (default: false)
+  vault?: string;
+}
+```
+
+**Output includes:**
+- `groups`: Array of groups with key, total_minutes, total_formatted, entry_count
+- `grand_total_minutes`: Sum of all matching entries
+- `grand_total_formatted`: Human-readable grand total
+- `total_entries`: Number of matching entries
+- `filters_applied`: Active filters
+
+**Example:**
+```typescript
+// This week's time by project
+{ date_from: "2026-02-10", date_to: "2026-02-16", group_by: "project" }
+
+// Billable time for a specific client
+{ client: "Acme Corp", billable: true, group_by: "date", include_entries: true }
+
+// Time by category across all projects
+{ group_by: "category" }
+```
+
 ## Version History Configuration
 
 Configure version history in `.palace.yaml`:
@@ -1439,6 +1546,7 @@ The Palace validates note types against a canonical list. Invalid types are auto
 - `troubleshooting` - Problem/solution documentation
 - `standard` - AI binding standards
 - `daily` - Daily session logs
+- `time_entry` - Time tracking entries
 
 **Hub Types** (for split content):
 - `research_hub`, `command_hub`, `infrastructure_hub`, `client_hub`

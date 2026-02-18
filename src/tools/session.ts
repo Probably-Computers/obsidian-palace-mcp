@@ -1,5 +1,5 @@
 /**
- * Session tracking tools - palace_session_start and palace_session_log
+ * Session tracking tools - palace_session_start, palace_session_log, palace_session_end
  * Creates and manages daily session logs for AI work tracking
  */
 
@@ -14,6 +14,9 @@ import {
   enforceWriteAccess,
   getVaultResultInfo,
 } from '../utils/vault-param.js';
+import { getIndexManager } from '../services/index/manager.js';
+import { createTimeEntry, formatDuration, TIME_CATEGORIES } from '../services/time/storage.js';
+import type { TimeEntryData } from '../services/time/storage.js';
 
 // Current session state (in-memory for simplicity)
 let currentSession: (Session & { vault: ResolvedVault }) | null = null;
@@ -377,6 +380,157 @@ export async function sessionLogHandler(args: Record<string, unknown>): Promise<
       success: false,
       error: error instanceof Error ? error.message : String(error),
       code: 'LOG_ERROR',
+    };
+  }
+}
+
+// ============================================================================
+// palace_session_end
+// ============================================================================
+
+const endInputSchema = z.object({
+  project: z.string().optional().describe('Project name for time entry'),
+  client: z.string().optional().describe('Client name for time entry'),
+  category: z.string().optional().describe('Time category (development, research, meetings, etc.)'),
+  billable: z.boolean().optional().default(true).describe('Whether time is billable'),
+});
+
+export const sessionEndTool: Tool = {
+  name: 'palace_session_end',
+  description: `End the current session, calculate duration, and optionally create a time entry. Use this to close a work session started with palace_session_start.`,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      project: {
+        type: 'string',
+        description: 'If set, creates a time entry for this session under the given project',
+      },
+      client: {
+        type: 'string',
+        description: 'Client name for the time entry',
+      },
+      category: {
+        type: 'string',
+        description: 'Time category',
+        enum: [...TIME_CATEGORIES],
+      },
+      billable: {
+        type: 'boolean',
+        description: 'Whether this time is billable (default: true)',
+      },
+    },
+  },
+};
+
+export async function sessionEndHandler(args: Record<string, unknown>): Promise<ToolResult> {
+  const parseResult = endInputSchema.safeParse(args);
+  if (!parseResult.success) {
+    return {
+      success: false,
+      error: parseResult.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      code: 'VALIDATION_ERROR',
+    };
+  }
+
+  if (!currentSession) {
+    return {
+      success: false,
+      error: 'No active session. Use palace_session_start first.',
+      code: 'NO_SESSION',
+    };
+  }
+
+  const { project, client, category, billable } = parseResult.data;
+
+  try {
+    const vault = currentSession.vault;
+    const now = new Date();
+    const endTime = now.toISOString();
+    const endTimeStr = endTime.split('T')[1]!.slice(0, 5);
+
+    // Calculate duration in minutes
+    const startMs = Date.parse(currentSession.startedAt);
+    const durationMinutes = Math.round((now.getTime() - startMs) / 60000);
+
+    // Read daily log and insert end time + duration
+    const today = currentSession.date;
+    let content = await readDailyLog(today, vault.path);
+
+    if (content) {
+      // Find the last session section and add ended/duration info
+      // Look for the session's "**Started**" line and insert after it
+      const sessionRegex = /(\*\*Started\*\*: \d{2}:\d{2}\n)/g;
+      let lastStartMatch: RegExpExecArray | null = null;
+      let match: RegExpExecArray | null;
+      while ((match = sessionRegex.exec(content)) !== null) {
+        lastStartMatch = match;
+      }
+
+      if (lastStartMatch) {
+        const insertPos = lastStartMatch.index + lastStartMatch[0].length;
+        const endInfo = `**Ended**: ${endTimeStr}\n**Duration**: ${formatDuration(durationMinutes)}\n`;
+        content = content.slice(0, insertPos) + endInfo + content.slice(insertPos);
+      }
+
+      const logPath = getDailyLogPath(today, vault.path);
+      await writeFile(logPath, content, 'utf-8');
+    }
+
+    // Create time entry if project is specified
+    let timeEntryPath: string | undefined;
+    if (project) {
+      const manager = getIndexManager();
+      const db = await manager.getIndex(vault.alias);
+
+      const sessionSummary = currentSession.entries.map((e) => e.entry).join('; ');
+      const description = sessionSummary || `Session: ${currentSession.topic}`;
+
+      const entryData: TimeEntryData = {
+        project,
+        duration_minutes: durationMinutes,
+        description,
+        date: today,
+        billable,
+        session_id: currentSession.id,
+        source: 'session',
+        start_time: currentSession.startedAt,
+        end_time: endTime,
+      };
+      if (client) entryData.client = client;
+      if (category) entryData.category = category as typeof TIME_CATEGORIES[number];
+
+      const result = await createTimeEntry(
+        entryData,
+        vault.path,
+        db,
+        vault.config.ignore
+      );
+
+      timeEntryPath = result.path;
+    }
+
+    logger.info(`Ended session: ${currentSession.topic} (${formatDuration(durationMinutes)})`);
+
+    const result = {
+      ...getVaultResultInfo(vault),
+      sessionId: currentSession.id,
+      topic: currentSession.topic,
+      duration_minutes: durationMinutes,
+      duration_formatted: formatDuration(durationMinutes),
+      entries_count: currentSession.entries.length,
+      time_entry_path: timeEntryPath,
+      message: `Session ended: "${currentSession.topic}" (${formatDuration(durationMinutes)})`,
+    };
+
+    // Clear the session
+    currentSession = null;
+
+    return { success: true, data: result };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      code: 'SESSION_END_ERROR',
     };
   }
 }

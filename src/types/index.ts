@@ -269,6 +269,7 @@ export interface VaultStructure {
   clients?: string; // Where client context goes (default: 'clients/')
   daily?: string; // Where session logs go (default: 'daily/')
   standards?: string; // Where AI binding standards live (default: 'standards/')
+  time?: string; // Where time entries go (default: 'time/')
 }
 
 // Vault ignore configuration

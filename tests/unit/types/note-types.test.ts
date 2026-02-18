@@ -37,6 +37,10 @@ describe('Note Types (Phase 025)', () => {
       expect(VALID_NOTE_TYPES).toContain('hub');
       expect(VALID_NOTE_TYPES).toContain('daily');
     });
+
+    it('should include time_entry type (Phase 030)', () => {
+      expect(VALID_NOTE_TYPES).toContain('time_entry');
+    });
   });
 
   describe('isValidNoteType', () => {
@@ -122,6 +126,8 @@ describe('Note Types (Phase 025)', () => {
       expect(normalizeType('tech', false)).toBe('infrastructure');
       expect(normalizeType('bug', false)).toBe('troubleshooting');
       expect(normalizeType('log', false)).toBe('daily');
+      expect(normalizeType('time', false)).toBe('time_entry');
+      expect(normalizeType('timeentry', false)).toBe('time_entry');
     });
 
     it('should default to research for unknown types', () => {
