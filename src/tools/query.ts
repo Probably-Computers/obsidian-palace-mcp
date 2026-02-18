@@ -37,6 +37,8 @@ const inputSchema = z.object({
   tags: z.array(z.string()).optional(),
   path: z.string().optional(),
   source: z.string().optional(),
+  project: z.string().optional(),
+  client: z.string().optional(),
   min_confidence: z.number().min(0).max(1).optional(),
   max_confidence: z.number().min(0).max(1).optional(),
   verified: z.boolean().optional(),
@@ -88,6 +90,14 @@ export const queryTool: Tool = {
       source: {
         type: 'string',
         description: 'Filter by source (claude, user, web:url)',
+      },
+      project: {
+        type: 'string',
+        description: 'Filter by project name',
+      },
+      client: {
+        type: 'string',
+        description: 'Filter by client name',
       },
       min_confidence: {
         type: 'number',
@@ -187,6 +197,8 @@ export async function queryHandler(args: Record<string, unknown>): Promise<ToolR
     if (input.tags) filterOptions.tags = input.tags;
     if (input.path) filterOptions.path = input.path;
     if (input.source) filterOptions.source = input.source;
+    if (input.project) filterOptions.project = input.project;
+    if (input.client) filterOptions.client = input.client;
     if (input.min_confidence !== undefined) filterOptions.minConfidence = input.min_confidence;
     if (input.max_confidence !== undefined) filterOptions.maxConfidence = input.max_confidence;
     if (input.verified !== undefined) filterOptions.verified = input.verified;

@@ -46,6 +46,8 @@ export function indexNote(db: Database.Database, note: Note): void {
   const aiBinding = fm.ai_binding as string | undefined;
   const appliesTo = fm.applies_to as string[] | undefined;
   const domain = fm.domain as string[] | undefined;
+  const project = fm.project as string | undefined;
+  const client = fm.client as string | undefined;
 
   // Handle source field - can be string or object
   const sourceValue = frontmatter.source;
@@ -65,7 +67,8 @@ export function indexNote(db: Database.Database, note: Note): void {
           content = ?, content_hash = ?,
           status = ?, mentioned_in = ?, tags = ?, related = ?, aliases = ?,
           palace_version = ?,
-          ai_binding = ?, applies_to = ?, domain = ?
+          ai_binding = ?, applies_to = ?, domain = ?,
+          project = ?, client = ?
         WHERE id = ?`
       ).run(
         title,
@@ -86,6 +89,8 @@ export function indexNote(db: Database.Database, note: Note): void {
         aiBinding ?? null,
         appliesTo ? JSON.stringify(appliesTo) : null,
         domain ? JSON.stringify(domain) : null,
+        project ?? null,
+        client ?? null,
         existing.id
       );
 
@@ -104,8 +109,9 @@ export function indexNote(db: Database.Database, note: Note): void {
           path, title, type, created, modified,
           source, confidence, verified, content, content_hash,
           status, mentioned_in, tags, related, aliases, palace_version,
-          ai_binding, applies_to, domain
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ai_binding, applies_to, domain,
+          project, client
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
         path,
         title,
@@ -125,7 +131,9 @@ export function indexNote(db: Database.Database, note: Note): void {
         palaceVersion,
         aiBinding ?? null,
         appliesTo ? JSON.stringify(appliesTo) : null,
-        domain ? JSON.stringify(domain) : null
+        domain ? JSON.stringify(domain) : null,
+        project ?? null,
+        client ?? null
       );
 
       const noteId = result.lastInsertRowid as number;

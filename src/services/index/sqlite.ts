@@ -41,7 +41,9 @@ CREATE TABLE IF NOT EXISTS notes (
     word_count INTEGER,
     palace_version INTEGER DEFAULT 1,
     last_agent TEXT,
-    children_count INTEGER DEFAULT 0
+    children_count INTEGER DEFAULT 0,
+    project TEXT,
+    client TEXT
 );
 
 -- Tags junction table
@@ -129,6 +131,8 @@ CREATE INDEX IF NOT EXISTS idx_domains_path ON domains(path);
 CREATE INDEX IF NOT EXISTS idx_domains_level ON domains(level);
 CREATE INDEX IF NOT EXISTS idx_domains_parent ON domains(parent_path);
 CREATE INDEX IF NOT EXISTS idx_note_domains_domain ON note_domains(domain);
+CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project);
+CREATE INDEX IF NOT EXISTS idx_notes_client ON notes(client);
 `;
 
 // FTS5 virtual table for full-text search
@@ -163,6 +167,23 @@ END;
 `;
 
 /**
+ * Migrate schema for existing databases (adds new columns)
+ */
+function migrateSchema(db: Database.Database): void {
+  const hasProjectCol = db
+    .prepare("SELECT COUNT(*) as cnt FROM pragma_table_info('notes') WHERE name='project'")
+    .get() as { cnt: number };
+
+  if (hasProjectCol.cnt === 0) {
+    logger.info('Migrating schema: adding project/client columns');
+    db.exec('ALTER TABLE notes ADD COLUMN project TEXT');
+    db.exec('ALTER TABLE notes ADD COLUMN client TEXT');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_notes_client ON notes(client)');
+  }
+}
+
+/**
  * Initialize database schema
  * Creates tables if they don't exist (fresh install)
  */
@@ -190,6 +211,9 @@ export function initializeSchema(db: Database.Database): void {
   } else {
     logger.debug('Database schema already exists');
   }
+
+  // Run migrations for both fresh and existing databases
+  migrateSchema(db);
 }
 
 /**

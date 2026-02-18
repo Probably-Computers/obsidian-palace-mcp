@@ -97,9 +97,13 @@ src/
 │   │   ├── inspector.ts       # Vault health inspection
 │   │   ├── executor.ts        # Migration execution
 │   │   └── index.ts
-│   └── time/                  # Time tracking (Phase 030)
-│       ├── storage.ts         # Time entry creation and duration parsing
-│       ├── aggregator.ts      # Time aggregation and reporting
+│   ├── time/                  # Time tracking (Phase 030)
+│   │   ├── storage.ts         # Time entry creation and duration parsing
+│   │   ├── aggregator.ts      # Time aggregation and reporting
+│   │   └── index.ts
+│   └── project/               # Project management (Phase 031)
+│       ├── work-items.ts      # Work item parser (checklists with annotations)
+│       ├── context-loader.ts  # Project context aggregation (brief/standard/deep)
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── store.ts               # palace_store (intent-based storage)
@@ -130,6 +134,7 @@ src/
 │   ├── migrate.ts             # palace_migrate (Phase 029)
 │   ├── time-log.ts            # palace_time_log (Phase 030)
 │   ├── time-summary.ts        # palace_time_summary (Phase 030)
+│   ├── project-summary.ts     # palace_project_summary (Phase 031)
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -354,6 +359,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_session_end | ✅ | End session with duration tracking and optional time entry |
 | palace_time_log | ✅ | Log time entries against projects with flexible duration input |
 | palace_time_summary | ✅ | Aggregate and report on time entries with filtering/grouping |
+| palace_project_summary | ✅ | Load project context at brief/standard/deep depth for AI session resume |
 
 ### palace_recall
 
@@ -381,6 +387,8 @@ Query notes by properties without full-text search:
   tags?: string[];         // Must have ALL tags
   path?: string;           // Path prefix filter
   source?: string;         // Source filter
+  project?: string;        // Filter by project name
+  client?: string;         // Filter by client name
   min_confidence?: number;
   max_confidence?: number;
   verified?: boolean;
@@ -1510,6 +1518,92 @@ Aggregate and report on logged time entries:
 
 // Time by category across all projects
 { group_by: "category" }
+```
+
+### palace_project_summary
+
+Load project context for AI session resume. Returns project status, work items, recent changes, time tracking, and more at three depth levels:
+
+```typescript
+{
+  project: string;               // Project name (required), or "*"/"all" for dashboard
+  vault?: string;                // Vault alias
+  depth?: 'brief' | 'standard' | 'deep';  // Context depth (default: standard)
+  lookback_days?: number;        // Days to look back for changes (default: 7)
+  include_time?: boolean;        // Include time summary (default: true)
+}
+```
+
+**Depth Levels:**
+- `brief` (~200-500 tokens): Status, priority, client, work item counts, blockers, time this week
+- `standard` (~2K-5K tokens): Brief + full work items with annotations, recent changes, Knowledge Map, time by category, decisions
+- `deep` (~8K-20K tokens): Standard + full hub content, session history, related projects, stubs
+
+**Multi-project mode:** Pass `project: "*"` or `project: "all"` to get a dashboard of all projects at brief depth, sorted by status priority (in_progress first).
+
+**Project hub discovery** (fallback chain):
+1. Index query: `type = project_hub` AND `project = ?`
+2. Index query: `type = project` AND `project = ?`
+3. Path-based: `projects/{project-slug}/` with type filter
+4. Title match as last resort
+
+**Work item format** (parsed from project hub content):
+```markdown
+- [ ] Task description [priority:high] [due:2026-03-15]
+- [ ] [[Note Title]] - Linked task [blocked_by:client review] [category:development]
+- [x] Completed task
+```
+
+**Annotations:** `[priority:critical|high|medium|low]`, `[due:YYYY-MM-DD]`, `[blocked_by:description]`, `[category:name]`
+
+**Output includes:**
+- `project`, `client`, `status`, `priority`, `hub_path`
+- `work_items`: `{ total, done, in_progress, blocked }`
+- `blockers`: Array of blocked_by descriptions
+- `time_summary`: Total time in lookback period (brief)
+- `work_item_details`: Full parsed work items (standard+)
+- `recent_changes`: Recently modified project notes (standard+)
+- `knowledge_map`: Hub's Knowledge Map section (standard+)
+- `time_by_category`: Time grouped by category (standard+)
+- `decisions`: Notes & Decisions section content (standard+)
+- `hub_content`: Full hub markdown (deep)
+- `session_history`: Recent daily notes (deep)
+- `related_projects`: Other project hubs (deep)
+- `stubs`: Stub notes in project path (deep)
+
+**Example:**
+```typescript
+// Resume working on a project
+{ project: "PC Standards", depth: "standard" }
+
+// Quick status check
+{ project: "Website Redesign", depth: "brief" }
+
+// All active projects dashboard
+{ project: "*", depth: "brief" }
+
+// Deep dive for onboarding
+{ project: "API Platform", depth: "deep", lookback_days: 30 }
+```
+
+### Project Hub Frontmatter Convention
+
+```yaml
+---
+type: project_hub
+title: "Project Name"
+project: "Project Name"
+client: "Client Name"
+status: in_progress        # backlog|todo|in_progress|blocked|review|done|on_hold|cancelled
+priority: high             # critical|high|medium|low
+start_date: 2026-02-18
+due_date: 2026-03-15
+budget_hours: 40
+billable: true
+children_count: 5
+domain: [consulting, web-dev]
+tags: [active, q1-2026]
+---
 ```
 
 ## Version History Configuration

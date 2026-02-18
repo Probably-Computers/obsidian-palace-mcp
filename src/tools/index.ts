@@ -46,6 +46,7 @@ import { undoTool, undoHandler } from './undo.js';
 import { migrateTool, migrateHandler } from './migrate.js';
 import { timeLogTool, timeLogHandler } from './time-log.js';
 import { timeSummaryTool, timeSummaryHandler } from './time-summary.js';
+import { projectSummaryTool, projectSummaryHandler } from './project-summary.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -164,6 +165,10 @@ export function registerTools(): void {
 
   tools.set('palace_time_summary', timeSummaryTool);
   handlers.set('palace_time_summary', timeSummaryHandler);
+
+  // Phase 031 tools - Project Management
+  tools.set('palace_project_summary', projectSummaryTool);
+  handlers.set('palace_project_summary', projectSummaryHandler);
 }
 
 /**

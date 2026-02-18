@@ -47,6 +47,8 @@ export interface FilterOptions {
   tags?: string[];
   path?: string;
   source?: string;
+  project?: string;
+  client?: string;
   minConfidence?: number;
   maxConfidence?: number;
   verified?: boolean;
@@ -238,6 +240,8 @@ export function queryNotesInVault(
     tags,
     path,
     source,
+    project,
+    client,
     minConfidence,
     maxConfidence,
     verified,
@@ -267,6 +271,16 @@ export function queryNotesInVault(
   if (source) {
     sql += ' AND source = ?';
     params.push(source);
+  }
+
+  if (project) {
+    sql += ' AND project = ?';
+    params.push(project);
+  }
+
+  if (client) {
+    sql += ' AND client = ?';
+    params.push(client);
   }
 
   if (minConfidence !== undefined) {
@@ -404,7 +418,7 @@ export function countNotesInVault(
   db: Database.Database,
   options: Omit<FilterOptions, 'limit' | 'offset' | 'sortBy' | 'sortOrder'>
 ): number {
-  const { type, tags, path, minConfidence, verified } = options;
+  const { type, tags, path, project, client, minConfidence, verified } = options;
 
   let sql = 'SELECT COUNT(*) as count FROM notes WHERE 1=1';
   const params: unknown[] = [];
@@ -417,6 +431,16 @@ export function countNotesInVault(
   if (path) {
     sql += ' AND path LIKE ?';
     params.push(`${path}%`);
+  }
+
+  if (project) {
+    sql += ' AND project = ?';
+    params.push(project);
+  }
+
+  if (client) {
+    sql += ' AND client = ?';
+    params.push(client);
   }
 
   if (minConfidence !== undefined) {
