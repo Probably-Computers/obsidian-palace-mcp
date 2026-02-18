@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-02-18
+
+### Fixed
+- **Hub Knowledge Map reconciliation**: `palace_improve` now detects orphaned children (files in hub directory not in Knowledge Map) after modify operations and adds them automatically. Root cause of 258 orphaned fragments found during vault migration.
+- **Multi-hub migration safety**: `palace_migrate` inspector no longer produces duplicate or conflicting rename suggestions when a directory contains multiple hubs.
+- **Filename sanitization in migrations**: Forward slashes in note titles (e.g. "Setup/Balancer") are replaced with hyphens to prevent accidental subdirectory creation during rename.
+- **Stale index guards**: Migration executor skips renames when the source file no longer exists on disk or when source and target paths are identical.
+
+### Added
+- **`addToHub` option for `createChildNote()`**: When `true`, automatically updates the hub's Knowledge Map after creating a child file. Default `false` for backward compatibility.
+- **`children_reconciled` output field**: `palace_improve` now surfaces the count of orphaned children added to the Knowledge Map in the response.
+
 ## [2.2.1] - 2026-02-18
 
 ### Fixed
