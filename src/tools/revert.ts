@@ -11,11 +11,10 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { getVaultRegistry, readNote } from '../services/vault/index.js';
 import {
   getVersion,
-  getVersionContent,
   saveVersion,
   listVersions,
 } from '../services/history/index.js';
-import { parseFrontmatter, stringifyFrontmatter } from '../utils/frontmatter.js';
+import { stringifyFrontmatter } from '../utils/frontmatter.js';
 import { indexNote } from '../services/index/sync.js';
 import { createDatabase } from '../services/index/sqlite.js';
 import { logger } from '../utils/logger.js';

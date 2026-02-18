@@ -8,7 +8,7 @@
  * Link styles: keep, plain_text, relative, remove
  */
 
-import { join, dirname, basename } from 'path';
+import { join } from 'path';
 import { existsSync, statSync } from 'fs';
 import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';

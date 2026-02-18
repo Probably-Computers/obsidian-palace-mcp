@@ -8,7 +8,7 @@
  */
 
 import { join, relative, normalize } from 'path';
-import { readdir, stat } from 'fs/promises';
+import { readdir } from 'fs/promises';
 import Database from 'better-sqlite3';
 import { queryNotesInVault, type FilterOptions } from '../index/query.js';
 import { logger } from '../../utils/logger.js';

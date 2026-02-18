@@ -11,7 +11,7 @@
  */
 
 import { join, dirname, basename } from 'path';
-import { rename as fsRename, mkdir, unlink } from 'fs/promises';
+import { rename as fsRename, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import Database from 'better-sqlite3';
 import { readNote } from '../vault/reader.js';

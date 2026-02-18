@@ -237,7 +237,7 @@ export async function exportDirectory(
     }
 
     // Read all markdown files in directory
-    const { readdirSync, statSync } = await import('fs');
+    const { readdirSync } = await import('fs');
     const files = readdirSync(fullDirPath)
       .filter((f) => f.endsWith('.md'))
       .map((f) => join(dirPath, f));

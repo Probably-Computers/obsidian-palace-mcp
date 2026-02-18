@@ -12,9 +12,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { getVaultRegistry, readNote } from '../services/vault/index.js';
 import {
   listVersions,
-  getVersion,
   getVersionContent,
-  type VersionEntry,
 } from '../services/history/index.js';
 import {
   generateDiff,

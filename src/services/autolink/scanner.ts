@@ -427,12 +427,10 @@ function findParagraphBoundaries(content: string): Array<{ start: number; end: n
   const regex = /(?:^|\n\n)([^\n]+(?:\n[^\n]+)*)/g;
   let match;
 
-  let lastEnd = 0;
   while ((match = regex.exec(content)) !== null) {
     const start = match.index === 0 ? 0 : match.index + 2; // Skip the \n\n
     const end = start + match[1]!.length;
     paragraphs.push({ start, end });
-    lastEnd = end;
   }
 
   // Handle edge case where content doesn't match the pattern

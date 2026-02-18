@@ -15,8 +15,8 @@ import type { ToolResult } from '../types/index.js';
 import { readNote, listNotes } from '../services/vault/index.js';
 import { updateNote } from '../services/vault/writer.js';
 import { indexNote, getIndexManager } from '../services/index/index.js';
-import { validateFrontmatter, repairFrontmatter, type ValidationIssue } from '../utils/frontmatter-schema.js';
-import { getAccurateChildrenCount, updateChildrenCount } from '../services/atomic/children-count.js';
+import { validateFrontmatter, type ValidationIssue } from '../utils/frontmatter-schema.js';
+import { getAccurateChildrenCount } from '../services/atomic/children-count.js';
 import { normalizeType, isHubType } from '../types/note-types.js';
 import { logger } from '../utils/logger.js';
 import {
@@ -27,7 +27,6 @@ import {
 
 // Repair types available
 const REPAIR_TYPES = ['types', 'children_count', 'dates', 'domains', 'required_fields', 'all'] as const;
-type RepairType = (typeof REPAIR_TYPES)[number];
 
 // Input schema
 const inputSchema = z.object({

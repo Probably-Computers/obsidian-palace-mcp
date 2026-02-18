@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import { rm } from 'fs/promises';
-import { join, basename, dirname } from 'path';
+import { join } from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';

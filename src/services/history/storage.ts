@@ -6,7 +6,7 @@
  */
 
 import { createHash } from 'crypto';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { readdir, readFile, writeFile, mkdir, stat, unlink, rm } from 'fs/promises';
 import { existsSync } from 'fs';
 import { parseFrontmatter, stringifyFrontmatter } from '../../utils/frontmatter.js';

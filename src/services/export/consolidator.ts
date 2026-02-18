@@ -8,9 +8,8 @@ import { join, dirname } from 'path';
 import { readFile } from 'fs/promises';
 import { existsSync } from 'fs';
 import { parseFrontmatter } from '../../utils/frontmatter.js';
-import { adjustHeaderLevels, stripFrontmatter } from '../../utils/markdown.js';
+import { adjustHeaderLevels } from '../../utils/markdown.js';
 import { getHubInfo } from '../atomic/hub-manager.js';
-import { logger } from '../../utils/logger.js';
 import type { HubChild, HubInfo } from '../../types/atomic.js';
 
 /**

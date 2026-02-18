@@ -6,7 +6,7 @@
 
 import matter from 'gray-matter';
 import type { NoteFrontmatter } from '../types/index.js';
-import { normalizeType, isValidNoteType } from '../types/note-types.js';
+import { normalizeType } from '../types/note-types.js';
 
 /**
  * Parse frontmatter from markdown content

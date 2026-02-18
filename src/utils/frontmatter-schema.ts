@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { VALID_NOTE_TYPES, normalizeType, type NoteType } from '../types/note-types.js';
+import { normalizeType, type NoteType } from '../types/note-types.js';
 
 /**
  * Validation severity levels
