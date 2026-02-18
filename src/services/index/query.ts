@@ -126,7 +126,7 @@ export function searchNotesInVault(
     SELECT
       n.id, n.path, n.title, n.type, n.created, n.modified,
       n.source, n.confidence, n.verified, n.content,
-      bm25(notes_fts) as rank
+      bm25(notes_fts, 10.0, 1.0, 5.0, 2.0) as rank
     FROM notes_fts
     JOIN notes n ON notes_fts.rowid = n.id
     WHERE notes_fts MATCH ?

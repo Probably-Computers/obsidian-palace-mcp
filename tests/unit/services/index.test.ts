@@ -220,6 +220,58 @@ describe('Index Service', () => {
       expect(results[0]?.note.title).toBe('Kubernetes Basics');
     });
 
+    it('ranks title matches above content-only matches', async () => {
+      const { indexNote } = await import('../../../src/services/index/sync');
+      const { searchNotesInVault } = await import('../../../src/services/index/query');
+
+      // Clear existing data
+      db.exec('DELETE FROM links');
+      db.exec('DELETE FROM note_tags');
+      db.exec('DELETE FROM notes');
+      db.exec('DELETE FROM notes_fts');
+
+      // Note with "time tracking" in title
+      indexNote(db, {
+        path: 'research/time-tracking.md',
+        filename: 'time-tracking.md',
+        title: 'Time Tracking',
+        frontmatter: {
+          type: 'research' as const,
+          created: '2025-01-01T00:00:00Z',
+          modified: '2025-01-01T00:00:00Z',
+          verified: false,
+          tags: [],
+          related: [],
+          aliases: [],
+        },
+        content: '# Time Tracking\n\nA guide to tracking time.',
+        raw: '---\ntype: research\n---\n\n# Time Tracking\n\nA guide to tracking time.',
+      });
+
+      // Note that mentions "time tracking" only in body
+      indexNote(db, {
+        path: 'research/project-management.md',
+        filename: 'project-management.md',
+        title: 'Project Management Hub',
+        frontmatter: {
+          type: 'research' as const,
+          created: '2025-01-02T00:00:00Z',
+          modified: '2025-01-02T00:00:00Z',
+          verified: false,
+          tags: [],
+          related: [],
+          aliases: [],
+        },
+        content: '# Project Management Hub\n\nThis hub covers project management. Time tracking is one aspect of project management.',
+        raw: '---\ntype: research\n---\n\n# Project Management Hub\n\nThis hub covers project management. Time tracking is one aspect.',
+      });
+
+      const results = searchNotesInVault(db, { query: 'time tracking' });
+      expect(results.length).toBe(2);
+      // Title match should rank first
+      expect(results[0]?.note.title).toBe('Time Tracking');
+    });
+
     it('filters by type', async () => {
       const { queryNotesInVault } = await import('../../../src/services/index/query');
 

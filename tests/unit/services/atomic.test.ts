@@ -487,8 +487,8 @@ More content.`;
 
     // Quick Reference should be in hub, not as a child
     expect(result.children.length).toBe(2); // Only Details and More Details
-    expect(result.children.map(c => c.title)).toContain('Details');
-    expect(result.children.map(c => c.title)).toContain('More Details');
+    expect(result.children.map(c => c.title)).toContain('My Document - Details');
+    expect(result.children.map(c => c.title)).toContain('My Document - More Details');
     expect(result.children.map(c => c.title)).not.toContain('Quick Reference');
 
     // Hub content should include Quick Reference section
@@ -523,7 +523,7 @@ Implementation details.`;
     });
 
     // Example Format (template content) should stay in hub
-    expect(result.children.map(c => c.title)).not.toContain('Example Format');
+    expect(result.children.map(c => c.title)).not.toContain('Template Doc - Example Format');
     expect(result.hub.content).toContain('## Example Format');
   });
 
@@ -552,12 +552,47 @@ Implementation guide.`;
     });
 
     // Summary should stay in hub
-    expect(result.children.map(c => c.title)).not.toContain('Summary');
+    expect(result.children.map(c => c.title)).not.toContain('Standard - Summary');
     expect(result.hub.content).toContain('## Summary');
 
     // Requirements and Implementation should be children
-    expect(result.children.map(c => c.title)).toContain('Requirements');
-    expect(result.children.map(c => c.title)).toContain('Implementation');
+    expect(result.children.map(c => c.title)).toContain('Standard - Requirements');
+    expect(result.children.map(c => c.title)).toContain('Standard - Implementation');
+  });
+
+  it('should use parent-prefixed child filenames and Knowledge Map links', async () => {
+    const { splitBySections } = await import('../../../src/services/atomic/splitter.js');
+
+    const content = `# Kubernetes
+
+Overview of Kubernetes.
+
+## Architecture
+
+Control plane and nodes.
+
+## Networking
+
+Pod networking and services.`;
+
+    const analysis = analyzeContent(content);
+    const result = splitBySections(content, analysis, {
+      targetDir: 'infrastructure/kubernetes',
+      title: 'Kubernetes',
+    });
+
+    // Children should have prefixed titles
+    expect(result.children.length).toBe(2);
+    expect(result.children[0]?.title).toBe('Kubernetes - Architecture');
+    expect(result.children[1]?.title).toBe('Kubernetes - Networking');
+
+    // Children should have prefixed filenames in relativePath
+    expect(result.children[0]?.relativePath).toBe('infrastructure/kubernetes/Kubernetes - Architecture.md');
+    expect(result.children[1]?.relativePath).toBe('infrastructure/kubernetes/Kubernetes - Networking.md');
+
+    // Knowledge Map links should use prefixed titles
+    expect(result.hub.content).toContain('[[Kubernetes - Architecture]]');
+    expect(result.hub.content).toContain('[[Kubernetes - Networking]]');
   });
 
   it('should handle multiple hub_sections patterns', async () => {
@@ -586,6 +621,6 @@ Details here.`;
 
     // Both should stay in hub
     expect(result.children.length).toBe(1);
-    expect(result.children[0]?.title).toBe('Details');
+    expect(result.children[0]?.title).toBe('Doc - Details');
   });
 });

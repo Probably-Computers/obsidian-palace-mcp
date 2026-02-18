@@ -164,6 +164,74 @@ describe('Retroactive Linking', () => {
       expect(containers!.mentionCount).toBe(2);
     });
 
+    it('skips mentions in heading lines', async () => {
+      const { findUnlinkedMentions } = await import('../../../src/services/graph/retroactive');
+      const { indexNote } = await import('../../../src/services/index/sync');
+
+      indexNote(db, createTestNote(
+        'research/heading-test.md',
+        'Heading Test',
+        '# Docker Overview\n\n## Docker Configuration\n\nSome content about containers.',
+      ));
+
+      const matches = findUnlinkedMentions(db, 'Docker', 'research/docker.md');
+
+      // Should NOT match heading lines, only body content
+      const headingMatch = matches.find(m => m.path === 'research/heading-test.md');
+      expect(headingMatch).toBeUndefined();
+    });
+
+    it('skips mentions inside code blocks', async () => {
+      const { findUnlinkedMentions } = await import('../../../src/services/graph/retroactive');
+      const { indexNote } = await import('../../../src/services/index/sync');
+
+      indexNote(db, createTestNote(
+        'research/codeblock-test.md',
+        'Code Block Test',
+        '# Code Block Test\n\n```bash\ndocker run -it ubuntu\ndocker build .\n```\n\nNo mention of the tool outside the fenced block.',
+      ));
+
+      const matches = findUnlinkedMentions(db, 'Docker', 'research/docker.md');
+
+      // Should NOT match inside code blocks
+      const codeMatch = matches.find(m => m.path === 'research/codeblock-test.md');
+      expect(codeMatch).toBeUndefined();
+    });
+
+    it('skips mentions inside URLs', async () => {
+      const { findUnlinkedMentions } = await import('../../../src/services/graph/retroactive');
+      const { indexNote } = await import('../../../src/services/index/sync');
+
+      indexNote(db, createTestNote(
+        'research/url-test.md',
+        'URL Test',
+        '# URL Test\n\nSee https://hub.docker.com/r/library/alpine for details.',
+      ));
+
+      const matches = findUnlinkedMentions(db, 'Docker', 'research/docker.md');
+
+      // "docker" is inside the URL, should not match
+      const urlMatch = matches.find(m => m.path === 'research/url-test.md');
+      expect(urlMatch).toBeUndefined();
+    });
+
+    it('skips mentions inside markdown links', async () => {
+      const { findUnlinkedMentions } = await import('../../../src/services/graph/retroactive');
+      const { indexNote } = await import('../../../src/services/index/sync');
+
+      indexNote(db, createTestNote(
+        'research/mdlink-test.md',
+        'MD Link Test',
+        '# MD Link Test\n\nSee [Docker docs](https://docs.docker.com) for more info.',
+      ));
+
+      const matches = findUnlinkedMentions(db, 'Docker', 'research/docker.md');
+
+      // "Docker" inside markdown link text should not match
+      const mdMatch = matches.find(m => m.path === 'research/mdlink-test.md');
+      expect(mdMatch).toBeUndefined();
+    });
+
     it('searches for aliases as well', async () => {
       const { findUnlinkedMentions } = await import('../../../src/services/graph/retroactive');
 
@@ -284,6 +352,42 @@ Mentions Docker here.`;
       );
 
       expect(result.notesUpdated.length).toBe(2);
+    });
+  });
+
+  describe('single common words should not match', () => {
+    beforeEach(async () => {
+      const { indexNote } = await import('../../../src/services/index/sync');
+
+      // A note about "Data Analysis Techniques"
+      indexNote(db, createTestNote(
+        'research/data-analysis.md',
+        'Data Analysis Techniques',
+        '# Data Analysis Techniques\n\nVarious methods for analyzing data.',
+      ));
+
+      // A note that mentions "analysis" in a different context
+      indexNote(db, createTestNote(
+        'research/code-review.md',
+        'Code Review',
+        '# Code Review\n\nPerform analysis of code quality during reviews.',
+      ));
+    });
+
+    it('does not match single common words from title', async () => {
+      const { findUnlinkedMentions } = await import('../../../src/services/graph/retroactive');
+
+      // Search with no aliases (Phase 029: buildRetroactiveAliases returns [])
+      const matches = findUnlinkedMentions(
+        db,
+        'Data Analysis Techniques',
+        'research/data-analysis.md',
+        [] // No single-word aliases
+      );
+
+      // "Code Review" mentions "analysis" but not "Data Analysis Techniques"
+      const codeReview = matches.find(m => m.path === 'research/code-review.md');
+      expect(codeReview).toBeUndefined();
     });
   });
 

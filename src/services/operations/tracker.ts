@@ -13,7 +13,7 @@ import { logger } from '../../utils/logger.js';
 /**
  * Operation types
  */
-export type OperationType = 'store' | 'improve' | 'split' | 'delete';
+export type OperationType = 'store' | 'improve' | 'split' | 'delete' | 'migrate';
 
 /**
  * Operation metadata

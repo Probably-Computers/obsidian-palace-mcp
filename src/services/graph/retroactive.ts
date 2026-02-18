@@ -80,6 +80,35 @@ export function findUnlinkedMentions(
 }
 
 /**
+ * Check if position is inside a markdown link [text](url)
+ */
+function isInsideMarkdownLink(line: string, position: number): boolean {
+  // Match [text](url) patterns
+  const mdLinkRegex = /\[([^\]]*)\]\([^)]*\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = mdLinkRegex.exec(line)) !== null) {
+    if (position >= match.index && position < match.index + match[0].length) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if position is inside a bare URL (https://...)
+ */
+function isInsideBareUrl(line: string, position: number): boolean {
+  const urlRegex = /https?:\/\/[^\s)>\]]+/g;
+  let match: RegExpExecArray | null;
+  while ((match = urlRegex.exec(line)) !== null) {
+    if (position >= match.index && position < match.index + match[0].length) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Find mentions of search terms in content that aren't already linked
  */
 function findMentionsInContent(
@@ -97,6 +126,9 @@ function findMentionsInContent(
     new RegExp(`\\[\\[${escapeRegex(targetName)}(\\|[^\\]]*)?\\]\\]`, 'gi'),
   ];
 
+  // Track code block state
+  let inCodeBlock = false;
+
   for (let lineNum = 0; lineNum < lines.length; lineNum++) {
     const line = lines[lineNum] || '';
 
@@ -111,10 +143,17 @@ function findMentionsInContent(
       continue;
     }
 
-    // Skip lines that are entirely in code blocks
+    // Track code block boundaries
     if (line.startsWith('```') || line.startsWith('~~~')) {
+      inCodeBlock = !inCodeBlock;
       continue;
     }
+
+    // Skip lines inside code blocks
+    if (inCodeBlock) continue;
+
+    // Skip heading lines — identity text should not be modified
+    if (/^#{1,6}\s+/.test(line)) continue;
 
     // Check if this line already has a link to the target
     const hasExistingLink = linkPatterns.some((pattern) => pattern.test(line));
@@ -131,6 +170,12 @@ function findMentionsInContent(
 
         // Check if inside inline code
         if (isInsideInlineCode(line, match.index)) continue;
+
+        // Check if inside a markdown link [text](url)
+        if (isInsideMarkdownLink(line, match.index)) continue;
+
+        // Check if inside a bare URL
+        if (isInsideBareUrl(line, match.index)) continue;
 
         matches.push({
           line: lineNum + 1,

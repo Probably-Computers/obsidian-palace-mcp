@@ -89,6 +89,11 @@ describe('titleToFilename (Phase 018)', () => {
     expect(titleToFilename('What is K8s?')).toBe('What is K8s.md');
     expect(titleToFilename('File:Name')).toBe('File-Name.md');
   });
+
+  it('should handle parent-prefixed child note names (Phase 029)', () => {
+    expect(titleToFilename('Kubernetes - Overview')).toBe('Kubernetes - Overview.md');
+    expect(titleToFilename('Green Peppers - Climate Requirements')).toBe('Green Peppers - Climate Requirements.md');
+  });
 });
 
 describe('sanitizeForFilename (Phase 018)', () => {

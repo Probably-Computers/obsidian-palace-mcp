@@ -5,7 +5,8 @@
  *
  * Phase 018: Uses title-style filenames (Obsidian-native)
  * - Hub filename = sanitized title (e.g., "Green Peppers.md")
- * - Child filename = sanitized section title (e.g., "Climate Requirements.md")
+ * Phase 029: Parent-prefixed child naming
+ * - Child filename = "{Parent} - {Section}.md" (e.g., "Green Peppers - Climate Requirements.md")
  */
 
 import { join, basename } from 'path';
@@ -159,13 +160,14 @@ export function splitBySections(
     const sectionLines = lines.slice(section.startLine, section.endLine + 1);
     const sectionContent = sectionLines.join('\n');
 
-    // Create child note with title-style filename
+    // Create child note with parent-prefixed filename
     const cleanSectionTitle = stripWikiLinks(section.title);
-    const childFilename = titleToFilename(cleanSectionTitle);
+    const prefixedTitle = `${cleanTitle} - ${cleanSectionTitle}`;
+    const childFilename = titleToFilename(prefixedTitle);
     const childPath = join(targetDir, childFilename);
 
     const child = buildChildContent(
-      cleanSectionTitle,
+      prefixedTitle,
       sectionContent,
       childPath,
       hubPath,
@@ -252,13 +254,14 @@ export function splitByLargeSections(
     const sectionLines = lines.slice(section.startLine, section.endLine + 1);
     const sectionContent = sectionLines.join('\n');
 
-    // Create child note with title-style filename
+    // Create child note with parent-prefixed filename
     const cleanSectionTitle = stripWikiLinks(section.title);
-    const childFilename = titleToFilename(cleanSectionTitle);
+    const prefixedTitle = `${cleanTitle} - ${cleanSectionTitle}`;
+    const childFilename = titleToFilename(prefixedTitle);
     const childPath = join(targetDir, childFilename);
 
     const child = buildChildContent(
-      cleanSectionTitle,
+      prefixedTitle,
       sectionContent,
       childPath,
       hubPath,
@@ -322,9 +325,10 @@ export function splitBySubConcepts(
     const subConceptLines = lines.slice(subConcept.startLine, subConcept.endLine + 1);
     const subConceptContent = subConceptLines.join('\n');
 
-    // Create child note with title-style filename
+    // Create child note with parent-prefixed filename
     const cleanSubConceptTitle = stripWikiLinks(subConcept.title);
-    const childFilename = titleToFilename(cleanSubConceptTitle);
+    const prefixedTitle = `${cleanTitle} - ${cleanSubConceptTitle}`;
+    const childFilename = titleToFilename(prefixedTitle);
     const childPath = join(targetDir, childFilename);
 
     // Promote heading to H2 for child note
@@ -334,7 +338,7 @@ export function splitBySubConcepts(
     );
 
     const child = buildChildContent(
-      cleanSubConceptTitle,
+      prefixedTitle,
       promotedContent,
       childPath,
       hubPath,

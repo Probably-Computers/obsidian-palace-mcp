@@ -41,6 +41,7 @@ import { batchTool, batchHandler } from './batch.js';
 import { historyTool, historyHandler } from './history.js';
 import { revertTool, revertHandler } from './revert.js';
 import { undoTool, undoHandler } from './undo.js';
+import { migrateTool, migrateHandler } from './migrate.js';
 
 // Tool registry
 const tools: Map<string, Tool> = new Map();
@@ -145,6 +146,10 @@ export function registerTools(): void {
 
   tools.set('palace_undo', undoTool);
   handlers.set('palace_undo', undoHandler);
+
+  // Phase 029 tools - Vault Migration
+  tools.set('palace_migrate', migrateTool);
+  handlers.set('palace_migrate', migrateHandler);
 }
 
 /**

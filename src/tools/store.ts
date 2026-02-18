@@ -71,6 +71,8 @@ export const storeTool: Tool = {
 
 **Domain IS the path:** ['networking', 'wireless', 'lora'] → networking/wireless/lora/
 
+**Options:** Set create_stubs: false to prevent auto-creating stub notes for [[wiki-links]]. Set auto_split: false to store as a single file without splitting. Set retroactive_link: false to skip updating existing notes with links back to this note.
+
 **IMPORTANT:** Before storing, use palace_structure to observe the vault and palace_check to find existing knowledge.`,
   inputSchema: {
     type: 'object',
@@ -611,33 +613,12 @@ export async function storeHandler(
  * Build aliases for retroactive linking from title and domain
  * This helps find mentions that don't match the exact title
  */
-function buildRetroactiveAliases(title: string, domain: string[]): string[] {
-  const aliases: string[] = [];
-
-  // Add the last domain term as an alias (e.g., "peppers" for gardening/vegetables/peppers)
-  if (domain.length > 0) {
-    const lastDomain = domain[domain.length - 1];
-    if (lastDomain && lastDomain.toLowerCase() !== title.toLowerCase()) {
-      aliases.push(lastDomain);
-    }
-  }
-
-  // Add significant words from the title (words > 4 chars, not common words)
-  const stopWords = new Set(['about', 'after', 'before', 'being', 'between', 'could', 'every', 'first', 'from', 'have', 'into', 'just', 'like', 'made', 'make', 'more', 'most', 'much', 'must', 'only', 'other', 'over', 'said', 'same', 'should', 'some', 'such', 'than', 'that', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'through', 'under', 'very', 'well', 'were', 'what', 'when', 'where', 'which', 'while', 'with', 'would', 'your']);
-
-  const titleWords = title
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(w => w.length > 4 && !stopWords.has(w));
-
-  // Add individual significant words as aliases
-  for (const word of titleWords) {
-    if (!aliases.includes(word)) {
-      aliases.push(word);
-    }
-  }
-
-  return aliases;
+function buildRetroactiveAliases(_title: string, _domain: string[]): string[] {
+  // Phase 029: Removed single-word alias generation.
+  // Single words from titles/domains matched too broadly across the vault.
+  // The full title with word boundary matching is sufficient for retroactive linking.
+  // Explicit note aliases (from frontmatter) can be added here in the future.
+  return [];
 }
 
 /**
@@ -657,7 +638,7 @@ function buildSuccessMessage(
   }
 
   if (stubs.length > 0) {
-    parts.push(`${stubs.length} stub${stubs.length > 1 ? 's' : ''} created`);
+    parts.push(`${stubs.length} stub${stubs.length > 1 ? 's' : ''} created (use create_stubs: false to suppress)`);
   }
 
   if (retroactiveUpdates.length > 0) {

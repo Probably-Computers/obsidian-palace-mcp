@@ -89,9 +89,13 @@ src/
 │   │   ├── selector.ts        # Note selection logic
 │   │   ├── operations.ts      # Batch operation implementations
 │   │   └── index.ts
-│   └── history/               # Version history (Phase 028)
-│       ├── storage.ts         # Version storage and retrieval
-│       ├── diff.ts            # Diff generation (LCS-based)
+│   ├── history/               # Version history (Phase 028)
+│   │   ├── storage.ts         # Version storage and retrieval
+│   │   ├── diff.ts            # Diff generation (LCS-based)
+│   │   └── index.ts
+│   └── migrate/               # Vault migration (Phase 029)
+│       ├── inspector.ts       # Vault health inspection
+│       ├── executor.ts        # Migration execution
 │       └── index.ts
 ├── tools/                     # MCP tool implementations
 │   ├── store.ts               # palace_store (intent-based storage)
@@ -119,6 +123,7 @@ src/
 │   ├── history.ts             # palace_history (Phase 028)
 │   ├── revert.ts              # palace_revert (Phase 028)
 │   ├── undo.ts                # palace_undo (Phase 028)
+│   ├── migrate.ts             # palace_migrate (Phase 029)
 │   └── index.ts               # Tool registration
 ├── utils/
 │   ├── markdown.ts            # Markdown parsing utilities
@@ -339,6 +344,7 @@ All tool inputs are validated with Zod. Each tool file exports:
 | palace_history | ✅ | View version history for notes with diff support |
 | palace_revert | ✅ | Restore notes to previous versions |
 | palace_undo | ✅ | Undo recent operations by operation ID |
+| palace_migrate | ✅ | Vault health inspection and migration of legacy data |
 
 ### palace_recall
 
@@ -692,7 +698,7 @@ All notes use **title-style filenames** that align with Obsidian best practices:
 | Note Type | Convention | Example |
 |-----------|------------|---------|
 | Hub note | `{Title}.md` | `Kubernetes.md`, `Green Peppers.md` |
-| Child note | `{Section Title}.md` | `Climate Requirements.md`, `Architecture.md` |
+| Child note | `{Parent Title} - {Section Title}.md` | `Green Peppers - Climate Requirements.md`, `Kubernetes - Architecture.md` |
 | Stub note | `{Title}.md` | `containerd.md` |
 
 **Benefits:**
@@ -729,9 +735,9 @@ Brief overview...
 
 ## Knowledge Map
 
-- [[Architecture]] - Control plane and node components
-- [[Core Concepts]] - Pods, Services, Deployments
-- [[Container Runtimes]] - containerd, CRI-O, gVisor
+- [[Kubernetes - Architecture]] - Control plane and node components
+- [[Kubernetes - Core Concepts]] - Pods, Services, Deployments
+- [[Kubernetes - Container Runtimes]] - containerd, CRI-O, gVisor
 ```
 
 ### Child Note Structure
@@ -1366,6 +1372,38 @@ Undo recent operations by operation ID:
 // Actually undo
 { operation_id: "op_abc123", dry_run: false }
 ```
+
+### palace_migrate
+
+Inspect vault health and apply migration fixes (Phase 029):
+
+```typescript
+{
+  vault?: string;              // Vault alias
+  categories?: string[];       // Issue categories to check (default: all)
+  dry_run?: boolean;           // Inspect only (default: true)
+  limit?: number;              // Max issues to process
+}
+```
+
+**Issue Categories:**
+- `unprefixed_children`: Child notes without `{Parent} - {Section}.md` naming (fixable)
+- `corrupted_headings`: H1 headings containing `[[wiki-links]]` (fixable)
+- `orphaned_fragments`: Notes in hub directories not linked from hub (report only)
+- `naming_inconsistencies`: Duplicate filenames across directories (report only)
+
+**Workflow:**
+1. Run with `dry_run: true` (default) to inspect
+2. Review findings with user
+3. Run with `dry_run: false` to apply fixes
+
+**Output includes:**
+- `notes_scanned`: Total notes inspected
+- `issues_found`: Number of issues detected
+- `summary`: Count per issue category
+- `issues`: Array of issues with path, type, description, suggestion, fixable flag
+- `fixes`: Applied fixes (when dry_run: false)
+- `operation_id`: For tracking/undo
 
 ## Version History Configuration
 
