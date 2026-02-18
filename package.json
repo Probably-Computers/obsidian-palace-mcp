@@ -25,7 +25,8 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
-    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "prepare": "husky"
   },
   "keywords": [
     "mcp",
@@ -70,6 +71,11 @@
     "yaml": "^2.8.2",
     "zod": "^3.23.0"
   },
+  "lint-staged": {
+    "src/**/*.ts": [
+      "eslint --ext .ts"
+    ]
+  },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/cors": "^2.8.19",
@@ -80,6 +86,8 @@
     "@typescript-eslint/parser": "^7.0.0",
     "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^8.57.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "prettier": "^3.2.0",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0",
