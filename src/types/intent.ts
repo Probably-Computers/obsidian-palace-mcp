@@ -356,6 +356,8 @@ export interface PalaceImproveOutput {
     // Phase 022: Consolidation changes
     children_consolidated?: number;
     children_deleted?: string[];
+    // Hub reconciliation: orphaned children added to Knowledge Map
+    children_reconciled?: number;
   };
   version: number; // New palace.version
   message: string;

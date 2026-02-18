@@ -21,7 +21,8 @@ import { indexNote, removeFromIndex } from '../services/index/sync.js';
 import { readNote } from '../services/vault/reader.js';
 import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../utils/vault-param.js';
 import { logger } from '../utils/logger.js';
-import { shouldSplit, splitContent, createHub, createChildNote, getHubInfo } from '../services/atomic/index.js';
+import { shouldSplit, splitContent, createHub, createChildNote, getHubInfo, addChild, getAccurateChildrenCount, updateChildrenCount } from '../services/atomic/index.js';
+import { isHubType } from '../types/note-types.js';
 import { generateReplaceCleanupSuggestions } from '../services/operations/index.js';
 import { saveVersion } from '../services/history/storage.js';
 
@@ -329,6 +330,21 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
       indexNote(db, updatedNote);
     }
 
+    // Reconcile hub Knowledge Map after content changes
+    // Skip for consolidate (handled separately) and frontmatter (no content changes)
+    const noteType = (newFrontmatter.type as string) ?? '';
+    if (isHubType(noteType) && mode !== 'frontmatter') {
+      try {
+        const reconciled = await reconcileHubChildren(vault, path);
+        if (reconciled > 0) {
+          changes.children_reconciled = reconciled;
+          logger.info(`Reconciled ${reconciled} orphaned children for hub: ${path}`);
+        }
+      } catch (reconcileError) {
+        logger.warn(`Hub reconciliation failed for ${path}:`, reconcileError);
+      }
+    }
+
     const vaultInfo = getVaultResultInfo(vault);
 
     // Phase 023: Generate cleanup suggestions for replace mode
@@ -537,6 +553,55 @@ function buildMessage(mode: ImprovementMode, changes: PalaceImproveOutput['chang
   }
 
   return parts.join(' | ');
+}
+
+/**
+ * Reconcile hub Knowledge Map with actual children on disk.
+ * Finds orphaned children (files in directory not in Knowledge Map) and adds them.
+ * Updates children_count if stale.
+ *
+ * @returns Number of children reconciled (added to Knowledge Map)
+ */
+async function reconcileHubChildren(
+  vault: ReturnType<typeof resolveVaultParam>,
+  hubPath: string
+): Promise<number> {
+  const countResult = await getAccurateChildrenCount(vault.path, hubPath);
+
+  let reconciled = 0;
+
+  // Add orphaned children to the Knowledge Map
+  if (countResult.orphanedChildren.length > 0) {
+    for (const orphanPath of countResult.orphanedChildren) {
+      const orphanTitle = basename(orphanPath, '.md');
+      const result = await addChild(vault.path, hubPath, {
+        path: orphanPath,
+        title: orphanTitle,
+      });
+      if (result.success) {
+        reconciled++;
+      }
+    }
+  }
+
+  // Update children_count if stale (including any newly added children)
+  if (reconciled > 0 || !countResult.isAccurate) {
+    const newCount = countResult.actualCount + reconciled;
+    await updateChildrenCount(vault.path, hubPath, newCount);
+
+    // Re-index the hub since its content changed
+    const manager = getIndexManager();
+    const db = await manager.getIndex(vault.alias);
+    const updatedNote = await readNote(hubPath, {
+      vaultPath: vault.path,
+      ignoreConfig: vault.config.ignore,
+    });
+    if (updatedNote) {
+      indexNote(db, updatedNote);
+    }
+  }
+
+  return reconciled;
 }
 
 /**

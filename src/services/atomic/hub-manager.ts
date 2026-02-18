@@ -500,6 +500,8 @@ export async function createChildNote(
   options: {
     domain?: string[];
     originalFrontmatter?: Record<string, unknown>;
+    /** When true, add this child to the hub's Knowledge Map via addChild() */
+    addToHub?: boolean;
   } = {}
 ): Promise<{ success: boolean; path: string; message: string }> {
   const fullPath = join(vaultPath, childPath);
@@ -532,6 +534,11 @@ export async function createChildNote(
     await writeFile(fullPath, fullContent, 'utf-8');
 
     logger.debug(`Created child note: ${childPath}`);
+
+    // Optionally add child to hub's Knowledge Map
+    if (options.addToHub) {
+      await addChild(vaultPath, hubPath, { path: childPath, title });
+    }
 
     return {
       success: true,
