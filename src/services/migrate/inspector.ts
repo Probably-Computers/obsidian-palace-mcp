@@ -112,7 +112,19 @@ export async function inspectVault(
 }
 
 /**
- * Find child notes whose filenames don't start with parent title prefix
+ * Sanitize a filename by replacing characters that are invalid on most filesystems.
+ * Forward slashes in titles (e.g. "Setup/Balancer", "NA/NB") would create subdirectories.
+ */
+function sanitizeFilename(name: string): string {
+  return name.replace(/\//g, '-');
+}
+
+/**
+ * Find child notes whose filenames don't start with parent title prefix.
+ *
+ * Multi-hub safety: if a directory has multiple hubs, children that already
+ * have a valid prefix from ANY hub in that directory are skipped. Each
+ * unprefixed child is only flagged once (assigned to the first hub found).
  */
 function findUnprefixedChildren(
   db: Database.Database,
@@ -123,9 +135,22 @@ function findUnprefixedChildren(
   // Find all hub notes
   const hubs = notes.filter((n) => isHubType(n.type));
 
+  // Group hub titles by directory for multi-hub detection
+  const hubTitlesByDir = new Map<string, string[]>();
+  for (const hub of hubs) {
+    const dir = dirname(hub.path);
+    const titles = hubTitlesByDir.get(dir) ?? [];
+    titles.push(stripWikiLinks(hub.title));
+    hubTitlesByDir.set(dir, titles);
+  }
+
+  // Track already-flagged child paths to avoid duplicates across hubs
+  const flaggedPaths = new Set<string>();
+
   for (const hub of hubs) {
     const hubDir = dirname(hub.path);
     const hubTitle = stripWikiLinks(hub.title);
+    const allHubTitlesInDir = hubTitlesByDir.get(hubDir) ?? [];
 
     // Find children: notes in same directory that aren't the hub itself
     const children = notes.filter(
@@ -136,26 +161,38 @@ function findUnprefixedChildren(
     );
 
     for (const child of children) {
+      // Skip already-flagged children (claimed by another hub in same dir)
+      if (flaggedPaths.has(child.path)) continue;
+
       const childFilename = basename(child.path, '.md');
       const expectedPrefix = `${hubTitle} - `;
 
-      if (!childFilename.startsWith(expectedPrefix)) {
-        const sectionTitle = stripWikiLinks(child.title);
-        const suggestedName = `${hubTitle} - ${sectionTitle}.md`;
+      // Skip if child already has THIS hub's prefix
+      if (childFilename.startsWith(expectedPrefix)) continue;
 
-        issues.push({
-          path: child.path,
-          type: 'unprefixed_children',
-          description: `Child note "${childFilename}" lacks parent prefix "${hubTitle} - "`,
-          suggestion: `Rename to "${suggestedName}"`,
-          details: {
-            hub_path: hub.path,
-            hub_title: hubTitle,
-            current_filename: basename(child.path),
-            suggested_filename: suggestedName,
-          },
-        });
-      }
+      // Skip if child already has ANY hub's prefix in the same directory
+      const hasAnyHubPrefix = allHubTitlesInDir.some(
+        (title) => childFilename.startsWith(`${title} - `)
+      );
+      if (hasAnyHubPrefix) continue;
+
+      const sectionTitle = stripWikiLinks(child.title);
+      const suggestedName = sanitizeFilename(`${hubTitle} - ${sectionTitle}`) + '.md';
+
+      flaggedPaths.add(child.path);
+
+      issues.push({
+        path: child.path,
+        type: 'unprefixed_children',
+        description: `Child note "${childFilename}" lacks parent prefix "${hubTitle} - "`,
+        suggestion: `Rename to "${suggestedName}"`,
+        details: {
+          hub_path: hub.path,
+          hub_title: hubTitle,
+          current_filename: basename(child.path),
+          suggested_filename: suggestedName,
+        },
+      });
     }
   }
 
@@ -198,7 +235,10 @@ function findCorruptedHeadings(notes: NoteRow[]): InspectionIssue[] {
 }
 
 /**
- * Find notes in hub directories that aren't linked from any hub's Knowledge Map
+ * Find notes in hub directories that aren't linked from any hub's Knowledge Map.
+ *
+ * Multi-hub safety: directories may contain multiple hubs. A child note is only
+ * flagged if it isn't linked from ANY hub in its directory.
  */
 function findOrphanedFragments(
   db: Database.Database,
@@ -206,36 +246,49 @@ function findOrphanedFragments(
 ): InspectionIssue[] {
   const issues: InspectionIssue[] = [];
 
-  // Build set of hub directories
+  // Build map of directory → all hubs in that directory
   const hubs = notes.filter((n) => isHubType(n.type));
-  const hubDirs = new Map<string, NoteRow>();
+  const hubsByDir = new Map<string, NoteRow[]>();
   for (const hub of hubs) {
-    hubDirs.set(dirname(hub.path), hub);
+    const dir = dirname(hub.path);
+    const existing = hubsByDir.get(dir) ?? [];
+    existing.push(hub);
+    hubsByDir.set(dir, existing);
   }
 
-  // Find notes in hub directories not referenced in the hub's content
+  // Find notes in hub directories not referenced by ANY hub's content
   for (const note of notes) {
     if (isHubType(note.type)) continue;
     const noteDir = dirname(note.path);
-    const hub = hubDirs.get(noteDir);
+    const dirHubs = hubsByDir.get(noteDir);
 
-    if (!hub || !hub.content) continue;
+    if (!dirHubs || dirHubs.length === 0) continue;
 
-    // Check if the hub references this note
     const noteTitle = basename(note.path, '.md');
-    const isLinked =
-      hub.content.includes(`[[${noteTitle}]]`) ||
-      hub.content.includes(`[[${noteTitle}|`);
+
+    // Check if ANY hub in the directory references this note
+    const isLinked = dirHubs.some((hub) => {
+      if (!hub.content) return false;
+      return (
+        hub.content.includes(`[[${noteTitle}]]`) ||
+        hub.content.includes(`[[${noteTitle}|`)
+      );
+    });
 
     if (!isLinked) {
+      // Report against the best-matching hub (prefix match, or first hub)
+      const bestHub =
+        dirHubs.find((h) => noteTitle.startsWith(stripWikiLinks(h.title) + ' - ')) ??
+        dirHubs[0]!;
+
       issues.push({
         path: note.path,
         type: 'orphaned_fragments',
-        description: `Note in hub directory but not linked from hub "${hub.title}"`,
+        description: `Note in hub directory but not linked from hub "${bestHub.title}"`,
         suggestion: `Add [[${noteTitle}]] to hub Knowledge Map or move note`,
         details: {
-          hub_path: hub.path,
-          hub_title: hub.title,
+          hub_path: bestHub.path,
+          hub_title: bestHub.title,
         },
       });
     }

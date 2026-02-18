@@ -10,7 +10,7 @@
  */
 
 import { join, dirname, basename } from 'path';
-import { readFile, writeFile, unlink } from 'fs/promises';
+import { readFile, writeFile, unlink, access } from 'fs/promises';
 import type Database from 'better-sqlite3';
 import type { InspectionIssue } from './inspector.js';
 import { parseFrontmatter, stringifyFrontmatter } from '../../utils/frontmatter.js';
@@ -126,9 +126,36 @@ async function fixUnprefixedChild(
 
   const oldPath = issue.path;
   const dir = dirname(oldPath);
-  const newRelativePath = join(dir, details.suggested_filename);
+
+  // Defensive sanitization: replace forward slashes in suggested filename
+  const safeFilename = details.suggested_filename.replace(/\//g, '-');
+  const newRelativePath = join(dir, safeFilename);
   const oldFullPath = join(vaultPath, oldPath);
   const newFullPath = join(vaultPath, newRelativePath);
+
+  // Guard: skip if source file no longer exists (stale index)
+  try {
+    await access(oldFullPath);
+  } catch {
+    result.issues_skipped++;
+    result.skipped.push({
+      path: oldPath,
+      type: 'unprefixed_children',
+      reason: 'Source file no longer exists (stale index)',
+    });
+    return;
+  }
+
+  // Guard: skip if source and target are the same (already correct)
+  if (oldFullPath === newFullPath) {
+    result.issues_skipped++;
+    result.skipped.push({
+      path: oldPath,
+      type: 'unprefixed_children',
+      reason: 'Already has correct name',
+    });
+    return;
+  }
 
   // Read current content and backup
   const content = await readFile(oldFullPath, 'utf-8');

@@ -123,6 +123,107 @@ describe('Migration Inspector', () => {
       expect(issue.suggestion).toContain('Kubernetes - Overview.md');
     });
 
+    it('skips children already prefixed by another hub in same directory', async () => {
+      const { indexNote } = await import('../../../src/services/index/sync');
+      const { inspectVault } = await import('../../../src/services/migrate/inspector');
+
+      // Hub A
+      indexNote(
+        db,
+        createTestNote(
+          'infrastructure/kubernetes/Hub Alpha.md',
+          'Hub Alpha',
+          '# Hub Alpha\n\n## Knowledge Map\n\n- [[Hub Alpha - Child A]]',
+          'research_hub'
+        )
+      );
+
+      // Hub B
+      indexNote(
+        db,
+        createTestNote(
+          'infrastructure/kubernetes/Hub Beta.md',
+          'Hub Beta',
+          '# Hub Beta\n\n## Knowledge Map\n\n- [[Hub Beta - Child B]]',
+          'research_hub'
+        )
+      );
+
+      // Child correctly prefixed with Hub Alpha — should NOT be flagged by Hub Beta
+      indexNote(
+        db,
+        createTestNote(
+          'infrastructure/kubernetes/Hub Alpha - Child A.md',
+          'Hub Alpha - Child A',
+          '# Child A\n\nContent.',
+          'research'
+        )
+      );
+
+      // Child correctly prefixed with Hub Beta — should NOT be flagged by Hub Alpha
+      indexNote(
+        db,
+        createTestNote(
+          'infrastructure/kubernetes/Hub Beta - Child B.md',
+          'Hub Beta - Child B',
+          '# Child B\n\nContent.',
+          'research'
+        )
+      );
+
+      // Unprefixed child — should be flagged once, not twice
+      indexNote(
+        db,
+        createTestNote(
+          'infrastructure/kubernetes/Orphan Note.md',
+          'Orphan Note',
+          '# Orphan Note\n\nContent.',
+          'research'
+        )
+      );
+
+      const result = await inspectVault(db, testVault, ['unprefixed_children']);
+
+      // Only the orphan should be flagged, and only once
+      expect(result.summary.unprefixed_children).toBe(1);
+      expect(result.issues[0]!.path).toBe('infrastructure/kubernetes/Orphan Note.md');
+    });
+
+    it('sanitizes forward slashes in suggested filenames', async () => {
+      const { indexNote } = await import('../../../src/services/index/sync');
+      const { inspectVault } = await import('../../../src/services/migrate/inspector');
+
+      // Hub
+      indexNote(
+        db,
+        createTestNote(
+          'infrastructure/kubernetes/My Hub.md',
+          'My Hub',
+          '# My Hub\n\n## Knowledge Map\n\n- [[Setup]]',
+          'research_hub'
+        )
+      );
+
+      // Child with forward slash in title
+      indexNote(
+        db,
+        createTestNote(
+          'infrastructure/kubernetes/Setup.md',
+          'Setup/Balancer Information',
+          '# Setup/Balancer Information\n\nContent.',
+          'research'
+        )
+      );
+
+      const result = await inspectVault(db, testVault, ['unprefixed_children']);
+
+      expect(result.summary.unprefixed_children).toBe(1);
+      const suggested = (result.issues[0]!.details as { suggested_filename: string }).suggested_filename;
+      // Should not contain forward slashes
+      expect(suggested).not.toContain('/');
+      expect(suggested).toBe('My Hub - Setup-Balancer Information.md');
+    });
+
     it('ignores notes not in hub directories', async () => {
       const { indexNote } = await import('../../../src/services/index/sync');
       const { inspectVault } = await import('../../../src/services/migrate/inspector');
@@ -342,6 +443,120 @@ describe('Migration Inspector', () => {
 
       expect(result.summary.orphaned_fragments).toBe(1);
       expect(result.issues[0]!.path).toBe('infrastructure/kubernetes/Legacy Notes.md');
+    });
+
+    it('handles multi-hub directories correctly', async () => {
+      const { indexNote } = await import('../../../src/services/index/sync');
+      const { inspectVault } = await import('../../../src/services/migrate/inspector');
+
+      // Hub A — links to its own children
+      indexNote(
+        db,
+        createTestNote(
+          'protocols/Commands.md',
+          'Commands',
+          '# Commands\n\n## Knowledge Map\n\n- [[Commands - Syntax]]',
+          'research_hub'
+        )
+      );
+
+      // Hub B — links to its own children
+      indexNote(
+        db,
+        createTestNote(
+          'protocols/Protocol Format.md',
+          'Protocol Format',
+          '# Protocol Format\n\n## Knowledge Map\n\n- [[Protocol Format - Overview]]',
+          'research_hub'
+        )
+      );
+
+      // Child linked from Hub A — should NOT be orphaned
+      indexNote(
+        db,
+        createTestNote(
+          'protocols/Commands - Syntax.md',
+          'Commands - Syntax',
+          '# Commands - Syntax\n\nSyntax details.',
+          'research'
+        )
+      );
+
+      // Child linked from Hub B — should NOT be orphaned
+      indexNote(
+        db,
+        createTestNote(
+          'protocols/Protocol Format - Overview.md',
+          'Protocol Format - Overview',
+          '# Protocol Format - Overview\n\nOverview details.',
+          'research'
+        )
+      );
+
+      // Orphan — not linked from any hub
+      indexNote(
+        db,
+        createTestNote(
+          'protocols/Stale Fragment.md',
+          'Stale Fragment',
+          '# Stale Fragment\n\nOld content.',
+          'research'
+        )
+      );
+
+      const result = await inspectVault(db, testVault, ['orphaned_fragments']);
+
+      // Only the stale fragment should be orphaned
+      expect(result.summary.orphaned_fragments).toBe(1);
+      expect(result.issues[0]!.path).toBe('protocols/Stale Fragment.md');
+    });
+
+    it('reports orphan against best-matching hub by prefix', async () => {
+      const { indexNote } = await import('../../../src/services/index/sync');
+      const { inspectVault } = await import('../../../src/services/migrate/inspector');
+
+      // Hub A
+      indexNote(
+        db,
+        createTestNote(
+          'protocols/Commands.md',
+          'Commands',
+          '# Commands\n\n## Knowledge Map\n',
+          'research_hub'
+        )
+      );
+
+      // Hub B
+      indexNote(
+        db,
+        createTestNote(
+          'protocols/Protocol Format.md',
+          'Protocol Format',
+          '# Protocol Format\n\n## Knowledge Map\n',
+          'research_hub'
+        )
+      );
+
+      // Orphan with Protocol Format prefix — should be reported against Hub B
+      indexNote(
+        db,
+        createTestNote(
+          'protocols/Protocol Format - Timing.md',
+          'Protocol Format - Timing',
+          '# Protocol Format - Timing\n\nTiming details.',
+          'research'
+        )
+      );
+
+      const result = await inspectVault(db, testVault, ['orphaned_fragments']);
+
+      expect(result.summary.orphaned_fragments).toBe(1);
+      const issue = result.issues[0]!;
+      expect(issue.path).toBe('protocols/Protocol Format - Timing.md');
+      // Should be reported against Protocol Format hub, not Commands
+      const details = issue.details as { hub_path: string; hub_title: string };
+      expect(details.hub_title).toBe('Protocol Format');
+      expect(details.hub_path).toBe('protocols/Protocol Format.md');
     });
   });
 });
