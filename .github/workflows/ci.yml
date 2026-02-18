@@ -31,5 +31,5 @@ jobs:
         if: matrix.node-version == 22 && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: codacy/codacy-coverage-reporter-action@v1.3.0
         with:
-          project-token: ${{ secrets.CODACY_PROJECT_TOKEN }}
+          api-token: ${{ secrets.CODACY_API_TOKEN }}
           coverage-reports: coverage/lcov.info
