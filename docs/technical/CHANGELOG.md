@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-02-18
+
+### Added
+
+#### Quality and Integrity Fixes (Phase 029)
+- **`palace_migrate` tool**: Vault health inspection and safe migration of legacy data
+- **Retroactive linker fixes**: Skip heading lines (H1-H6) to prevent identity text modification
+- **Improved match specificity**: Removed single-word alias generation, added tag-aware scoring
+- **FTS5 ranking weights**: Title=10x, content=1x, tags=5x, domain=2x for better search results
+- **Child note naming**: Standardized to `{Parent Title} - {Section Title}.md` format
+- **Tool description improvements**: Better discoverability of key options like `create_stubs`
+
+#### Time Tracking (Phase 030)
+- **`palace_session_end` tool**: Close sessions with duration calculation and optional time entry creation
+- **`palace_time_log` tool**: Log time entries with flexible duration formats (`"2h 30m"`, `"120"`, `"2.5h"`)
+- **`palace_time_summary` tool**: Aggregate and report time by project, client, date, or category
+- **`time_entry` note type**: Structured frontmatter with project, client, category, duration, billable status
+- **Time entry storage**: Organized at `time/YYYY/MM/{date} - {project} - {category}.md`
+- **Backdating support**: Log time entries for past dates via `date` field
+- **10 time categories**: development, research, meetings, review, documentation, design, admin, business_dev, professional_dev, other
+
+#### Project Management (Phase 031)
+- **`palace_project_summary` tool**: Load project context at brief/standard/deep depth for AI session resume
+- **Work item parser**: Extract checklists from markdown with annotation support (`[priority:high]`, `[due:YYYY-MM-DD]`, `[blocked_by:...]`, `[category:...]`)
+- **Multi-project dashboard**: Pass `project: "*"` for all active projects sorted by status
+- **Project hub discovery**: Fallback chain (project field, type, path, title match)
+- **Schema migration**: Added `project` and `client` columns to SQLite index with indexes
+- **`palace_query` filters**: New `project` and `client` filter parameters
+
+---
+
 ## [2.1.0] - 2026-02-15
 
 ### Added
