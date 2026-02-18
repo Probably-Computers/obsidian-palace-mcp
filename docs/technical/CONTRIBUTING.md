@@ -18,7 +18,7 @@ Thank you for your interest in contributing to Obsidian Palace MCP! This documen
    cd obsidian-palace-mcp
    ```
 
-2. Install dependencies:
+2. Install dependencies (also sets up Husky pre-commit hooks):
    ```bash
    npm install
    ```
@@ -72,6 +72,23 @@ npm run build
 # Test with MCP Inspector
 npm run inspect
 ```
+
+### Pre-commit Hooks
+
+[Husky](https://typicode.github.io/husky/) + [lint-staged](https://github.com/lint-staged/lint-staged) run automatically on every commit:
+
+- ESLint runs on staged `src/**/*.ts` files
+- Commits are blocked if lint errors are found
+- To bypass in emergencies: `git commit --no-verify` (CI will still catch issues)
+
+### Continuous Integration
+
+GitHub Actions CI runs on every push to `main` and every PR:
+
+- **Matrix**: Node 18, 20, 22
+- **Steps**: lint, typecheck, build, test:coverage
+- **Coverage**: Reported to [Codacy](https://app.codacy.com/gh/Probably-Computers/obsidian-palace-mcp/dashboard)
+- All CI checks must pass before merging
 
 ## Code Style
 
@@ -138,10 +155,10 @@ docs(readme): update installation instructions
 
 1. Create a feature branch from `main`
 2. Make your changes
-3. Ensure tests pass: `npm test`
-4. Ensure linting passes: `npm run lint`
-5. Commit with conventional commit message
-6. Push and create a Pull Request
+3. Commit your changes (pre-commit hook will lint staged files automatically)
+4. Ensure tests pass: `npm test`
+5. Push and create a Pull Request
+6. CI will run lint, typecheck, build, and tests — all checks must pass
 
 ## Adding New Tools
 

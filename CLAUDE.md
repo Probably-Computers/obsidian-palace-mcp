@@ -1681,7 +1681,28 @@ interface Operation {
 
 - Unit tests in `tests/unit/` mirror src/ structure
 - Integration tests in `tests/integration/` use a test vault
-- Run `npm test` before committing
+- Coverage via `@vitest/coverage-v8` — generates LCOV reports in `coverage/`
+- Pre-commit hook runs ESLint on staged files automatically
+- CI runs the full suite on push/PR — see "Continuous Integration" below
+
+## Pre-commit Hooks
+
+Husky + lint-staged are configured to run on every commit:
+
+- `npm install` automatically sets up Husky via the `prepare` script
+- The pre-commit hook runs `npx lint-staged`
+- lint-staged runs `eslint --ext .ts` on staged files in `src/`
+- Commits are blocked if ESLint finds errors in staged code
+
+## Continuous Integration
+
+GitHub Actions CI pipeline (`.github/workflows/ci.yml`):
+
+- **Triggers**: Push to `main`, pull requests targeting `main`
+- **Matrix**: Node 18, 20, 22 on Ubuntu
+- **Steps**: `npm ci` → `npm run lint` → `npm run typecheck` → `npm run build` → `npm run test:coverage`
+- **Coverage**: LCOV uploaded to Codacy on push to `main` (Node 22 only)
+- **Codacy**: Grade A (92), coverage tracked at [Codacy Dashboard](https://app.codacy.com/gh/Probably-Computers/obsidian-palace-mcp/dashboard)
 
 ## Git Workflow
 

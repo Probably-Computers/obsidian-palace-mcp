@@ -1,6 +1,9 @@
 # Obsidian Palace MCP
 
 [![npm version](https://img.shields.io/npm/v/obsidian-palace-mcp.svg)](https://www.npmjs.com/package/obsidian-palace-mcp)
+[![CI](https://github.com/Probably-Computers/obsidian-palace-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Probably-Computers/obsidian-palace-mcp/actions/workflows/ci.yml)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/5445c00a0bd0432bb6bef601edb001e9)](https://app.codacy.com/gh/Probably-Computers/obsidian-palace-mcp/dashboard)
+[![Codacy Coverage](https://app.codacy.com/project/badge/Coverage/5445c00a0bd0432bb6bef601edb001e9)](https://app.codacy.com/gh/Probably-Computers/obsidian-palace-mcp/dashboard)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/Probably-Computers?label=Sponsor&logo=GitHub)](https://github.com/sponsors/Probably-Computers)
@@ -349,7 +352,7 @@ AI: [Follows git workflow standard from vault]
 git clone https://github.com/Probably-Computers/obsidian-palace-mcp.git
 cd obsidian-palace-mcp
 
-# Install dependencies
+# Install dependencies (also sets up Husky pre-commit hooks)
 npm install
 
 # Run in development mode
@@ -358,9 +361,20 @@ npm run dev
 # Run tests
 npm test
 
+# Run tests with coverage
+npm run test:coverage
+
 # Build for production
 npm run build
 ```
+
+### CI Pipeline
+
+GitHub Actions runs lint, typecheck, build, and tests with coverage across Node 18, 20, and 22 on every push and PR to `main`. Coverage is reported to [Codacy](https://app.codacy.com/gh/Probably-Computers/obsidian-palace-mcp/dashboard).
+
+### Pre-commit Hooks
+
+[Husky](https://typicode.github.io/husky/) + [lint-staged](https://github.com/lint-staged/lint-staged) run ESLint on staged `.ts` files before each commit. Hooks are installed automatically via `npm install`.
 
 ## Contributing
 

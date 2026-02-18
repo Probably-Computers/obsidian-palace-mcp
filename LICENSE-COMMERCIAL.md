@@ -46,7 +46,7 @@ For businesses and teams who want to:
 
 ## Purchase
 
-Commercial licenses are available at: **[Purchase Link TBD]**
+For commercial licensing, contact **adamc@probablycomputers.com**.
 
 ## Frequently Asked Questions
 
@@ -74,7 +74,7 @@ Open source projects using a compatible copyleft license can use AGPL-3.0 direct
 
 For licensing questions or custom arrangements:
 
-- Email: adam@probablycomputers.co.za
+- Email: adamc@probablycomputers.com
 - GitHub: [Issues](https://github.com/Probably-Computers/obsidian-palace-mcp/issues)
 
 ---

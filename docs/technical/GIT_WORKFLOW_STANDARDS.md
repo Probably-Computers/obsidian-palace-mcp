@@ -462,52 +462,27 @@ gh release create v1.2.0 \
 
 ## Git Hooks
 
-### Recommended Hooks
+### Pre-commit (Husky + lint-staged)
 
-**Pre-commit:**
-- Run linters (flake8, black)
-- Check for secrets
-- Validate commit message format
-- Run quick tests
+Pre-commit hooks are managed by [Husky](https://typicode.github.io/husky/) and [lint-staged](https://github.com/lint-staged/lint-staged):
 
-**Pre-push:**
-- Run full test suite
-- Check code coverage
-- Run security scans
+- **Automatic setup**: `npm install` sets up Husky via the `prepare` script
+- **Hook**: `.husky/pre-commit` runs `npx lint-staged`
+- **lint-staged config** (in `package.json`): runs `eslint --ext .ts` on staged `src/**/*.ts` files
+- **Effect**: Commits are blocked if ESLint finds errors in staged TypeScript files
 
-**Commit-msg:**
-- Validate commit message format
-- Enforce Conventional Commits
-
-### Using Pre-commit
-
-**Install:**
+**Bypass (emergencies only):**
 ```bash
-pip install pre-commit
-pre-commit install
+git commit --no-verify  # Skip hooks — CI will still catch issues
 ```
 
-**Basic configuration (.pre-commit-config.yaml):**
-```yaml
-repos:
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.5.0
-    hooks:
-      - id: trailing-whitespace
-      - id: end-of-file-fixer
-      - id: check-yaml
-      - id: check-added-large-files
-      - id: detect-private-key
-
-  - repo: https://github.com/psf/black
-    rev: 23.11.0
-    hooks:
-      - id: black
-
-  - repo: https://github.com/PyCQA/flake8
-    rev: 6.1.0
-    hooks:
-      - id: flake8
+**Configuration (package.json):**
+```json
+{
+  "lint-staged": {
+    "src/**/*.ts": ["eslint --ext .ts"]
+  }
+}
 ```
 
 ---
@@ -527,38 +502,41 @@ Protect: `main`, `staging`, `develop`
 - No force pushes
 - No deletions
 
-**Required status checks:**
-- All tests pass
-- Code coverage ≥ 80%
-- Linting passes
-- Security scans pass
-- Build succeeds
+**Required status checks (GitHub Actions CI):**
+- Linting passes (`npm run lint`)
+- Type checking passes (`npm run typecheck`)
+- Build succeeds (`npm run build`)
+- All tests pass with coverage (`npm run test:coverage`)
+- Coverage target: ≥ 80% (tracked via Codacy)
 
 ---
 
 ## Continuous Integration
 
-### CI/CD Pipeline
+### GitHub Actions CI Pipeline
 
-**On every PR:**
-- Run tests
-- Check code coverage
-- Run linters
-- Security scans
-- Build application
+Defined in `.github/workflows/ci.yml`.
 
-**On merge to main:**
-- Full test suite
-- Deploy to staging
-- Run integration tests
-- Tag release (if applicable)
+**Triggers:**
+- Push to `main`
+- Pull requests targeting `main`
 
-**Required checks:**
-- Tests pass (100%)
-- Coverage ≥ 80%
-- Linting passes
-- Security scan passes
-- Build succeeds
+**Matrix:** Node 18, 20, 22 on Ubuntu
+
+**Steps (all matrix entries):**
+1. `npm ci` — install dependencies
+2. `npm run lint` — ESLint
+3. `npm run typecheck` — TypeScript type checking
+4. `npm run build` — compile to dist/
+5. `npm run test:coverage` — vitest with v8 coverage
+
+**Coverage upload (Node 22 + push to main only):**
+- LCOV report uploaded to [Codacy](https://app.codacy.com/gh/Probably-Computers/obsidian-palace-mcp/dashboard)
+- Uses `codacy/codacy-coverage-reporter-action` with `CODACY_API_TOKEN` secret
+
+**Required checks for merge:**
+- All CI jobs pass (lint, typecheck, build, tests)
+- Coverage target: ≥ 80%
 
 ---
 
@@ -604,10 +582,11 @@ Protect: `main`, `staging`, `develop`
 - [Trunk-Based Development](https://trunkbaseddevelopment.com/)
 - [GitHub Flow](https://guides.github.com/introduction/flow/)
 - [Semantic Versioning](https://semver.org/)
-- [Pre-commit Framework](https://pre-commit.com/)
+- [Husky](https://typicode.github.io/husky/)
+- [lint-staged](https://github.com/lint-staged/lint-staged)
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** October 2025
+**Document Version:** 1.1
+**Last Updated:** February 2026
 **Maintained By:** Development Team
