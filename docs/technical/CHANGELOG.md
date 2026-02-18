@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] - 2026-02-18
+
+### Added
+- **GitHub Actions CI pipeline**: Lint, typecheck, build, and test across Node 18/20/22 on push and PR
+- **Codacy coverage upload**: LCOV coverage reports uploaded to Codacy on main branch pushes
+- **`@vitest/coverage-v8` dependency**: Enables `npm run test:coverage` (was previously missing)
+- **LCOV coverage reporter**: Added to vitest config for CI integration
+
 ## [2.2.2] - 2026-02-18
 
 ### Fixed

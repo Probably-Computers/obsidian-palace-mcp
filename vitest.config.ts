@@ -18,7 +18,7 @@ export default defineConfig({
     reporters: process.env.CI ? ['verbose'] : ['default'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
+      reporter: ['text', 'json', 'html', 'lcov'],
       include: ['src/**/*.ts'],
       exclude: ['src/types/**', 'src/index.ts'],
     },

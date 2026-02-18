@@ -1,6 +1,6 @@
 {
   "name": "obsidian-palace-mcp",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "MCP server that turns your Obsidian vault into an AI memory palace with intent-based storage, multi-vault support, and atomic notes",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -78,6 +78,7 @@
     "@types/yaml": "^1.9.6",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^8.57.0",
     "prettier": "^3.2.0",
     "tsx": "^4.7.0",
