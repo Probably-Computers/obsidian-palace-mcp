@@ -98,7 +98,8 @@ export function isValidNoteType(type: unknown): type is NoteType {
 /**
  * Check if a type is a hub type
  */
-export function isHubType(type: string): boolean {
+export function isHubType(type: string | null | undefined): boolean {
+  if (!type) return false;
   return type.endsWith('_hub') || type === 'hub';
 }
 

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-02-18
+
+### Fixed
+- **`isHubType` null guard**: Fixed crash in `palace_migrate` (and other hub-type checks) when notes have NULL type values in the index. 21 notes in production vaults had NULL types causing `Cannot read properties of null (reading 'endsWith')`.
+
 ## [2.2.0] - 2026-02-18
 
 ### Added
