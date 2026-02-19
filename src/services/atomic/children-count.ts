@@ -68,6 +68,66 @@ function extractChildrenFromKnowledgeMap(content: string, hubDir: string): strin
 }
 
 /**
+ * Verify which linked children actually exist on disk
+ */
+function verifyLinkedChildren(
+  vaultPath: string,
+  linkedChildren: string[]
+): { existing: string[]; missing: string[] } {
+  const existing: string[] = [];
+  const missing: string[] = [];
+
+  for (const childPath of linkedChildren) {
+    if (existsSync(join(vaultPath, childPath))) {
+      existing.push(childPath);
+    } else {
+      missing.push(childPath);
+    }
+  }
+
+  return { existing, missing };
+}
+
+/**
+ * Find orphaned children in a hub's directory (files not linked from hub)
+ */
+async function findOrphanedChildrenInDir(
+  vaultPath: string,
+  hubDir: string,
+  hubPath: string,
+  linkedChildren: string[]
+): Promise<string[]> {
+  const orphaned: string[] = [];
+
+  try {
+    const files = readdirSync(join(vaultPath, hubDir));
+    const hubFilename = basename(hubPath);
+    const linkedNames = new Set(linkedChildren.map((p) => basename(p)));
+
+    for (const file of files) {
+      if (!file.endsWith('.md') || file === hubFilename || linkedNames.has(file)) continue;
+
+      try {
+        const childPath = join(hubDir, file);
+        const childContent = await readFile(join(vaultPath, childPath), 'utf-8');
+        const { frontmatter: childFm } = parseFrontmatter(childContent);
+        const childType = (childFm as Record<string, unknown>).type as string ?? '';
+
+        if (!isHubType(childType)) {
+          orphaned.push(childPath);
+        }
+      } catch {
+        // Can't read, skip
+      }
+    }
+  } catch {
+    // Directory might not exist, ignore
+  }
+
+  return orphaned;
+}
+
+/**
  * Get accurate children count for a hub note
  *
  * @param vaultPath - Full path to vault root
@@ -109,51 +169,13 @@ export async function getAccurateChildrenCount(
   const linkedChildren = extractChildrenFromKnowledgeMap(body, hubDir);
 
   // Verify which children actually exist
-  const existingChildren: string[] = [];
-  const missingChildren: string[] = [];
-
-  for (const childPath of linkedChildren) {
-    const fullChildPath = join(vaultPath, childPath);
-    if (existsSync(fullChildPath)) {
-      existingChildren.push(childPath);
-    } else {
-      missingChildren.push(childPath);
-    }
-  }
+  const { existing: existingChildren, missing: missingChildren } =
+    verifyLinkedChildren(vaultPath, linkedChildren);
 
   // Find orphaned children (files in same dir not linked from hub)
-  const orphanedChildren: string[] = [];
-  try {
-    const hubDirFull = join(vaultPath, hubDir);
-    const files = readdirSync(hubDirFull);
-    const hubFilename = basename(hubPath);
-
-    for (const file of files) {
-      if (!file.endsWith('.md') || file === hubFilename) continue;
-
-      const childPath = join(hubDir, file);
-      // Check if this file is a child (not another hub) and not in the linked list
-      const linkedNames = linkedChildren.map((p) => basename(p));
-      if (!linkedNames.includes(file)) {
-        // Check if it's a child by reading frontmatter
-        try {
-          const fullChildPath = join(vaultPath, childPath);
-          const childContent = await readFile(fullChildPath, 'utf-8');
-          const { frontmatter: childFm } = parseFrontmatter(childContent);
-          const childType = (childFm as Record<string, unknown>).type as string ?? '';
-
-          // If not a hub type and in same dir, it might be an orphan
-          if (!isHubType(childType)) {
-            orphanedChildren.push(childPath);
-          }
-        } catch {
-          // Can't read, skip
-        }
-      }
-    }
-  } catch {
-    // Directory might not exist, ignore
-  }
+  const orphanedChildren = await findOrphanedChildrenInDir(
+    vaultPath, hubDir, hubPath, linkedChildren
+  );
 
   const actualCount = existingChildren.length;
 

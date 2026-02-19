@@ -58,79 +58,12 @@ export async function checkIndexSync(
   }>;
   const indexPaths = new Set(indexNotes.map((n) => n.path));
 
-  // Find notes missing in index
-  for (const vaultNote of vaultNotes) {
-    if (!indexPaths.has(vaultNote.path)) {
-      desyncs.push({
-        path: vaultNote.path,
-        type: 'missing_in_index',
-        details: 'Note exists in vault but not in index',
-      });
-    }
-  }
-
-  // Find notes missing in vault (stale index entries)
-  for (const indexNote of indexNotes) {
-    if (!vaultPaths.has(indexNote.path)) {
-      desyncs.push({
-        path: indexNote.path,
-        type: 'missing_in_vault',
-        details: 'Note exists in index but not in vault (deleted?)',
-      });
-    }
-  }
+  // Find notes missing in either direction
+  findMissingNotes(vaultNotes, indexPaths, 'missing_in_index', 'Note exists in vault but not in index', desyncs);
+  findMissingNotes(indexNotes, vaultPaths, 'missing_in_vault', 'Note exists in index but not in vault (deleted?)', desyncs);
 
   // Check metadata mismatches for notes in both
-  for (const indexNote of indexNotes) {
-    if (!vaultPaths.has(indexNote.path)) continue;
-
-    const vaultNote = await readNote(indexNote.path, readOptions);
-    if (!vaultNote) continue;
-
-    const fm = vaultNote.frontmatter;
-
-    // Check type
-    if (fm.type !== indexNote.type && fm.type !== undefined) {
-      desyncs.push({
-        path: indexNote.path,
-        type: 'metadata_mismatch',
-        details: 'Type mismatch',
-        fileValue: fm.type,
-        indexValue: indexNote.type,
-      });
-    }
-
-    // Check modified timestamp (only if significantly different)
-    if (fm.modified && indexNote.modified) {
-      const fileDate = new Date(fm.modified).getTime();
-      const indexDate = new Date(indexNote.modified).getTime();
-      // Allow 1 second tolerance
-      if (Math.abs(fileDate - indexDate) > 1000) {
-        desyncs.push({
-          path: indexNote.path,
-          type: 'metadata_mismatch',
-          details: 'Modified timestamp mismatch',
-          fileValue: fm.modified,
-          indexValue: indexNote.modified,
-        });
-      }
-    }
-
-    // Check confidence
-    if (
-      fm.confidence !== undefined &&
-      indexNote.confidence !== null &&
-      Math.abs((fm.confidence ?? 0) - indexNote.confidence) > 0.01
-    ) {
-      desyncs.push({
-        path: indexNote.path,
-        type: 'metadata_mismatch',
-        details: 'Confidence mismatch',
-        fileValue: fm.confidence,
-        indexValue: indexNote.confidence,
-      });
-    }
-  }
+  await checkMetadataMismatches(indexNotes, vaultPaths, readOptions, desyncs);
 
   return {
     notesInVault: vaultPaths.size,
@@ -138,6 +71,80 @@ export async function checkIndexSync(
     desyncs,
     repaired: 0,
   };
+}
+
+/**
+ * Find notes present in one set but missing from another
+ */
+function findMissingNotes(
+  notes: Array<{ path: string }>,
+  referenceSet: Set<string>,
+  desyncType: IndexDesync['type'],
+  details: string,
+  desyncs: IndexDesync[]
+): void {
+  for (const note of notes) {
+    if (!referenceSet.has(note.path)) {
+      desyncs.push({ path: note.path, type: desyncType, details });
+    }
+  }
+}
+
+/**
+ * Check metadata mismatches between index and vault for notes present in both
+ */
+async function checkMetadataMismatches(
+  indexNotes: Array<{ path: string; type: string | null; modified: string | null; confidence: number | null }>,
+  vaultPaths: Set<string>,
+  readOptions: ReadOptions,
+  desyncs: IndexDesync[]
+): Promise<void> {
+  for (const idxNote of indexNotes) {
+    if (!vaultPaths.has(idxNote.path)) continue;
+
+    const vaultNote = await readNote(idxNote.path, readOptions);
+    if (!vaultNote) continue;
+
+    const fm = vaultNote.frontmatter;
+
+    if (fm.type !== idxNote.type && fm.type !== undefined) {
+      desyncs.push({
+        path: idxNote.path,
+        type: 'metadata_mismatch',
+        details: 'Type mismatch',
+        fileValue: fm.type,
+        indexValue: idxNote.type,
+      });
+    }
+
+    if (fm.modified && idxNote.modified) {
+      const fileDate = new Date(fm.modified).getTime();
+      const indexDate = new Date(idxNote.modified).getTime();
+      if (Math.abs(fileDate - indexDate) > 1000) {
+        desyncs.push({
+          path: idxNote.path,
+          type: 'metadata_mismatch',
+          details: 'Modified timestamp mismatch',
+          fileValue: fm.modified,
+          indexValue: idxNote.modified,
+        });
+      }
+    }
+
+    if (
+      fm.confidence !== undefined &&
+      idxNote.confidence !== null &&
+      Math.abs((fm.confidence ?? 0) - idxNote.confidence) > 0.01
+    ) {
+      desyncs.push({
+        path: idxNote.path,
+        type: 'metadata_mismatch',
+        details: 'Confidence mismatch',
+        fileValue: fm.confidence,
+        indexValue: idxNote.confidence,
+      });
+    }
+  }
 }
 
 /**

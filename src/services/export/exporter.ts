@@ -110,30 +110,14 @@ export async function exportNote(
     const { frontmatter, body } = parseFrontmatter(raw);
     const fm = frontmatter as Record<string, unknown>;
 
-    // Check if this is a hub note
+    // Resolve content (consolidate hub children if applicable)
     const noteType = fm.type as string | undefined;
     const isHub = noteType?.endsWith('_hub');
+    const defaultTitle = (fm.title as string) || basename(notePath, '.md');
 
-    let content: string;
-    let title = (fm.title as string) || basename(notePath, '.md');
-
-    if (isHub && options.includeChildren) {
-      // Consolidate hub with children
-      const consolidation = await consolidateHub(vaultPath, notePath, {
-        includeFrontmatter: options.includeFrontmatter,
-        recursive: true,
-      });
-
-      content = consolidation.content;
-      title = consolidation.title;
-      sources.push(...consolidation.sources.filter((s) => s !== notePath));
-      warnings.push(...consolidation.warnings);
-
-      // Use consolidated frontmatter
-      Object.assign(fm, consolidation.frontmatter);
-    } else {
-      content = body;
-    }
+    const { content, title } = isHub && options.includeChildren
+      ? await consolidateForExport(vaultPath, notePath, fm, options, sources, warnings)
+      : { content: body, title: defaultTitle };
 
     // Process the content based on format
     const linkStyle = options.linkStyle || getDefaultLinkStyle(options.format);
@@ -155,49 +139,8 @@ export async function exportNote(
         break;
     }
 
-    // Handle output path
-    if (options.outputPath) {
-      const outputResult = await writeOutput(
-        output,
-        options.outputPath,
-        vaultPath,
-        options.allowOutsideVault ?? false
-      );
-
-      if (!outputResult.success) {
-        const result: ExportResult = {
-          success: false,
-          content: output,
-          format: options.format,
-          sources,
-          warnings,
-        };
-        if (outputResult.error) {
-          result.error = outputResult.error;
-        }
-        return result;
-      }
-
-      const result: ExportResult = {
-        success: true,
-        content: output,
-        format: options.format,
-        sources,
-        warnings,
-      };
-      if (outputResult.path) {
-        result.outputPath = outputResult.path;
-      }
-      return result;
-    }
-
-    return {
-      success: true,
-      content: output,
-      format: options.format,
-      sources,
-      warnings,
-    };
+    // Handle output path or return content directly
+    return buildExportResult(output, options, vaultPath, sources, warnings);
   } catch (error) {
     logger.error(`Export failed for ${notePath}`, error);
     return {
@@ -209,6 +152,67 @@ export async function exportNote(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+/**
+ * Consolidate a hub note with its children for export
+ */
+async function consolidateForExport(
+  vaultPath: string,
+  notePath: string,
+  fm: Record<string, unknown>,
+  options: ExportOptions,
+  sources: string[],
+  warnings: string[]
+): Promise<{ content: string; title: string }> {
+  const consolidation = await consolidateHub(vaultPath, notePath, {
+    includeFrontmatter: options.includeFrontmatter,
+    recursive: true,
+  });
+
+  sources.push(...consolidation.sources.filter((s) => s !== notePath));
+  warnings.push(...consolidation.warnings);
+  Object.assign(fm, consolidation.frontmatter);
+
+  return { content: consolidation.content, title: consolidation.title };
+}
+
+/**
+ * Build export result, optionally writing to file
+ */
+async function buildExportResult(
+  output: string,
+  options: ExportOptions,
+  vaultPath: string,
+  sources: string[],
+  warnings: string[]
+): Promise<ExportResult> {
+  if (options.outputPath) {
+    const outputResult = await writeOutput(
+      output,
+      options.outputPath,
+      vaultPath,
+      options.allowOutsideVault ?? false
+    );
+
+    return {
+      success: outputResult.success,
+      content: output,
+      format: options.format,
+      sources,
+      warnings,
+      ...(outputResult.error ? { error: outputResult.error } : {}),
+      ...(outputResult.path ? { outputPath: outputResult.path } : {}),
+    };
+  }
+
+  return {
+    success: true,
+    content: output,
+    format: options.format,
+    sources,
+    warnings,
+  };
 }
 
 /**

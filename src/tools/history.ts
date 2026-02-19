@@ -155,51 +155,12 @@ async function historyHandlerInternal(input: HistoryInput): Promise<ToolResult<H
     const limitedVersions = versions.slice(0, input.limit);
 
     // Build version results
-    const versionResults: VersionResult[] = [];
-
-    for (let i = 0; i < limitedVersions.length; i++) {
-      const version = limitedVersions[i];
-      if (!version) continue;
-
-      const result: VersionResult = {
-        version: version.version,
-        timestamp: version.timestamp,
-        operation: version.operation,
-        changes: version.changes,
-      };
-
-      if (version.mode !== undefined) {
-        result.mode = version.mode;
-      }
-
-      // Generate diff if requested
-      if (input.show_diff && i < limitedVersions.length - 1) {
-        const nextVersion = limitedVersions[i + 1];
-        if (nextVersion) {
-          const currentContent = await getVersionContent(palaceDir, input.path, version.version);
-          const previousContent = await getVersionContent(
-            palaceDir,
-            input.path,
-            nextVersion.version
-          );
-
-          if (currentContent && previousContent) {
-            result.summary = generateChangeSummary(previousContent, currentContent);
-
-            const diff = generateDiff(previousContent, currentContent);
-            result.diff = formatUnifiedDiff(diff, `v${nextVersion.version}`, `v${version.version}`);
-          }
-        }
-      } else if (input.show_diff && i === limitedVersions.length - 1) {
-        // For the oldest version, compare with empty
-        const currentContent = await getVersionContent(palaceDir, input.path, version.version);
-        if (currentContent) {
-          result.summary = 'Initial version';
-        }
-      }
-
-      versionResults.push(result);
-    }
+    const versionResults = await buildVersionResults(
+      limitedVersions,
+      input.show_diff,
+      palaceDir,
+      input.path
+    );
 
     // Get current version number
     const currentVersion = versions.length > 0 ? versions[0]!.version : 0;
@@ -220,6 +181,57 @@ async function historyHandlerInternal(input: HistoryInput): Promise<ToolResult<H
       code: 'HISTORY_ERROR',
     };
   }
+}
+
+/**
+ * Build version result entries with optional diffs
+ */
+async function buildVersionResults(
+  versions: Array<{ version: number; timestamp: string; operation: string; mode?: string | undefined; changes: string[] }>,
+  showDiff: boolean,
+  palaceDir: string,
+  notePath: string
+): Promise<VersionResult[]> {
+  const results: VersionResult[] = [];
+
+  for (let i = 0; i < versions.length; i++) {
+    const version = versions[i];
+    if (!version) continue;
+
+    const result: VersionResult = {
+      version: version.version,
+      timestamp: version.timestamp,
+      operation: version.operation,
+      changes: version.changes,
+    };
+
+    if (version.mode !== undefined) {
+      result.mode = version.mode;
+    }
+
+    if (showDiff && i < versions.length - 1) {
+      const nextVersion = versions[i + 1];
+      if (nextVersion) {
+        const currentContent = await getVersionContent(palaceDir, notePath, version.version);
+        const previousContent = await getVersionContent(palaceDir, notePath, nextVersion.version);
+
+        if (currentContent && previousContent) {
+          result.summary = generateChangeSummary(previousContent, currentContent);
+          const diff = generateDiff(previousContent, currentContent);
+          result.diff = formatUnifiedDiff(diff, `v${nextVersion.version}`, `v${version.version}`);
+        }
+      }
+    } else if (showDiff && i === versions.length - 1) {
+      const currentContent = await getVersionContent(palaceDir, notePath, version.version);
+      if (currentContent) {
+        result.summary = 'Initial version';
+      }
+    }
+
+    results.push(result);
+  }
+
+  return results;
 }
 
 /**

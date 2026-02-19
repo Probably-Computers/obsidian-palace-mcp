@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.4] - 2026-02-19
+
+### Fixed
+- **Dependency CVEs**: Updated `@modelcontextprotocol/sdk` to ^1.26.0 (ReDoS + data leak), `qs` to 6.15.0 (DoS)
+
+### Changed
+- **Markdownlint config**: Added `.markdownlint.json` with `MD024.siblings_only: true` to suppress false positive duplicate heading warnings
+- **Refactored complex functions** (Phase 033 — Codacy issue cleanup):
+  - `historyHandlerInternal`: Extracted `buildVersionResults()` for version iteration and diff generation
+  - `checkIndexSync`: Extracted `findMissingNotes()` and `checkMetadataMismatches()` for clearer separation
+  - `exportNote`: Extracted `consolidateForExport()` and `buildExportResult()` for hub consolidation and output writing
+  - `getAccurateChildrenCount`: Extracted `verifyLinkedChildren()` and `findOrphanedChildrenInDir()` for disk verification
+
 ## [2.2.3] - 2026-02-18
 
 ### Added
