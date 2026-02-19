@@ -18,12 +18,76 @@ function hashContent(content: string): string {
 }
 
 /**
+ * Extract indexable fields from note frontmatter
+ */
+function extractIndexFields(note: Note): {
+  sourceStr: string | null;
+  status: string;
+  mentionedIn: string[] | undefined;
+  palaceVersion: number;
+  aiBinding: string | undefined;
+  appliesTo: string[] | undefined;
+  domain: string[] | undefined;
+  project: string | undefined;
+  client: string | undefined;
+} {
+  const fm = note.frontmatter as unknown as Record<string, unknown>;
+  const palaceObj = fm.palace as Record<string, unknown> | undefined;
+  const sourceValue = note.frontmatter.source;
+
+  return {
+    sourceStr: sourceValue
+      ? typeof sourceValue === 'string'
+        ? sourceValue
+        : JSON.stringify(sourceValue)
+      : null,
+    status: (fm.status as string | undefined) ?? 'active',
+    mentionedIn: fm.mentioned_in as string[] | undefined,
+    palaceVersion: (palaceObj?.version as number | undefined) ?? 1,
+    aiBinding: fm.ai_binding as string | undefined,
+    appliesTo: fm.applies_to as string[] | undefined,
+    domain: fm.domain as string[] | undefined,
+    project: fm.project as string | undefined,
+    client: fm.client as string | undefined,
+  };
+}
+
+/**
+ * Build the array of SQL parameter values for a note
+ */
+function buildNoteParams(
+  note: Note,
+  contentHash: string,
+  fields: ReturnType<typeof extractIndexFields>
+): unknown[] {
+  const { frontmatter, content, path, title } = note;
+  return [
+    path, title,
+    frontmatter.type, frontmatter.created, frontmatter.modified,
+    fields.sourceStr,
+    frontmatter.confidence ?? null,
+    frontmatter.verified ? 1 : 0,
+    content, contentHash,
+    fields.status,
+    fields.mentionedIn ? JSON.stringify(fields.mentionedIn) : null,
+    frontmatter.tags ? JSON.stringify(frontmatter.tags) : null,
+    frontmatter.related ? JSON.stringify(frontmatter.related) : null,
+    frontmatter.aliases ? JSON.stringify(frontmatter.aliases) : null,
+    fields.palaceVersion,
+    fields.aiBinding ?? null,
+    fields.appliesTo ? JSON.stringify(fields.appliesTo) : null,
+    fields.domain ? JSON.stringify(fields.domain) : null,
+    fields.project ?? null,
+    fields.client ?? null,
+  ];
+}
+
+/**
  * Index a note in the specified vault's database
  */
 export function indexNote(db: Database.Database, note: Note): void {
   const contentHash = hashContent(note.raw);
 
-  // Check if note exists and has changed
   const existing = db
     .prepare('SELECT id, content_hash FROM notes WHERE path = ?')
     .get(note.path) as { id: number; content_hash: string } | undefined;
@@ -33,36 +97,14 @@ export function indexNote(db: Database.Database, note: Note): void {
     return;
   }
 
-  const { frontmatter, content, path, title } = note;
-
-  // Extract additional frontmatter fields
-  const fm = frontmatter as unknown as Record<string, unknown>;
-  const status = (fm.status as string | undefined) ?? 'active';
-  const mentionedIn = fm.mentioned_in as string[] | undefined;
-  const palaceObj = fm.palace as Record<string, unknown> | undefined;
-  const palaceVersion = (palaceObj?.version as number | undefined) ?? 1;
-
-  // Extract standards fields
-  const aiBinding = fm.ai_binding as string | undefined;
-  const appliesTo = fm.applies_to as string[] | undefined;
-  const domain = fm.domain as string[] | undefined;
-  const project = fm.project as string | undefined;
-  const client = fm.client as string | undefined;
-
-  // Handle source field - can be string or object
-  const sourceValue = frontmatter.source;
-  const sourceStr = sourceValue
-    ? typeof sourceValue === 'string'
-      ? sourceValue
-      : JSON.stringify(sourceValue)
-    : null;
+  const fields = extractIndexFields(note);
+  const params = buildNoteParams(note, contentHash, fields);
 
   db.transaction(() => {
     if (existing) {
-      // Update existing note
       db.prepare(
         `UPDATE notes SET
-          title = ?, type = ?, created = ?, modified = ?,
+          path = ?, title = ?, type = ?, created = ?, modified = ?,
           source = ?, confidence = ?, verified = ?,
           content = ?, content_hash = ?,
           status = ?, mentioned_in = ?, tags = ?, related = ?, aliases = ?,
@@ -70,40 +112,13 @@ export function indexNote(db: Database.Database, note: Note): void {
           ai_binding = ?, applies_to = ?, domain = ?,
           project = ?, client = ?
         WHERE id = ?`
-      ).run(
-        title,
-        frontmatter.type,
-        frontmatter.created,
-        frontmatter.modified,
-        sourceStr,
-        frontmatter.confidence ?? null,
-        frontmatter.verified ? 1 : 0,
-        content,
-        contentHash,
-        status,
-        mentionedIn ? JSON.stringify(mentionedIn) : null,
-        frontmatter.tags ? JSON.stringify(frontmatter.tags) : null,
-        frontmatter.related ? JSON.stringify(frontmatter.related) : null,
-        frontmatter.aliases ? JSON.stringify(frontmatter.aliases) : null,
-        palaceVersion,
-        aiBinding ?? null,
-        appliesTo ? JSON.stringify(appliesTo) : null,
-        domain ? JSON.stringify(domain) : null,
-        project ?? null,
-        client ?? null,
-        existing.id
-      );
+      ).run(...params, existing.id);
 
-      // Clear existing tags and links
       db.prepare('DELETE FROM note_tags WHERE note_id = ?').run(existing.id);
       db.prepare('DELETE FROM links WHERE source_id = ?').run(existing.id);
-
-      // Re-insert tags and links
-      insertTagsAndLinks(db, existing.id, frontmatter.tags ?? [], content);
-
-      logger.debug(`Updated note in index: ${path}`);
+      insertTagsAndLinks(db, existing.id, note.frontmatter.tags ?? [], note.content);
+      logger.debug(`Updated note in index: ${note.path}`);
     } else {
-      // Insert new note
       const result = db.prepare(
         `INSERT INTO notes (
           path, title, type, created, modified,
@@ -112,36 +127,11 @@ export function indexNote(db: Database.Database, note: Note): void {
           ai_binding, applies_to, domain,
           project, client
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        path,
-        title,
-        frontmatter.type,
-        frontmatter.created,
-        frontmatter.modified,
-        sourceStr,
-        frontmatter.confidence ?? null,
-        frontmatter.verified ? 1 : 0,
-        content,
-        contentHash,
-        status,
-        mentionedIn ? JSON.stringify(mentionedIn) : null,
-        frontmatter.tags ? JSON.stringify(frontmatter.tags) : null,
-        frontmatter.related ? JSON.stringify(frontmatter.related) : null,
-        frontmatter.aliases ? JSON.stringify(frontmatter.aliases) : null,
-        palaceVersion,
-        aiBinding ?? null,
-        appliesTo ? JSON.stringify(appliesTo) : null,
-        domain ? JSON.stringify(domain) : null,
-        project ?? null,
-        client ?? null
-      );
+      ).run(...params);
 
       const noteId = result.lastInsertRowid as number;
-
-      // Insert tags and links
-      insertTagsAndLinks(db, noteId, frontmatter.tags ?? [], content);
-
-      logger.debug(`Indexed new note: ${path}`);
+      insertTagsAndLinks(db, noteId, note.frontmatter.tags ?? [], note.content);
+      logger.debug(`Indexed new note: ${note.path}`);
     }
   })();
 }

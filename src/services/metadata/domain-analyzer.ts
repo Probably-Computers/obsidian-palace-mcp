@@ -83,101 +83,98 @@ function similarityRatio(a: string, b: string): number {
 }
 
 /**
- * Analyze domains across the vault
+ * Parse a stored domain value into an array of normalized domain strings
  */
-export function analyzeDomains(db: Database.Database): DomainAnalysisResult {
-  // Get all notes with domain data
-  const notes = db
-    .prepare(
-      `
-    SELECT path, domain
-    FROM notes
-    WHERE domain IS NOT NULL AND domain != ''
-  `
-    )
-    .all() as Array<{ path: string; domain: string }>;
+function parseDomainValue(domainStr: string): string[] {
+  let domains: string[];
+  try {
+    if (domainStr.startsWith('[')) {
+      domains = JSON.parse(domainStr);
+    } else {
+      domains = domainStr.split(',').map((d) => d.trim());
+    }
+  } catch {
+    domains = [domainStr];
+  }
+  return domains
+    .map((d) => d.toLowerCase().trim())
+    .filter((d) => d.length > 0);
+}
 
-  // Build domain usage map
+/**
+ * Build domain usage map from note rows
+ */
+function buildDomainUsageMap(
+  notes: Array<{ path: string; domain: string }>
+): Map<string, DomainUsage> {
   const domainUsage = new Map<string, DomainUsage>();
 
   for (const note of notes) {
-    // Parse domain (stored as comma-separated or JSON array)
-    let domains: string[] = [];
-    try {
-      // Try JSON parse first
-      if (note.domain.startsWith('[')) {
-        domains = JSON.parse(note.domain);
-      } else {
-        // Comma-separated
-        domains = note.domain.split(',').map((d) => d.trim());
-      }
-    } catch {
-      // Fallback to single domain
-      domains = [note.domain];
-    }
-
-    for (const domain of domains) {
-      const normalizedDomain = domain.toLowerCase().trim();
-      if (!normalizedDomain) continue;
-
-      let usage = domainUsage.get(normalizedDomain);
+    for (const domain of parseDomainValue(note.domain)) {
+      let usage = domainUsage.get(domain);
       if (!usage) {
-        usage = {
-          domain: normalizedDomain,
-          noteCount: 0,
-          notes: [],
-        };
-        domainUsage.set(normalizedDomain, usage);
+        usage = { domain, noteCount: 0, notes: [] };
+        domainUsage.set(domain, usage);
       }
       usage.noteCount++;
       usage.notes.push(note.path);
     }
   }
 
-  // Find orphaned domains (only 1 note)
-  const orphanedDomains: DomainUsage[] = [];
-  for (const usage of domainUsage.values()) {
-    if (usage.noteCount === 1) {
-      orphanedDomains.push(usage);
-    }
-  }
+  return domainUsage;
+}
 
-  // Find similar domains
-  const similarDomains: DomainSimilarity[] = [];
+/**
+ * Find domain pairs with high similarity
+ */
+function findSimilarDomainPairs(
+  domainUsage: Map<string, DomainUsage>,
+  threshold = 0.8
+): DomainSimilarity[] {
+  const pairs: DomainSimilarity[] = [];
   const domainList = Array.from(domainUsage.keys());
 
   for (let i = 0; i < domainList.length; i++) {
     for (let j = i + 1; j < domainList.length; j++) {
       const d1 = domainList[i]!;
       const d2 = domainList[j]!;
-
-      // Skip if same domain
       if (d1 === d2) continue;
 
       const similarity = similarityRatio(d1, d2);
+      if (similarity < threshold) continue;
 
-      // Only suggest if highly similar (>= 0.8)
-      if (similarity >= 0.8) {
-        // Prefer the one with more notes
-        const count1 = domainUsage.get(d1)?.noteCount ?? 0;
-        const count2 = domainUsage.get(d2)?.noteCount ?? 0;
-        const preferred = count1 >= count2 ? d1 : d2;
-        const deprecated = count1 >= count2 ? d2 : d1;
+      const count1 = domainUsage.get(d1)?.noteCount ?? 0;
+      const count2 = domainUsage.get(d2)?.noteCount ?? 0;
+      const preferred = count1 >= count2 ? d1 : d2;
+      const deprecated = count1 >= count2 ? d2 : d1;
 
-        similarDomains.push({
-          domain1: d1,
-          domain2: d2,
-          similarity,
-          suggestion: `Consider consolidating '${deprecated}' into '${preferred}' (${Math.round(similarity * 100)}% similar)`,
-        });
-      }
+      pairs.push({
+        domain1: d1,
+        domain2: d2,
+        similarity,
+        suggestion: `Consider consolidating '${deprecated}' into '${preferred}' (${Math.round(similarity * 100)}% similar)`,
+      });
     }
   }
 
-  // Sort similar domains by similarity
-  similarDomains.sort((a, b) => b.similarity - a.similarity);
+  return pairs.sort((a, b) => b.similarity - a.similarity);
+}
 
-  // Get top domains by usage
+/**
+ * Analyze domains across the vault
+ */
+export function analyzeDomains(db: Database.Database): DomainAnalysisResult {
+  const notes = db
+    .prepare('SELECT path, domain FROM notes WHERE domain IS NOT NULL AND domain != \'\'')
+    .all() as Array<{ path: string; domain: string }>;
+
+  const domainUsage = buildDomainUsageMap(notes);
+
+  const orphanedDomains = Array.from(domainUsage.values())
+    .filter((usage) => usage.noteCount === 1);
+
+  const similarDomains = findSimilarDomainPairs(domainUsage);
+
   const topDomains = Array.from(domainUsage.values())
     .sort((a, b) => b.noteCount - a.noteCount)
     .slice(0, 20);
