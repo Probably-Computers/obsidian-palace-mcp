@@ -17,6 +17,7 @@ import {
 import { stringifyFrontmatter } from '../utils/frontmatter.js';
 import { indexNote } from '../services/index/sync.js';
 import { createDatabase } from '../services/index/sqlite.js';
+import { validateNotePath } from '../utils/vault-param.js';
 import { logger } from '../utils/logger.js';
 import type { ToolResult, NoteFrontmatter } from '../types/index.js';
 
@@ -83,6 +84,7 @@ async function revertHandlerInternal(input: RevertInput): Promise<ToolResult<Rev
       };
     }
 
+    validateNotePath(input.path, vault.path);
     const palaceDir = join(vault.path, '.palace');
     const fullPath = join(vault.path, input.path);
 

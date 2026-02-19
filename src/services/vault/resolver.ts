@@ -191,15 +191,6 @@ export function generateAlternativePath(
 }
 
 /**
- * Validate that a path is within the vault.
- */
-export function isPathWithinVault(path: string, vaultPath: string): boolean {
-  const normalizedPath = join(path).toLowerCase();
-  const normalizedVault = join(vaultPath).toLowerCase();
-  return normalizedPath.startsWith(normalizedVault);
-}
-
-/**
  * Get all possible paths where a note might be stored based on intent.
  * Useful for checking if similar content exists.
  */

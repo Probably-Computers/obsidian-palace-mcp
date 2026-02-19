@@ -58,7 +58,6 @@ export {
   resolveStorage,
   checkPathConflict,
   generateAlternativePath,
-  isPathWithinVault,
   getPossiblePaths,
   extractDomainFromPath,
   isSpecialFolder,

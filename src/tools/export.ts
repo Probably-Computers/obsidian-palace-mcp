@@ -14,7 +14,7 @@ import { z } from 'zod';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
 import { exportNote, exportDirectory, type ExportFormat, type ExportOptions } from '../services/export/index.js';
-import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
+import { resolveVaultParam, getVaultResultInfo, validateNotePath } from '../utils/vault-param.js';
 import { logger } from '../utils/logger.js';
 import type { LinkStyle } from '../utils/markdown.js';
 
@@ -173,6 +173,7 @@ export async function exportHandler(
   try {
     // Resolve vault
     const vault = resolveVaultParam(vaultParam);
+    validateNotePath(path, vault.path);
 
     // Check if path exists
     const fullPath = join(vault.path, path);

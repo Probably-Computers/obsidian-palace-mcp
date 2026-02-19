@@ -10,6 +10,7 @@ import {
   resolvePathWithVault,
   formatCrossVaultPath,
   getVaultResultInfo,
+  validateNotePath,
 } from '../../../src/utils/vault-param';
 import * as registry from '../../../src/services/vault/registry';
 
@@ -158,6 +159,41 @@ describe('vault-param utilities', () => {
         vault_path: '/path/to/work',
         vault_mode: 'rw',
       });
+    });
+  });
+
+  describe('validateNotePath', () => {
+    it('allows normal relative paths', () => {
+      expect(() => validateNotePath('notes/test.md', '/vault')).not.toThrow();
+      expect(() => validateNotePath('deep/nested/path/note.md', '/vault')).not.toThrow();
+    });
+
+    it('allows a file directly in vault root', () => {
+      expect(() => validateNotePath('note.md', '/vault')).not.toThrow();
+    });
+
+    it('rejects absolute paths starting with /', () => {
+      expect(() => validateNotePath('/etc/passwd', '/vault')).toThrow('Absolute paths are not allowed');
+    });
+
+    it('rejects absolute paths starting with backslash', () => {
+      expect(() => validateNotePath('\\Windows\\System32', '/vault')).toThrow('Absolute paths are not allowed');
+    });
+
+    it('rejects ../ path traversal', () => {
+      expect(() => validateNotePath('../../../etc/passwd', '/vault')).toThrow('Path traversal detected');
+    });
+
+    it('rejects embedded ../ traversal', () => {
+      expect(() => validateNotePath('notes/../../etc/passwd', '/vault')).toThrow('Path traversal detected');
+    });
+
+    it('rejects traversal that escapes vault boundary', () => {
+      expect(() => validateNotePath('notes/../../../secret', '/vault/root')).toThrow('Path traversal detected');
+    });
+
+    it('allows ../ that stays within vault', () => {
+      expect(() => validateNotePath('notes/../other/note.md', '/vault')).not.toThrow();
     });
   });
 });

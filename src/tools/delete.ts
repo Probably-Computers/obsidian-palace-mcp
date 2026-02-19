@@ -13,7 +13,7 @@ import { rm } from 'fs/promises';
 import { join } from 'path';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ToolResult } from '../types/index.js';
-import { resolveVaultParam, getVaultResultInfo } from '../utils/vault-param.js';
+import { resolveVaultParam, getVaultResultInfo, validateNotePath } from '../utils/vault-param.js';
 import { getIndexManager } from '../services/index/index.js';
 import { removeFromIndex } from '../services/index/sync.js';
 import { getIncomingLinks } from '../services/graph/links.js';
@@ -462,6 +462,7 @@ export async function deleteHandler(args: Record<string, unknown>): Promise<Tool
   try {
     // Resolve vault
     const vault = resolveVaultParam(vaultParam);
+    validateNotePath(targetPath, vault.path);
 
     // Check for read-only vault
     if (vault.mode === 'ro') {

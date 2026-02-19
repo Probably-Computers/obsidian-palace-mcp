@@ -22,6 +22,7 @@ import {
   generateChangeSummary,
 } from '../services/history/diff.js';
 import type { ToolResult } from '../types/index.js';
+import { validateNotePath } from '../utils/vault-param.js';
 
 /**
  * Input schema for palace_history
@@ -95,6 +96,7 @@ async function historyHandlerInternal(input: HistoryInput): Promise<ToolResult<H
       };
     }
 
+    validateNotePath(input.path, vault.path);
     const palaceDir = join(vault.path, '.palace');
 
     // Check if the note exists

@@ -3,6 +3,7 @@
  * Shared utilities for resolving vault parameters in tools
  */
 
+import { resolve, sep } from 'path';
 import { z } from 'zod';
 import { getVaultRegistry } from '../services/vault/registry.js';
 import type { ResolvedVault } from '../types/index.js';
@@ -98,6 +99,26 @@ export function resolvePathWithVault(
  */
 export function formatCrossVaultPath(vaultAlias: string, notePath: string): string {
   return `vault:${vaultAlias}/${notePath}`;
+}
+
+/**
+ * Validate that a relative note path stays within the vault root.
+ * Prevents path traversal attacks via ../ sequences or absolute paths.
+ * Throws if the path would escape the vault.
+ */
+export function validateNotePath(notePath: string, vaultPath: string): void {
+  // Reject absolute paths
+  if (notePath.startsWith('/') || notePath.startsWith('\\')) {
+    throw new Error(`Absolute paths are not allowed: ${notePath}`);
+  }
+
+  // Resolve to absolute and verify containment
+  const resolvedVault = resolve(vaultPath);
+  const resolvedNote = resolve(vaultPath, notePath);
+
+  if (!resolvedNote.startsWith(resolvedVault + sep) && resolvedNote !== resolvedVault) {
+    throw new Error(`Path traversal detected: ${notePath}`);
+  }
 }
 
 /**

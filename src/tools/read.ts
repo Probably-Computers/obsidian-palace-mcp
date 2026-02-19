@@ -10,6 +10,7 @@ import {
   resolveVaultParam,
   resolvePathWithVault,
   getVaultResultInfo,
+  validateNotePath,
 } from '../utils/vault-param.js';
 
 // Input schema
@@ -73,6 +74,7 @@ export async function readHandler(args: Record<string, unknown>): Promise<ToolRe
       // Handle cross-vault path format or use explicit vault parameter
       const { vault, notePath } = resolvePathWithVault(input.path, input.vault);
       resolvedVault = vault;
+      validateNotePath(notePath, vault.path);
 
       note = await readNote(notePath, {
         vaultPath: vault.path,

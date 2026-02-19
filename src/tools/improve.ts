@@ -19,7 +19,7 @@ import { buildCompleteIndex, scanForMatches, autolinkContent } from '../services
 import { getIndexManager } from '../services/index/index.js';
 import { indexNote, removeFromIndex } from '../services/index/sync.js';
 import { readNote } from '../services/vault/reader.js';
-import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo } from '../utils/vault-param.js';
+import { resolveVaultParam, enforceWriteAccess, getVaultResultInfo, validateNotePath } from '../utils/vault-param.js';
 import { logger } from '../utils/logger.js';
 import { shouldSplit, splitContent, createHub, createChildNote, getHubInfo, addChild, getAccurateChildrenCount, updateChildrenCount } from '../services/atomic/index.js';
 import { isHubType } from '../types/note-types.js';
@@ -128,6 +128,7 @@ export async function improveHandler(args: Record<string, unknown>): Promise<Too
     // Resolve and validate vault
     const vault = resolveVaultParam(vaultParam);
     enforceWriteAccess(vault);
+    validateNotePath(path, vault.path);
 
     const fullPath = join(vault.path, path);
 
