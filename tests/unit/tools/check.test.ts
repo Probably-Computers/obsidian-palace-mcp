@@ -1,5 +1,34 @@
-import { describe, it, expect } from 'vitest';
-import { buildSemanticDomainPath, buildDomainPathFromVault } from '../../../src/tools/check.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Mocks must come before handler import
+vi.mock('fs', () => ({
+  readdirSync: vi.fn(() => []),
+}));
+
+vi.mock('../../../src/services/index/query.js', () => ({
+  searchNotesInVault: vi.fn(),
+  queryNotesInVault: vi.fn(),
+}));
+
+vi.mock('../../../src/services/index/index.js', () => ({
+  getIndexManager: vi.fn(),
+}));
+
+vi.mock('../../../src/utils/vault-param.js', () => ({
+  resolveVaultParam: vi.fn(),
+  getVaultResultInfo: vi.fn(),
+}));
+
+vi.mock('../../../src/services/vault/resolver.js', () => ({
+  extractDomainFromPath: vi.fn(() => []),
+  isSpecialFolder: vi.fn(() => false),
+}));
+
+import { checkHandler, buildSemanticDomainPath, buildDomainPathFromVault } from '../../../src/tools/check.js';
+import { searchNotesInVault, queryNotesInVault } from '../../../src/services/index/query.js';
+import { getIndexManager } from '../../../src/services/index/index.js';
+import { resolveVaultParam, getVaultResultInfo } from '../../../src/utils/vault-param.js';
+import { extractDomainFromPath } from '../../../src/services/vault/resolver.js';
 
 describe('buildSemanticDomainPath (legacy - no vault context)', () => {
   describe('stop word filtering', () => {
@@ -187,5 +216,202 @@ describe('buildDomainPathFromVault (dynamic - with vault context)', () => {
       expect(result).toContain('kubernetes');
       expect(result).toContain('deployment');
     });
+  });
+});
+
+// --- Handler tests (mocked) ---
+
+const mockVault = {
+  alias: 'test',
+  path: '/tmp/vault',
+  mode: 'rw' as const,
+  config: { ignore: { patterns: [] } },
+  indexPath: '/tmp/vault/.palace/index.sqlite',
+};
+
+const mockDb = {};
+
+describe('checkHandler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (resolveVaultParam as ReturnType<typeof vi.fn>).mockReturnValue(mockVault);
+    (getVaultResultInfo as ReturnType<typeof vi.fn>).mockReturnValue({
+      vault: 'test',
+      vault_path: '/tmp/vault',
+      vault_mode: 'rw',
+    });
+    (getIndexManager as ReturnType<typeof vi.fn>).mockReturnValue({
+      getIndex: vi.fn().mockResolvedValue(mockDb),
+    });
+    (searchNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([]);
+    (queryNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([]);
+    (extractDomainFromPath as ReturnType<typeof vi.fn>).mockReturnValue([]);
+  });
+
+  it('returns validation error when query is missing', async () => {
+    const result = await checkHandler({});
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns create_new when no matches found', async () => {
+    const result = await checkHandler({ query: 'Kubernetes Networking' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.found).toBe(false);
+    expect(result.data.matches).toHaveLength(0);
+    expect(result.data.recommendation).toBe('create_new');
+  });
+
+  it('returns improve_existing for high-relevance active matches', async () => {
+    (searchNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        note: {
+          path: 'infra/k8s/networking.md',
+          title: 'Kubernetes Networking',
+          frontmatter: { confidence: 0.8, modified: '2025-01-01' },
+        },
+        score: 0.85,
+      },
+    ]);
+
+    const result = await checkHandler({ query: 'Kubernetes Networking' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.found).toBe(true);
+    expect(result.data.recommendation).toBe('improve_existing');
+  });
+
+  it('returns reference_existing for very high relevance', async () => {
+    (searchNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        note: {
+          path: 'research/topic.md',
+          title: 'Topic',
+          frontmatter: { confidence: 0.9, modified: '2025-01-01' },
+        },
+        score: 0.96,
+      },
+    ]);
+
+    const result = await checkHandler({ query: 'Topic' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.recommendation).toBe('reference_existing');
+  });
+
+  it('returns expand_stub for stub matches', async () => {
+    (searchNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        note: {
+          path: 'stubs/docker.md',
+          title: 'Docker',
+          frontmatter: { status: 'stub', confidence: 0.5, modified: '2025-01-01' },
+        },
+        score: 0.9,
+      },
+    ]);
+
+    const result = await checkHandler({ query: 'Docker' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.recommendation).toBe('expand_stub');
+  });
+
+  it('filters stubs when include_stubs is false', async () => {
+    (searchNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        note: {
+          path: 'stubs/docker.md',
+          title: 'Docker',
+          frontmatter: { status: 'stub', modified: '2025-01-01' },
+        },
+        score: 0.8,
+      },
+    ]);
+
+    const result = await checkHandler({ query: 'Docker', include_stubs: false });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.matches).toHaveLength(0);
+  });
+
+  it('applies path_filter to results', async () => {
+    (searchNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([
+      {
+        note: {
+          path: 'infrastructure/k8s/networking.md',
+          title: 'Kubernetes',
+          frontmatter: { confidence: 0.8, modified: '2025-01-01' },
+        },
+        score: 0.8,
+      },
+      {
+        note: {
+          path: 'gardening/containers.md',
+          title: 'Container Gardening',
+          frontmatter: { confidence: 0.7, modified: '2025-01-01' },
+        },
+        score: 0.6,
+      },
+    ]);
+
+    const result = await checkHandler({ query: 'containers', path_filter: 'infrastructure' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.matches).toHaveLength(1);
+    expect(result.data.matches[0].path).toBe('infrastructure/k8s/networking.md');
+  });
+
+  it('deduplicates search and title results', async () => {
+    const note = {
+      path: 'research/docker.md',
+      title: 'Docker',
+      frontmatter: { confidence: 0.8, modified: '2025-01-01' },
+    };
+    (searchNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([
+      { note, score: 0.9 },
+    ]);
+    (queryNotesInVault as ReturnType<typeof vi.fn>).mockReturnValue([note]);
+
+    const result = await checkHandler({ query: 'Docker' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    // Should not have duplicates
+    expect(result.data.matches).toHaveLength(1);
+  });
+
+  it('passes domain tags to search', async () => {
+    await checkHandler({ query: 'test', domain: ['kubernetes', 'networking'] });
+    expect(searchNotesInVault).toHaveBeenCalledWith(
+      mockDb,
+      expect.objectContaining({ tags: ['kubernetes', 'networking'] })
+    );
+  });
+
+  it('includes domain suggestions', async () => {
+    const result = await checkHandler({ query: 'Kubernetes Networking' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+
+    expect(result.data.suggestions).toBeDefined();
+    expect(result.data.suggestions.suggested_domains).toBeDefined();
+  });
+
+  it('handles errors gracefully', async () => {
+    (resolveVaultParam as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      throw new Error('Vault error');
+    });
+
+    const result = await checkHandler({ query: 'test' });
+    expect(result.success).toBe(false);
+    expect(result.code).toBe('CHECK_ERROR');
   });
 });
