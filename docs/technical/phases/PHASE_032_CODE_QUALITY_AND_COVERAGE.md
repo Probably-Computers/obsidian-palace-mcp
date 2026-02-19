@@ -1,6 +1,6 @@
 # Phase 032: Code Quality and Coverage
 
-**Status**: Planning
+**Status**: In Progress
 **Start Date**: 2026-02-19
 **Target Completion**: 2026-02-28
 **Owner**: Adam
@@ -106,8 +106,8 @@
 
 ### Task 1: Pin GitHub Actions to Commit SHAs
 
-- [ ] Look up commit SHAs for `actions/checkout@v4`, `actions/setup-node@v4`, `codacy/codacy-coverage-reporter-action@v1.3.0`
-- [ ] Update `.github/workflows/ci.yml` with pinned SHAs and version comments
+- [x] Look up commit SHAs for `actions/checkout@v4`, `actions/setup-node@v4`, `codacy/codacy-coverage-reporter-action@v1.3.0`
+- [x] Update `.github/workflows/ci.yml` with pinned SHAs and version comments
 
 ### Task 2: Coverage — High-Impact Unit Tests
 
@@ -176,29 +176,29 @@ Break long functions (>50 LOC) into smaller units:
 ### Task 6: Documentation Updates
 
 #### README.md
-- [ ] Add CI status badge
-- [ ] Add Codacy coverage badge
-- [ ] Update Development section to mention pre-commit hooks and coverage
+- [x] Add CI status badge
+- [x] Add Codacy coverage badge
+- [x] Update Development section to mention pre-commit hooks and coverage
 
 #### CLAUDE.md
-- [ ] Add "Continuous Integration" section documenting the pipeline
-- [ ] Add "Pre-commit Hooks" section documenting Husky + lint-staged
-- [ ] Update "Testing" section with coverage tooling details
+- [x] Add "Continuous Integration" section documenting the pipeline
+- [x] Add "Pre-commit Hooks" section documenting Husky + lint-staged
+- [x] Update "Testing" section with coverage tooling details
 
 #### CONTRIBUTING.md
-- [ ] Add note that `npm install` sets up Husky hooks automatically
-- [ ] Add "Pre-commit Hooks" subsection
-- [ ] Add "Continuous Integration" section
-- [ ] Update Pull Request section to reference CI checks
+- [x] Add note that `npm install` sets up Husky hooks automatically
+- [x] Add "Pre-commit Hooks" subsection
+- [x] Add "Continuous Integration" section
+- [x] Update Pull Request section to reference CI checks
 
 #### GIT_WORKFLOW_STANDARDS.md
-- [ ] **Overhaul "Git Hooks" section** — replace Python tooling (flake8, black, pre-commit) with Husky + lint-staged
-- [ ] **Overhaul "Continuous Integration" section** — replace generic description with actual GitHub Actions setup
-- [ ] Update "Branch Protection" required status checks to reflect reality
-- [ ] Replace Python `.gitignore` example with Node.js/TypeScript version
-- [ ] Update "Additional Resources" links (Husky + lint-staged instead of pre-commit framework)
-- [ ] Remove Django/Python references throughout
-- [ ] Update document metadata (Last Updated date)
+- [x] **Overhaul "Git Hooks" section** — replace Python tooling (flake8, black, pre-commit) with Husky + lint-staged
+- [x] **Overhaul "Continuous Integration" section** — replace generic description with actual GitHub Actions setup
+- [x] Update "Branch Protection" required status checks to reflect reality
+- [x] Replace Python `.gitignore` example with Node.js/TypeScript version
+- [x] Update "Additional Resources" links (Husky + lint-staged instead of pre-commit framework)
+- [x] Remove Django/Python references throughout
+- [x] Update document metadata (Last Updated date)
 
 ### Task 7: Verification
 
@@ -262,9 +262,9 @@ The security patterns flagged by Codacy (Semgrep) are largely expected for a fil
 - [ ] Codacy coverage >= 80%
 - [ ] Codacy issues < 100 (down from 308)
 - [ ] CI pipeline green on all Node versions
-- [ ] All 4 documentation files updated
-- [ ] GIT_WORKFLOW_STANDARDS.md no longer references Python tooling
-- [ ] GitHub Actions pinned to commit SHAs
+- [x] All 4 documentation files updated
+- [x] GIT_WORKFLOW_STANDARDS.md no longer references Python tooling
+- [x] GitHub Actions pinned to commit SHAs
 - [ ] No new lint or typecheck errors introduced
 
 ## Risks & Mitigation

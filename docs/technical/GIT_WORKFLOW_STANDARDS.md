@@ -23,7 +23,7 @@ This document outlines Git workflow standards and version control best practices
 
 ### Recommended: Trunk-Based Development
 
-**For most Django projects:**
+**For most projects:**
 - Single main branch (trunk)
 - Short-lived feature branches (< 2 days)
 - Frequent integration
@@ -374,16 +374,14 @@ git rebase origin/main
 
 **Use .gitignore properly:**
 ```
-# Python
-*.pyc
-__pycache__/
-.venv/
-venv/
+# Dependencies
+node_modules/
 
-# Django
-*.log
-db.sqlite3
-media/
+# Build output
+dist/
+
+# Coverage
+coverage/
 
 # IDE
 .vscode/
@@ -392,6 +390,10 @@ media/
 # Environment
 .env
 .env.local
+.envrc
+
+# OS
+.DS_Store
 ```
 
 ### Undoing Changes
@@ -587,6 +589,6 @@ Defined in `.github/workflows/ci.yml`.
 
 ---
 
-**Document Version:** 1.1
+**Document Version:** 1.2
 **Last Updated:** February 2026
 **Maintained By:** Development Team
